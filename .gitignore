@@ -1,3 +1,25 @@
+### root entries
+
+# Ignore unknown root files and folders; allow new content in known folders.
+/*
+!/.github/
+!/docs/
+!/extern/
+!/scripts/
+!/src/
+!/test/
+!/tools/
+!/ui/
+!/.gitattributes
+!/.gitignore
+!/.gitmodules
+!/CMakeLists.txt
+!/LICENSE
+!/README.md
+!/emmodule.cpp
+!/pymodule.cpp
+!/test.cpp
+
 ### build files
 
 build/
