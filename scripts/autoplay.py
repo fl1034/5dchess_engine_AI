@@ -18,9 +18,13 @@ from datetime import date
 from pathlib import Path
 
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MODULE_DIR = REPOSITORY_ROOT / "build"
+
+
 MOVE_RE = re.compile(
     r"^\((-?\d+)T(-?\d+)\)([a-h])([1-8])"
-    r"(?:\((-?\d+)T(-?\d+)\))?([a-h])([1-8])([A-Za-z])?$"
+    r"(?:\((-?\d+)T(-?\d+)\))?([a-h])([1-8])(?:=?([A-Za-z]))?$"
 )
 
 
@@ -81,11 +85,7 @@ class EngineProcess:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                # Matchmaker workers are already isolated processes. Creating
-                # another session from inside a worker is rejected by some
-                # restricted Linux hosts with EPERM; the worker still owns
-                # cancellation and cleanup for its engine children.
-                start_new_session=False,
+                start_new_session=sys.platform != "win32",
             )
         except OSError as exc:
             raise ProtocolError(f"{self.name}: cannot start {self.command!r}: {exc}") from exc
@@ -121,6 +121,11 @@ class EngineProcess:
                     raise ProtocolError(f"{self.name}: exited with {code}; {self.diagnostic()}")
                 line = raw.decode(errors="replace").strip()
                 self._record("<", line)
+                if line.startswith("info string error"):
+                    raise ProtocolError(
+                        f"{self.name}: engine reported {line.removeprefix('info string error').strip()!r}; "
+                        f"{self.diagnostic()}"
+                    )
                 if line.startswith("info mcts_stats ") or line.startswith("info flat_ucb_stats "):
                     self.last_engine_stats = dict(
                         token.split("=", 1)
@@ -156,19 +161,36 @@ class EngineProcess:
         self.phase = "idle"
 
     async def choose(
-        self, position: str, history: list[str], movetime_ms: int, commands: asyncio.Queue[str]
+        self,
+        position: str,
+        history: list[str],
+        movetime_ms: int,
+        commands: asyncio.Queue[str],
+        depth: int | None = None,
     ) -> list[str] | None:
         self.phase = "searching"
         request = f"position {position}"
         if history:
             request += " moves " + " ".join(history)
         await self.send(request)
+        # This is a cheap protocol barrier which makes position parsing
+        # failures observable before search. It also protects the controller
+        # from adapters whose input callbacks perform asynchronous replay.
+        self.phase = "synchronizing_position"
+        await self.send("isready")
+        await self.wait_for("readyok", self.timeout_seconds)
+        self.phase = "searching"
         self.last_engine_stats = {}
         self.last_engine_score = ""
         self.last_engine_scores = ""
         self.last_go_seconds = None
         go_started = time.perf_counter()
-        await self.send(f"go movetime {movetime_ms}")
+        go = f"go movetime {movetime_ms}"
+        if depth is not None:
+            if depth <= 0:
+                raise ValueError("depth must be positive")
+            go += f" depth {depth}"
+        await self.send(go)
 
         # Wait for engine output and terminal input concurrently.  Keeping
         # this orchestration in Python makes Ctrl+C responsive even while the
@@ -327,9 +349,9 @@ def load_rules(module_dir: Path):
         raise SystemExit(
             f"Cannot import the Python engine module from {module_dir}.\n"
             "Build it for this Python interpreter with:\n"
-            f"  cmake -S . -B {module_dir} -DPYMODULE=ON -DTEST=ON "
-            f"-DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE={sys.executable}\n"
-            f"  cmake --build {module_dir} -j"
+            f"  cmake -S {shlex.quote(str(REPOSITORY_ROOT))} -B {shlex.quote(str(module_dir))} -DPYMODULE=ON -DENGINE=ON "
+            f"-DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE={shlex.quote(sys.executable)}\n"
+            f"  cmake --build {shlex.quote(str(module_dir))} -j"
         ) from exc
 
 
@@ -360,14 +382,50 @@ def parse_move(rules, text: str):
 def apply_action(rules, game, moves: list[str]) -> str | None:
     """Apply and submit a complete bestmove action, rolling back on error."""
 
+    def coordinate(point) -> str:
+        return f"({point.l()}T{point.t()}){chr(point.x() + 97)}{point.y() + 1}"
+
+    def rejection_reason(move) -> str:
+        source = move.get_from()
+        target = move.get_to()
+        if not game.is_playable(source):
+            return f"source {coordinate(source)} is not currently playable"
+        legal_targets = list(game.gen_move_if_playable(source))
+        if target not in legal_targets:
+            preview = ", ".join(coordinate(item) for item in legal_targets[:12])
+            if len(legal_targets) > 12:
+                preview += f", ... ({len(legal_targets)} total)"
+            return (
+                f"destination {coordinate(target)} is not legal from {coordinate(source)}; "
+                f"legal destinations: {preview or '<none>'}"
+            )
+        return "the source and destination exist, but the move details (such as promotion) are invalid"
+
     applied = 0
     try:
-        for text in moves:
-            if text == "submit" or not game.apply_move(parse_move(rules, text)):
-                raise ValueError(f"illegal move {text!r}")
+        for move_index, text in enumerate(moves, 1):
+            if text == "submit":
+                raise ValueError(
+                    f"move {move_index} is an unexpected submit token; bestmove must contain only LAN moves"
+                )
+            try:
+                move = parse_move(rules, text)
+            except ValueError as exc:
+                raise ValueError(f"move {move_index} {text!r} is malformed: {exc}") from exc
+            if not game.apply_move(move):
+                raise ValueError(
+                    f"move {move_index} {text!r} is illegal: {rejection_reason(move)}"
+                )
             applied += 1
         if not game.submit():
-            raise ValueError("action cannot be submitted")
+            present = game.get_current_present()
+            active, present_lines, inactive = game.get_current_timeline_status()
+            raise ValueError(
+                "action cannot be submitted: "
+                f"present=T{present[0]} ({'black' if present[1] else 'white'}), "
+                f"active timelines={list(active)}, present timelines={list(present_lines)}, "
+                f"inactive timelines={list(inactive)}, in_check={game.currently_check()}"
+            )
         return None
     except (ValueError, RuntimeError) as exc:
         for _ in range(applied):
@@ -495,13 +553,13 @@ def status_worker(module_dir: str, pgn: str, sender) -> None:
 
 
 def save_adjudication_position(
-    pgn: str, game_number: int = 1, log_dir: Path = Path("logs")
+    game, game_number: int = 1, log_dir: Path = Path("logs")
 ) -> Path:
     """Persist the exact position passed to get_match_status() for diagnosis."""
 
     log_dir.mkdir(parents=True, exist_ok=True)
     output = log_dir / f"adjudication-{game_number:04d}.5dpgn"
-    output.write_text(pgn)
+    output.write_text(snapshot_pgn(game))
     return output.resolve()
 
 
@@ -527,6 +585,41 @@ def save_protocol_failure(
         return output.resolve()
     except OSError as exc:
         print(f"Could not save protocol diagnostics: {exc}", file=sys.stderr)
+        return None
+
+
+def save_illegal_action(
+    game,
+    player: EngineProcess,
+    moves: list[str],
+    error: str,
+    game_number: int,
+    action_number: int,
+    log_dir: Path = Path("logs"),
+) -> Path | None:
+    """Save the pre-action position and concrete legality evidence."""
+
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        output = log_dir / f"illegal-action-{game_number:04d}-{action_number:04d}.txt"
+        output.write_text(
+            "\n".join(
+                (
+                    f"Engine: {player.name or player.command}",
+                    f"Command: {player.command}",
+                    f"Reported bestmove: {' '.join(moves)}",
+                    f"Rejection: {error}",
+                    f"Protocol: {' | '.join(player.protocol_log)}",
+                    "",
+                    "Position before the rejected action:",
+                    snapshot_pgn(game),
+                )
+            )
+            + "\n"
+        )
+        return output.resolve()
+    except OSError as exc:
+        print(f"Could not save illegal-action diagnostics: {exc}", file=sys.stderr)
         return None
 
 
@@ -620,8 +713,6 @@ async def play(
     except (AttributeError, NotImplementedError, OSError):
         pass
     result = "draw: action limit reached"
-    outcome = "cap"
-    termination = "action_cap"
 
     def player_label(index: int) -> str:
         player = players[index]
@@ -646,6 +737,7 @@ async def play(
         print("Starting match...\n")
 
     try:
+        outcome = "cap"
         startup_results = await asyncio.gather(
             *(player.start() for player in players), return_exceptions=True
         )
@@ -657,7 +749,6 @@ async def play(
         if startup_errors:
             failed_index, startup_error = startup_errors[0]
             outcome = "protocol"
-            termination = "protocol_failure"
             result = f"protocol failure during startup: {startup_error}"
             append_termination_comment(
                 game,
@@ -686,7 +777,6 @@ async def play(
         if new_game_errors:
             failed_index, new_game_error = new_game_errors[0]
             outcome = "protocol"
-            termination = "protocol_failure"
             result = f"protocol failure during new game: {new_game_error}"
             append_termination_comment(
                 game,
@@ -719,7 +809,6 @@ async def play(
                     timeline_count, board_count,
                     "black" if index else "white", args.movetime, "protocol_error")
                 outcome = "protocol"
-                termination = "protocol_failure"
                 result = f"protocol failure from {player_label(index)}: {exc}"
                 append_termination_comment(
                     game, protocol_termination_comment(player, index, exc)
@@ -736,31 +825,24 @@ async def play(
                 "black" if index else "white", args.movetime,
                 "bestmove" if moves else "nobestmove")
             if not moves:
-                adjudication_pgn = snapshot_pgn(game)
-                adjudication_file = save_adjudication_position(
-                    adjudication_pgn, game_number, log_dir
-                )
+                adjudication_file = save_adjudication_position(game, game_number, log_dir)
                 print(
                     f"{player_label(index)} returned nobestmove; adjudicating position saved at\n"
                     f"  {adjudication_file}",
                     flush=True,
                 )
-                status = await adjudicate(adjudication_pgn, args.module_dir)
+                status = await adjudicate(adjudication_file.read_text(), args.module_dir)
                 if status == "white":
                     outcome = "white"
-                    termination = "checkmate"
                     result = winner(0)
                 elif status == "black":
                     outcome = "black"
-                    termination = "checkmate"
                     result = winner(1)
                 elif status == "draw":
                     outcome = "draw"
-                    termination = "stalemate"
                     result = "draw: stalemate"
                 elif status.startswith("error:"):
                     outcome = "error"
-                    termination = "adjudication_error"
                     exit_code = status.partition(":")[2]
                     append_termination_comment(
                         game, f"Adjudication failed with exit code {exit_code}."
@@ -772,7 +854,6 @@ async def play(
                 else:
                     winning_index = 1 - index
                     outcome = "black" if winning_index else "white"
-                    termination = "nobestmove_nonterminal"
                     result = (
                         f"{winner(winning_index)}: {player_label(index)} returned no move; "
                         "position is not terminal"
@@ -782,8 +863,17 @@ async def play(
             if error:
                 winning_index = 1 - index
                 outcome = "black" if winning_index else "white"
-                termination = "illegal_move"
                 result = f"{winner(winning_index)}: {player_label(index)} {error}"
+                append_termination_comment(
+                    game, f"{player_label(index)} reported an illegal bestmove: {error}."
+                )
+                failure_file = save_illegal_action(
+                    game, player, moves, error, game_number, turn, log_dir
+                )
+                print(f"\nRejected bestmove: {' '.join(moves)}", file=sys.stderr)
+                print(f"Reason: {error}", file=sys.stderr)
+                if failure_file:
+                    print(f"Legality diagnostics saved at\n  {failure_file}", file=sys.stderr)
                 break
             history.extend(moves)
             history.append("submit")
@@ -804,7 +894,6 @@ async def play(
         print(game.show_pgn(show_flags))
         return outcome
     except asyncio.CancelledError:
-        termination = "interrupted"
         set_pgn_result(game, "protocol")
         append_termination_comment(game, "Interrupted.")
         print("\nInterrupted: quitting both engines.\n", file=sys.stderr)
@@ -812,9 +901,6 @@ async def play(
         print(game.show_pgn(show_flags))
         raise
     except Exception as exc:
-        outcome = "error"
-        termination = "unexpected_error"
-        result = f"autoplay failed: {type(exc).__name__}: {exc}"
         set_pgn_result(game, "error")
         append_termination_comment(game, f"Autoplay failed: {type(exc).__name__}.")
         raise
@@ -825,7 +911,6 @@ async def play(
         if capture is not None:
             capture.update(
                 outcome=outcome,
-                termination=termination,
                 summary=result,
                 pgn=game.show_pgn(show_flags),
             )
@@ -880,7 +965,7 @@ def main() -> int:
     game_group = parser.add_mutually_exclusive_group()
     game_group.add_argument("-g", "--game", dest="game_file", type=Path, help="initial .5dpgn file")
     game_group.add_argument("-m", dest="game_text", help="initial 5DPGN text")
-    parser.add_argument("--module-dir", type=Path, default=Path("build"))
+    parser.add_argument("--module-dir", type=Path, default=DEFAULT_MODULE_DIR)
     parser.add_argument("--movetime", type=int, default=1000, help="milliseconds per action")
     parser.add_argument(
         "--timeout",
@@ -895,10 +980,6 @@ def main() -> int:
         type=Path,
         default=Path("logs/autoplay-go-metrics.csv"),
         help="CSV output for per-go timing and MCTS visit counts",
-    )
-    parser.add_argument(
-        "--log-dir", type=Path, default=Path("logs"),
-        help="directory for adjudication positions and protocol diagnostics",
     )
     args = parser.parse_args()
     if args.movetime <= 0 or args.timeout <= 0 or args.max_actions <= 0:

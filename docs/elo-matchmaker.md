@@ -13,9 +13,9 @@ An engine ID identifies one fixed playing policy. Register a new ID whenever
 code, options, or weights can affect move selection:
 
 ```sh
-python3 elo.py register baseline --command "./build/5dchess zero-capture" \
+python3 scripts/elo.py register baseline --command "./build/5dchess zero-capture" \
   --artifact ./build/5dchess
-python3 elo.py register candidate \
+python3 scripts/elo.py register candidate \
   --command "./build/5dchess zero-capture-check-pw" \
   --artifact ./build/5dchess
 ```
@@ -27,10 +27,10 @@ matches when playing behavior is unchanged.
 Useful registry commands include:
 
 ```sh
-python3 elo.py list
-python3 elo.py leaderboard
-python3 elo.py history
-python3 elo.py pending
+python3 scripts/elo.py list
+python3 scripts/elo.py leaderboard
+python3 scripts/elo.py history
+python3 scripts/elo.py pending
 ```
 
 The leaderboard fits all completed rated results together with a
@@ -46,7 +46,7 @@ running at once. A free worker immediately claims another game; rating
 bookkeeping does not introduce wave barriers.
 
 ```sh
-python3 elo_matchmaker.py run \
+python3 scripts/elo_matchmaker.py run \
   --games 120 --jobs 6 --movetime 1000 \
   --event "Candidate evaluation"
 ```
@@ -58,7 +58,7 @@ Use repeated `--core` options to bind each worker and both engines in its game
 to one CPU:
 
 ```sh
-python3 elo_matchmaker.py run --games 120 --jobs 6 \
+python3 scripts/elo_matchmaker.py run --games 120 --jobs 6 \
   --core 0 --core 1 --core 2 --core 3 --core 4 --core 5
 ```
 
@@ -71,7 +71,7 @@ Named pools keep hardware classes separate and store the assigned group on
 each match:
 
 ```sh
-python3 elo_matchmaker.py run --games 480 --jobs 12 \
+python3 scripts/elo_matchmaker.py run --games 480 --jobs 12 \
   --core-group P=0,1,2,3,4,5 \
   --core-group E=6,7,8,9,10,11
 ```
@@ -87,7 +87,7 @@ scheduled state, closes engine processes, and exits. Resume with the same
 worker and affinity options:
 
 ```sh
-python3 elo_matchmaker.py resume --jobs 6 \
+python3 scripts/elo_matchmaker.py resume --jobs 6 \
   --core 0 --core 1 --core 2 --core 3 --core 4 --core 5
 ```
 
@@ -95,7 +95,7 @@ After a power loss or forced termination, first ensure the old workers are no
 longer running, then reclaim their matches:
 
 ```sh
-python3 elo_matchmaker.py resume --recover-running --jobs 6
+python3 scripts/elo_matchmaker.py resume --recover-running --jobs 6
 ```
 
 The runner pauses on a protocol or worker error and preserves all available
@@ -104,14 +104,14 @@ disable a broken engine and resume; unfinished games involving it are aborted
 while completed results remain:
 
 ```sh
-python3 elo.py disable candidate
-python3 elo_matchmaker.py resume --jobs 6
+python3 scripts/elo.py disable candidate
+python3 scripts/elo_matchmaker.py resume --jobs 6
 ```
 
 To discard every open result involving the engine as well, use:
 
 ```sh
-python3 elo.py disable candidate --abort-open --reason "broken engine"
+python3 scripts/elo.py disable candidate --abort-open --reason "broken engine"
 ```
 
 Re-enable only an unchanged engine. Register a new engine ID after a fix that
@@ -123,10 +123,15 @@ can affect play.
 by another controller:
 
 ```sh
-python3 elo.py suggest 4 --engine candidate
-python3 elo.py schedule 4 --engine candidate
-python3 elo.py report 42 white --pgn completed-game.5dpgn
+python3 scripts/elo.py suggest 4 --engine candidate
+python3 scripts/elo.py schedule 4 --engine candidate
+python3 scripts/elo.py report 42 white --pgn completed-game.5dpgn
 ```
 
 Valid reports are `white`, `black`, `draw`, and `void`. Void and aborted games
 do not affect ratings.
+
+Run the examples above from the repository root. From `scripts/`, omit the
+`scripts/` prefix and adjust engine commands to use `../build/5dchess`. The
+default Python module directory remains the repository’s `build/`; explicit
+`--module-dir` values and log paths are relative to the current directory.

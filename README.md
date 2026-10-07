@@ -112,17 +112,29 @@ and `src/engine/uct.cpp`. To create an engine, derive the `engine` class in
 `src/engine/uci.h`. Implement `initialize()` and `find_best_move()`, then start
 its `mainloop()` with an `io_handler`.
 
-To play a match between two engines, first build the Python module (run `cmake` with `-DPYMODULE=on`), then run `autoplay.py` with the two engines specified as arguments. Example:
+To play a match between two engines, first build the Python module (run `cmake` with `-DPYMODULE=on`), then run `scripts/autoplay.py` with the two engines specified as arguments. Example:
 ```sh
-python autoplay.py --white "./build/5dchess mcts" --black "./build/5dchess monkey"
+python scripts/autoplay.py --white "./build/5dchess mcts" --black "./build/5dchess monkey"
 ```
+The root Python scripts live in `scripts/`. The default Python module directory
+is the repository’s `build/`, regardless of your current directory. Engine
+commands, explicit `--module-dir` values, and log paths are relative to the
+current directory. To run from `scripts/`, use:
+
+```sh
+cd scripts
+python autoplay.py --white "../build/5dchess mcts" --black "../build/5dchess monkey"
+```
+
+This writes logs under `scripts/logs/`, which Git ignores.
+
 Autoplay records standard PGN match headers. Use `--event` and `--site` to
 name a standalone run; both default to `Autoplay` and `Local`. In a series,
 `Round` is the one-based game number.
 
 For a compact 10-game flat-UCB/MCTS protocol smoke test, use:
 ```sh
-python autoplay.py --white "./build/5dchess flat-ucb --seed 11 --rollout-max-actions 2" --black "./build/5dchess mcts --seed 29 --rollout-max-actions 2" --movetime 20 --max-actions 2 --games 10
+python scripts/autoplay.py --white "./build/5dchess flat-ucb --seed 11 --rollout-max-actions 2" --black "./build/5dchess mcts --seed 29 --rollout-max-actions 2" --movetime 20 --max-actions 2 --games 10
 ```
 Autoplay metrics include `engine_score`: flat-UCB's selected-action rollout win rate, or MCTS's average score along the selected principal path. MCTS also fills `engine_scores` with the colon-separated score for each path node. Both engines report `iterations` and `ips` (iterations per second) in the CSV metrics.
 Use `--help` for more information on how to set a starting game, time controls, or a multi-game series.
@@ -132,6 +144,11 @@ reporting, automatic opponent selection, and concurrent games, see
 [Elo registry and concurrent matchmaker](docs/elo-matchmaker.md). The pure
 `elo.py` tool never launches an engine; `elo_matchmaker.py` optionally automates
 its scheduled matches through `autoplay.py`.
+
+Run the Python script and binding contract tests with
+`python -m unittest discover -s scripts/test -v`. No `venv/` folder is required. The
+[test coverage guide](scripts/test/README.md) explains what passing establishes
+for each module and which features remain outside this suite.
 
 #### Coding with IDE
 
@@ -154,16 +171,33 @@ git clone --recurse-submodules <link-to-this-repo>
 ```
 to download both this repository and the necessary submodules.
 
-If interaction with the [graphics interface](https://github.com/SuZero-5DChess/5dchess_client) is preferred, please install `flask` and `flask_socketio` via `pip`.
+Use Python 3.11 or newer; Python 3.12 is tested. A virtual environment is
+optional. Use the same interpreter to install dependencies, build the binding,
+and run scripts/tests. For the [graphics interface](https://github.com/SuZero-5DChess/5dchess_client)
+and web API tests, install Flask and Flask-SocketIO in that interpreter:
 
 ```sh
-mkdir build
-cd build
-cmake .. -DPYMODULE=on -DCMAKE_BUILD_TYPE=Release
-cmake --build .
+python -m pip install flask flask-socketio
 ```
 
-To use it, go to the base directory of this project and run `host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
+From the repository root, configure and build using your selected Python
+(the following example uses a POSIX shell):
+
+```sh
+cmake -S . -B build -DPYMODULE=ON -DENGINE=ON -DCMAKE_BUILD_TYPE=Release \
+  -DPython_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
+cmake --build build --parallel
+python -m unittest discover -s scripts/test -v
+```
+
+You can replace `python` with an absolute interpreter path, such as
+`/opt/anaconda3/bin/python`. CMake discovers Python automatically when
+`Python_EXECUTABLE` is omitted, but its cached selection can differ from the
+shell's `python`. Passing the path explicitly keeps the binding and runtime
+aligned. Reconfigure and rebuild when changing interpreters. `ENGINE=ON` builds
+the executable used by autoplay and the real-engine smoke test.
+
+To use it, go to the base directory of this project and run `python scripts/host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
 
 ### Build WASM
 
@@ -205,8 +239,8 @@ For more details on the structure of this repository, please read [this page](do
 ### TODOs
 - [x] Modularize Monte Carlo tree search
 - [x] Move weighting for default policy
-- [ ] Move ordering for tree policy
-- [ ] Progressive widening
+- [x] Move ordering for tree policy
+- [x] Progressive widening
 - [x] Learned weights for the linear engine
 - [ ] UCT/PUCT switch
 - [x] Increase performance of find_checks

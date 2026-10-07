@@ -1,7 +1,10 @@
-import sys, os
+import sys
+from pathlib import Path
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 original_sys_path = sys.path.copy()
 try:
-    sys.path.append(os.path.join(os.path.dirname(__file__), 'build'))
+    sys.path.append(str(REPOSITORY_ROOT / 'build'))
     import engine # type: ignore
 finally:
     sys.path = original_sys_path

@@ -728,7 +728,7 @@ def _add_game_options(parser: argparse.ArgumentParser, *, include_games: bool) -
         action="append",
         help="define a stratified refill pool as NAME=CPU,CPU,...; repeat per group",
     )
-    parser.add_argument("--module-dir", type=Path, default=Path("build"))
+    parser.add_argument("--module-dir", type=Path, default=autoplay.DEFAULT_MODULE_DIR)
     parser.add_argument("--movetime", type=int, default=1000)
     parser.add_argument("--timeout", type=int, default=2000)
     parser.add_argument("--max-actions", type=int, default=500)
