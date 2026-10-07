@@ -29,6 +29,8 @@ int very_long_function_name<with_template>(
 });
 ```
 
+- RTTI is forbidden in `src/` and `tools/`.
+
 ## Testing
 
 Build the affected targets and run the relevant tests.
@@ -60,6 +62,8 @@ Update documentation when changing user-visible behavior.
 Keep the root README focused on the project overview, quick start, limitations, and documentation navigation. Put detailed instructions and feature explanations in the relevant page under `docs/`.
 
 Keep each piece of guidance in one primary location and link to it elsewhere. Add new pages to the [documentation guide](docs/README.md), and update links when moving files.
+
+After implementing a new feature or refactoring, do not edit `docs/architecture/` or `docs/README.md` before the code becomes stable.
 
 Experimental results belong in `docs/reports/`. Distinguish measured results from expectations or hypotheses.
 

@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <set>
@@ -18,6 +19,8 @@
 
 class state
 {
+    friend std::uint64_t hash_state(const state &s);
+
     std::unique_ptr<multiverse> m;
     /*
      `present` is in L,T coordinate (i.e. not u,v corrdinated).

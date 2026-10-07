@@ -16,6 +16,7 @@
 !/CMakeLists.txt
 !/LICENSE
 !/README.md
+!/CONTRIBUTING.md
 !/emmodule.cpp
 !/pymodule.cpp
 !/test.cpp
