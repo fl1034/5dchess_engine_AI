@@ -5,9 +5,9 @@ The converter intentionally writes full 5DPGN notation.  This avoids needing
 to reconstruct board state merely to shorten moves or identify captures.
 
 Examples:
-    python3 uci_to_5dpgn.py 'position startpos moves (0T1)e2e3 submit'
+    python3 scripts/uci2pgn.py 'position startpos moves (0T1)e2e3 submit'
     printf '%s\n' 'position size 6x6 odd fen [6/6/6/6/6/6:0:1:w] moves submit' \\
-        | python3 uci_to_5dpgn.py
+        | python3 scripts/uci2pgn.py
 """
 
 from __future__ import annotations

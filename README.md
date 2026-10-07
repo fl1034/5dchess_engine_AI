@@ -1,246 +1,81 @@
-5D Chess Engine
-==================
+# 5D Chess Engine
 
-An open source C++ engine based on Monte Carlo tree search (MCTS) for the game '5D Chess With Multiverse Time Travel', featuring fast checkmate detection and customized MCTS tree design.
+An open-source C++ engine and game logic library for **5D Chess With Multiverse Time Travel**. It provides Monte Carlo tree search engines, legal action generation, checkmate detection, a web analyzer, and Python and JavaScript bindings.
 
-Besides the [5duci](docs/5duci.md) engine, this project also includes a web interface which allows analyzing 5D Chess positions online. Moreover, it provides python and javascript bindings that allows access of game logic from different programming languages.
+## Features
 
-### Try it online!
+- Analyze positions and explore branching game histories.
+- Run search engines through the [5DUCI protocol](docs/5duci.md).
+- Generate legal actions and detect checkmate using the [hypercuboid algorithm](docs/hypercuboid.md).
+- Read custom starting positions and [branched 5DPGN games](docs/branched-5dpgn.md).
+- Access game logic from C++, Python, or JavaScript.
 
-Visit <https://ftxi.github.io/5dchess_engine/>.
+Boards are limited to a maximum size of **8 × 8**. Engine strength and search methods remain under active development.
 
-### Features
+## Quick start (Analyze Games)
 
-This project is written in a serious language for chess-programming. The target for it has shift from early stage goal of providing fast performance for basic game logic such as move generation and checkmate detection, which can be then used as a solid foundation for a competent 5d chess bot, to actually improving the bot. In fact, the plans for the near future is to try out different modifications of MCTS and figure out which is the correct direction.
+**[Try the web analyzer](https://ftxi.github.io/5dchess_engine/)**
 
-This program supports reading arbitary 5d chess variant specified by 5dfen. For moves, it supports long algebraic notation (which looks like `(0T13)b6b5` for physical moves and `(-1T19)e8(0T18)f8` for superphysical moves) or simplified 5dpgn notation specified in [docs/pgn-bnf.txt](docs/pgn-bnf.txt).
+## Quick start
 
-The storage of a game state is based on [bitboards](https://www.chessprogramming.org/Bitboards). As a result, all boards are hard-coded to be no larger than `8x8`.
+Requires **CMake 3.20 or newer** and a compiler with **C++23 support**.
 
-Currently, the engine implements move generation and check detection using coroutine-based generators. Thus it won't work on compilers pre-C++20.
-
-For checkmate detection and action generation, this program implements the hypercuboid algorithm. The hypercuboid algorithm is also utilized in `core/fine_tree.h` for generating semimoves. This ensures that the branching factor of the search tree does not explode exponentially with the number of timelines.
-
-This program supports tree shaped traversal.
-
-### Usage
-
-The CMake program and a modern C++ complier (C++ 20 or newer) is required. On MacOS, Xcode is enough. On windows, I suggest Visual Studio Community version 2022.
-
-There are a number of ways to use the program:
-1. Use the static webpage hosted on github pages. See *Try it online* above.
-2. Use the command-line engine and tools. No dependencies other than cmake and a C++ compiler. See *Build command-line programs*.
-3. Build python module and host a graphics interface server via python. Requires a python runtime with `flask` and `flask_socketio` installed. See *Build Python Module*.
-4. Build javascript module and host the static webpage same as the online version. See *Build WASM*.
-
-#### Build command-line programs
+From the repository root:
 
 ```sh
-mkdir build
-cd build
-cmake .. -DENGINE=on -DTOOLS=on -DCMAKE_BUILD_TYPE=Release
-cmake --build .
+cmake -S . -B build -DENGINE=ON -DTOOLS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
 ```
-The performance of this code depends significantly on compiler optimizations. Without optimization, the plain (unoptimized) version may run x6 ~ x7 times slower compared to the same code compiled with `-O3` optimization.
-The flag `-DCMAKE_BUILD_TYPE=Release` above is used to enable optimizations.
 
+This builds the `5dchess` engine and `5dtools` utilities. Use a Release build for search performance.
 
-The engine is built as `build/5dchess`, and the general command-line utility is built as `build/5dtools`. For commands that consume a game, provide 5DPGN on standard input and press Control-D to complete it. Current utility commands include:
--  `print [--at <turn>]`: print the selected state of the game
--  `stats [--at <turn>] [--format text|json]`: display position, timeline, and HC-volume statistics
--  `count [--at <turn>] [--format text|json] [<policy>] [<max>]`: display number of available moves capped by `<max>`
--  `all [--at <turn>] [<policy>] [<max>]`: display all legal moves capped by `<max>`
--  `checkmate [--at <turn>] [<policy>]`: determine whether the selected state is checkmate/stalemate
--  `diff [--at <turn>]`: compare the output of two algorithms
--  `perftest [<policy>]`: on each intermediate state, print 1 if it is checkmate/stalemate, 0 otherwise
--  `rollout [options]`: run and report random rollout simulations
--  `replay-log <log> [seed]`: replay and time a protocol failure log
-
-For `print`, `stats`, `count`, `all`, `checkmate`, and `diff`, `--at 0` and
-`--at 0b` select the initial
-position. A value such as `--at 16b` selects the state immediately after
-turn `16b` is submitted. A count equal to its maximum is the cap sentinel;
-for example, `max=10001` and a result of `10001` means 10,000 or more
-actions.
-
-Build the tests independently with `-DTEST=on`. With none of `ENGINE`, `TOOLS`, `TEST`, `PYMODULE`, or `EMMODULE` enabled, CMake builds only the core C++ library.
-
-#### Engines and autoplay
-
-There are eleven engines: `mcts`, `mcts-weighted`, `zero`, `zero-capture`,
-`zero-capture-check-pw`, `linear`, `linear-trained`, `linear-weighted`,
-`flat-ucb`, `flat-ucb-weighted`, and `monkey`. They communicate using the
-[5DUCI protocol](docs/5duci.md).
-
-The three `*-weighted` engines use move metadata to bias rollout selection
-toward tactically promising moves. `zero` is MCTS with a constant-zero default
-policy.
-
-`zero-capture` and `zero-capture-check-pw` share move evaluation with different
-capture/check weight profiles. `zero-capture-check-pw` also uses progressive
-widening; its widening constant and exponent can be changed with
-`--pw-constant` and `--pw-alpha`.
-
-The Linear engines evaluate inconclusive rollout positions with the same
-bounded 64-feature model. `linear` and `linear-weighted` use hand-written
-weights, while `linear-trained` uses a frozen experimental profile. See
-[Linear evaluation features](docs/linear-features.md).
-
-The two flat-UCB engines evaluate each legal root action with repeated rollouts
-and choose with the adversarial UCB rule, without expanding a search tree.
-Weighting affects their rollout moves, not root UCB selection.
-
-Search engines accept an optional unsigned 32-bit seed using `--seed` or `-s`.
-For example, use `5dchess flat-ucb-weighted --seed 1234`. MCTS, Linear, and
-flat-UCB engines also accept `--rollout-max-actions` (or `-r`) to shorten each
-default-policy rollout from its default limit of 200 actions. For example, use
-`5dchess linear-weighted --rollout-max-actions 40`.
-
-Weighted engines accept `--weight-temperature` (or `-wt`) to control how
-strongly move weights bias their rollouts. Lower positive values increase the
-bias; higher values approach randomized selection. The default is `1200`. The
-same value can be changed through 5DUCI with
-`setoption name weight-temperature value 600.0`.
-
-The rollout action limit can be changed through 5DUCI with
-`setoption name rollout-max-actions value 40`. A rollout that reaches the limit
-is scored as a draw by MCTS and flat-UCB; Linear evaluates the final rollout
-position instead. Setting the limit to zero disables rollout entirely.
-
-The shared confidence-bound scoring implementation is in `src/engine/uct.h`
-and `src/engine/uct.cpp`. To create an engine, derive the `engine` class in
-`src/engine/uci.h`. Implement `initialize()` and `find_best_move()`, then start
-its `mainloop()` with an `io_handler`.
-
-To play a match between two engines, first build the Python module (run `cmake` with `-DPYMODULE=on`), then run `scripts/autoplay.py` with the two engines specified as arguments. Example:
-```sh
-python scripts/autoplay.py --white "./build/5dchess mcts" --black "./build/5dchess monkey"
-```
-The root Python scripts live in `scripts/`. The default Python module directory
-is the repository’s `build/`, regardless of your current directory. Engine
-commands, explicit `--module-dir` values, and log paths are relative to the
-current directory. To run from `scripts/`, use:
+Start an MCTS engine:
 
 ```sh
-cd scripts
-python autoplay.py --white "../build/5dchess mcts" --black "../build/5dchess monkey"
+./build/5dchess mcts
 ```
 
-This writes logs under `scripts/logs/`, which Git ignores.
+The engine accepts [5DUCI](docs/5duci.md) commands on stdin. Enter the commands below in order, waiting for `5duciok` after `5duci` and `readyok` after `isready` before continuing:
 
-Autoplay records standard PGN match headers. Use `--event` and `--site` to
-name a standalone run; both default to `Autoplay` and `Local`. In a series,
-`Round` is the one-based game number.
-
-For a compact 10-game flat-UCB/MCTS protocol smoke test, use:
-```sh
-python scripts/autoplay.py --white "./build/5dchess flat-ucb --seed 11 --rollout-max-actions 2" --black "./build/5dchess mcts --seed 29 --rollout-max-actions 2" --movetime 20 --max-actions 2 --games 10
-```
-Autoplay metrics include `engine_score`: flat-UCB's selected-action rollout win rate, or MCTS's average score along the selected principal path. MCTS also fills `engine_scores` with the colon-separated score for each path node. Both engines report `iterations` and `ips` (iterations per second) in the CSV metrics.
-Use `--help` for more information on how to set a starting game, time controls, or a multi-game series.
-
-For persistent Elo ratings across many registered engines, manual result
-reporting, automatic opponent selection, and concurrent games, see
-[Elo registry and concurrent matchmaker](docs/elo-matchmaker.md). The pure
-`elo.py` tool never launches an engine; `elo_matchmaker.py` optionally automates
-its scheduled matches through `autoplay.py`.
-
-Run the Python script and binding contract tests with
-`python -m unittest discover -s scripts/test -v`. No `venv/` folder is required. The
-[test coverage guide](scripts/test/README.md) explains what passing establishes
-for each module and which features remain outside this suite.
-
-#### Coding with IDE
-
-It is possible to run the c++ part of the code without interacting with python or web interface at all. It also makes sense to use a modern programming IDE:
-```sh
-mkdir build-xcode
-cd build-xcode
-cmake .. -DTEST=on -GXcode
-```
-On Windows, the last line should be:
-```cmd
-cmake .. -DTEST=on -G"Visual Studio 17 2022"
+```text
+5duci
+isready
+position startpos
+go movetime 1000
 ```
 
-### Build Python Module
+Possible output:
 
-<bold style="color:#ff6347;">**IMPORTANT NOTE**</bold> This module rely on two separate submodules. It is impossible to build the python library without them. Make sure use
-```sh
-git clone --recurse-submodules <link-to-this-repo>
-```
-to download both this repository and the necessary submodules.
-
-Use Python 3.11 or newer; Python 3.12 is tested. A virtual environment is
-optional. Use the same interpreter to install dependencies, build the binding,
-and run scripts/tests. For the [graphics interface](https://github.com/SuZero-5DChess/5dchess_client)
-and web API tests, install Flask and Flask-SocketIO in that interpreter:
-
-```sh
-python -m pip install flask flask-socketio
+```text
+5duciok
+readyok
+bestmove (0T1)g1f3
 ```
 
-From the repository root, configure and build using your selected Python
-(the following example uses a POSIX shell):
+The engine also prints identification, option, and search information. The move line starts with `bestmove`, followed by the selected move or action.
 
-```sh
-cmake -S . -B build -DPYMODULE=ON -DENGINE=ON -DCMAKE_BUILD_TYPE=Release \
-  -DPython_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
-cmake --build build --parallel
-python -m unittest discover -s scripts/test -v
-```
+With a multi-configuration generator such as Visual Studio, executables are under `build/Release/`; on Windows, they have an `.exe` suffix.
 
-You can replace `python` with an absolute interpreter path, such as
-`/opt/anaconda3/bin/python`. CMake discovers Python automatically when
-`Python_EXECUTABLE` is omitted, but its cached selection can differ from the
-shell's `python`. Passing the path explicitly keeps the binding and runtime
-aligned. Reconfigure and rebuild when changing interpreters. `ENGINE=ON` builds
-the executable used by autoplay and the real-engine smoke test.
+See the [build guide](docs/usage/building.md) for platform details, Python bindings, and WebAssembly builds.
 
-To use it, go to the base directory of this project and run `python scripts/host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
+## Documentation
 
-### Build WASM
+| Task | Guide |
+|---|---|
+| Build native programs, Python bindings, or the web interface | [Building](docs/usage/building.md) |
+| Choose an engine, configure search, or run autoplay matches | [Engine usage](docs/engine/usage.md) |
+| Inspect positions and enumerate legal actions | [Command-line tools](docs/usage/tools.md) |
+| Manage engine ratings and schedule matches | [Elo registry and matchmaker](docs/engine/elo-matchmaker.md) |
+| Understand the linear evaluation model | [Linear features](docs/engine/linear-features.md) |
+| Understand game logic and client design | [Core architecture](docs/architecture/core.md) · [Client architecture](docs/architecture/client.md) |
+| Integrate an engine or read game notation | [5DUCI](docs/5duci.md) · [Branched 5DPGN](docs/branched-5dpgn.md) |
 
-Requires [emscripten](https://emscripten.org).
+See the [documentation guide](docs/README.md) for algorithm explanations, formal grammar, and experimental reports.
 
-```sh
-mkdir build-wasm
-cd build-wasm
-emcmake cmake .. -DEMMODULE=on -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-```
+## Contributing
 
-The static website is generated in the `/build-wasm/ui/`. 
-Note that simply double-clicking index.html will likely fail to initialize the JavaScript components due to [CORS (Cross-Origin Resource Sharing)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) restrictions enforced by modern browsers when using the `file://` protocol.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development conventions, testing expectations, and documentation guidelines.
 
-To run the application correctly, you must serve the directory via a local web server. Use one of the following methods from within the `build-wasm/` folder:
+## Attribution
 
-If you have python installed:
-```sh
-python -m http.server 8080 --directory ui/
-```
-If the emsdk is already sourced in your environment:
-```sh
-emrun ui/
-```
-If you prefer [darkhttpd](https://github.com/emikulic/darkhttpd):
-```sh
-darkhttpd ui/
-```
-
-### Disclaimer
-
-All resources inside this project are either open source online or created by myself. It does not use any source code, copied directly or decompiled, from the 5D Chess With Multiverse Time Travel by Thunkspace, LLC. The original game is a commercial product and I have no affiliation with the developer.
-
-### Documentation
-
-For more details on the structure of this repository, please read [this page](docs/index.md).
-
-### TODOs
-- [x] Modularize Monte Carlo tree search
-- [x] Move weighting for default policy
-- [x] Move ordering for tree policy
-- [x] Progressive widening
-- [x] Learned weights for the linear engine
-- [ ] UCT/PUCT switch
-- [x] Increase performance of find_checks
+All resources in this project are open source or created by the project author. This is an independent project and is not affiliated with Thunkspace, LLC. It contains no copied or decompiled source code from the commercial game **5D Chess With Multiverse Time Travel**.

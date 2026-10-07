@@ -79,6 +79,6 @@ Python binding.
 
 Use the same Python for installation, compilation, and tests. An existing
 binding that cannot load fails rather than skips; rebuild for the selected
-interpreter. See the [root README](../../README.md#build-python-module) for
+interpreter. See the [build guide](../../docs/usage/building.md#python-module) for
 build prerequisites and interpreter selection. Full validation requires a
 passing run with zero skips.

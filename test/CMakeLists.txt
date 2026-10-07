@@ -9,9 +9,11 @@ foreach(TEST_FILE ${TEST_SOURCES})
 
     # Create an executable for each test file
     add_executable(${TEST_NAME} ${TEST_FILE})
+    add_dependencies(${TEST_NAME} copy_pgn_fixtures)
     # Disable LTO/IPO for this test target
     set_target_properties(${TEST_NAME} PROPERTIES
         INTERPROCEDURAL_OPTIMIZATION FALSE
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<0:>"
     )
 
     # Link against the core engine library

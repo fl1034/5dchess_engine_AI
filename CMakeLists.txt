@@ -140,6 +140,14 @@ target_include_directories(5dchess_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 # Check if this is being built as a submodule
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     # Standalone mode - build only the explicitly requested products.
+    if(TOOLS OR TEST)
+        add_custom_target(copy_pgn_fixtures ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/test/pgn"
+                "${CMAKE_CURRENT_BINARY_DIR}/pgn"
+            COMMENT "Copying PGN fixtures to build directory"
+        )
+    endif()
     if(ENGINE OR TOOLS)
         add_subdirectory(tools)
     endif()
@@ -149,6 +157,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         # Scratch executable for temporary, ad hoc experiments. Keep this out
         # of CTest because test.cpp is intentionally edited and cleared often.
         add_executable(test_exec test.cpp)
+        add_dependencies(test_exec copy_pgn_fixtures)
         target_link_libraries(test_exec PRIVATE 5dchess_client 5dchess_engine)
         add_subdirectory(test)
     endif()

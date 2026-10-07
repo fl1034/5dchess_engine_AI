@@ -52,11 +52,11 @@ hand-written weights are zero.
 `linear.cpp`. It is the first 64 coefficients of the final `r=40` checkpoint;
 royal-safety coefficients from that experiment are intentionally excluded.
 Consequently this projected profile is not identical to the engine evaluated
-in the original matches. See [Frozen Linear profile](linear-trained.md).
+in the original matches. See [Frozen Linear profile](../reports/linear-trained.md).
 
-Both engines retain the normal rollout option, for example:
+Both engines retain the normal rollout option. From the repository root:
 
 ```sh
-5dchess linear -r 40
-5dchess linear-trained -r 40
+./build/5dchess linear -r 40
+./build/5dchess linear-trained -r 40
 ```

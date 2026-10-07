@@ -128,6 +128,9 @@ python3 scripts/elo.py schedule 4 --engine candidate
 python3 scripts/elo.py report 42 white --pgn completed-game.5dpgn
 ```
 
+In the `report` example, replace `42` with a scheduled match ID and
+`completed-game.5dpgn` with the path to its completed game.
+
 Valid reports are `white`, `black`, `draw`, and `void`. Void and aborted games
 do not affect ratings.
 

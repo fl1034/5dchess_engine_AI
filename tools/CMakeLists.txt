@@ -20,11 +20,7 @@ if(TOOLS)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     )
 
-    add_custom_command(TARGET 5dtools POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/test/pgn
-        $<TARGET_FILE_DIR:5dtools>/pgn
-    )
+    add_dependencies(5dtools copy_pgn_fixtures)
 
     if(TEST)
         message(STATUS "Registering tools related tests...")
