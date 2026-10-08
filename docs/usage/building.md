@@ -105,6 +105,8 @@ cmake --build build-wasm --parallel
 ```
 
 The static website is generated in the `build-wasm/ui/`.
+
+The floating game-information panel displays the loaded game’s White and Black headers and recorded Result. Use its bottom-right expand/fold button to reveal Event, Site, Date, and Round in the same panel. The button has a soft gray corner highlight on hover or keyboard focus; the HUD toggle uses the same fading gray treatment beneath its centered icon. Player names stay side by side with evenly distributed gaps around the result, and full values wrap in the expanded view; long summaries use ellipses. Missing names appear as dark-gray “Unknown Player” placeholders, missing details as a dash, and an unknown or unfinished Result is replaced by a muted slash between the players in the expanded view (omitted in the folded summary). The panel stays open until folded and updates when another game is loaded. On narrow windows it sits below overlapping controls; oversized details scroll within the viewport. The recorded Result is independent of the current position’s move/status display.
 Note that simply double-clicking index.html will likely fail to initialize the JavaScript components due to [CORS (Cross-Origin Resource Sharing)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) restrictions enforced by modern browsers when using the `file://` protocol.
 
 To run the application correctly, you must serve the directory via a local web server. Use one of the following methods after running `cd build-wasm`:

@@ -1,5 +1,7 @@
 // ui.js
 
+import { setGameMetadata } from './metadata.js';
+
 export const UI = (() => {
     /* ================= SVG Icons ================= */
     const ICON_UP = `
@@ -1038,6 +1040,7 @@ export const UI = (() => {
     };
 
     return {
+        setGameMetadata,
         buttons: buttonControls,
         select: selectControls,
         

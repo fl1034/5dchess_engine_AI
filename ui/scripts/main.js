@@ -167,6 +167,7 @@ worker.onmessage = (e) => {
     else if (msg.type === 'update_hud_status')
     {
         UI.setHudTitle(msg.hudTitle);
+        UI.setGameMetadata(msg.metadata);
         if (msg.hudText) {
             UI.setHudText(msg.hudText);
         }

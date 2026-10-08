@@ -63,6 +63,32 @@
 
 <body>
 
+<!-- Game metadata: one panel that extends from its top-left corner. -->
+<section id="gameMetadata" class="game-metadata" aria-label="Game information">
+    <div id="gameMetadataSummary" class="game-metadata-summary">
+        <span data-game-header="white" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
+        <span class="game-metadata-separator" aria-hidden="true">/</span>
+        <span data-game-header="black" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
+        <span data-game-header="result" class="game-metadata-result" hidden></span>
+    </div>
+    <div id="gameMetadataDetails" class="game-metadata-details" hidden>
+        <div data-game-header="event" class="game-metadata-event"></div>
+        <div class="game-metadata-players">
+            <div><div data-game-header="white" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">White</span></div>
+            <span data-game-header="result" class="game-metadata-result game-metadata-result-empty">/</span>
+            <div><div data-game-header="black" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">Black</span></div>
+        </div>
+        <dl class="game-metadata-facts">
+            <div class="game-metadata-site"><dt>Site</dt><dd data-game-header="site"></dd></div>
+            <div><dt>Date</dt><dd data-game-header="date"></dd></div>
+            <div><dt>Round</dt><dd data-game-header="round"></dd></div>
+        </dl>
+    </div>
+    <button id="gameMetadataToggle" class="game-metadata-toggle" type="button" aria-expanded="false" aria-controls="gameMetadataDetails" aria-label="Expand game information" title="Expand game information">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path></path></svg>
+    </button>
+</section>
+
 <!-- SVG Icon Definitions -->
 <svg style="display: none;">
     <defs>

@@ -239,6 +239,7 @@ createModule().then((engine) => {
         self.postMessage({
             type: 'update_hud_status',
             hudTitle: matchStatus,
+            metadata: self.game.get_metadata(),
             hudText: hudText,
         });
     }
