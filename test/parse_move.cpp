@@ -1,3 +1,5 @@
+#undef NDEBUG
+#include <cassert>
 #include <iostream>
 #include <vector>
 #include "pgnparser.h"
@@ -51,8 +53,23 @@ void test_match()
 
 
 
+void test_castling_parsing_and_move_boundaries()
+{
+    for(const std::string notation : {"O-O", "O-O-O", "O-O+", "O-O-O#?!"})
+    {
+        assert(pgnparser(notation).parse_standalone_move().has_value());
+        const auto parsed = pgnparser("1. " + notation + " (1T1)e4 / e5").parse_game();
+        assert(parsed.has_value());
+        const auto &actions = std::get<pgnparser_ast::gametree::variations_t>(
+            parsed->gt.variations_or_outcome);
+        assert(actions.back().first.moves.size() == 2);
+        assert(pgnparser("1. " + notation + "{castle}/ e5").parse_game().has_value());
+    }
+}
+
 int main()
 {
+    test_castling_parsing_and_move_boundaries();
     test_match();
 //    auto obj = pgnparser("(-1T5)f6>>(0T5)f6").parse_superphysical_move();
 //    std::cout << obj << "\n";

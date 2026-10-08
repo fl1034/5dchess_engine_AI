@@ -12,6 +12,8 @@ Use existing features and utilities where possible before implementing new ones.
 
 Before introducing a new dependency for C++ or the UI, open an issue to discuss it.
 
+- `test/` and `tools/` are reserved for C++ files. Put python source files and shell scripts inside `scripts/` if they worths reusing. 
+
 ## C++ style
 
 Follow the surrounding code, including these conventions:

@@ -381,6 +381,16 @@ class RatioContracts(ContractCase):
 class BindingContracts(ContractCase):
     """Real public engine objects: legal/illegal moves, history, and PGN."""
 
+    def test_endpoint_hash_ignores_metadata_and_tracks_navigation(self):
+        rules = self.bindings()
+        initial = rules.game.from_pgn(STANDARD_GAME)
+        game = rules.game.from_pgn(STANDARD_GAME + '\n[Result "0-1"]\n1. e4 {clock}')
+        endpoint = game.get_current_hash()
+        self.assertNotEqual(endpoint, initial.get_current_hash())
+        self.assertEqual(endpoint, rules.game.from_pgn(STANDARD_GAME + '\n1. e4').get_current_hash())
+        game.visit_parent()
+        self.assertEqual(game.get_current_hash(), initial.get_current_hash())
+
     def test_coordinates_and_move_values(self):
         rules = self.bindings()
         point = rules.vec4(3, 1, 1, 0)

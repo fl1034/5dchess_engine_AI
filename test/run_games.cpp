@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
         if(argc == 0 || argv[0] == nullptr || argv[0][0] == '\0')
             throw std::runtime_error("Cannot locate the run_games executable");
         const auto directory = executable_path(argv[0]).parent_path().parent_path()
-            / "pgn/online_games";
+            / "pgn/online";
         std::vector<std::filesystem::path> paths;
         for(const auto &entry : std::filesystem::directory_iterator(directory))
         {
@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
             pgns.push_back(contents.str());
         }
 
-        const int repetitions = 10;
+        const int repetitions = 2;
         const auto start = std::chrono::steady_clock::now();
         for(int iteration = 0; iteration < repetitions; ++iteration)
         {

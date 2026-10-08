@@ -75,21 +75,21 @@ void pgnparser::next_token()
             buffer.current++;
             break;
         case 'O':
-            if(input.end()-buffer.current>=2 && *++buffer.current == '-' && *++buffer.current == 'O')
+            if(input.end()-buffer.current >= 3
+               && buffer.current[1] == '-' && buffer.current[2] == 'O')
             {
-                if(input.end()-buffer.current>=2 && *++buffer.current == '-' && *++buffer.current == 'O')
+                buffer.current += 3;
+                if(input.end()-buffer.current >= 2
+                   && buffer.current[0] == '-' && buffer.current[1] == 'O')
                 {
                     buffer.token = CASTLE_QUEENSIDE;
                     dprint("token:CASTLE_QUEENSIDE");
-                    buffer.current++;
-                    break;
+                    buffer.current += 2;
                 }
                 else
                 {
                     buffer.token = CASTLE_KINGSIDE;
                     dprint("token:CASTLE_KINGSIDE");
-                    buffer.current++;
-                    break;
                 }
             }
             else
@@ -547,6 +547,10 @@ std::optional<physical_move> pgnparser::parse_physical_move()
     {
         token_t castle = buffer.token;
         next_token();
+        if(buffer.token == POSITIVE || buffer.token == SOFTMATE || buffer.token == CHECKMATE)
+            next_token();
+        if(buffer.token == EVALUATION_SYM)
+            next_token();
         return physical_move{board, castle, std::nullopt, std::nullopt, std::nullopt, false, 0, 0, std::nullopt};
     }
     if(buffer.token == PIECE)

@@ -71,6 +71,37 @@ const std::map<std::string, variant_setup_t> default_variants = {
         }
     },
     {
+        "Standard - Half Reflected",
+        {
+            8,8,
+            {
+                std::make_tuple("r*nbqk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*NBK*QBNR*", pgnparser_ast::NIL, 0, 1, false)
+            },
+            false
+        }
+    },
+    {
+        "Standard - Defended Pawn",
+        {
+            8,8,
+            {
+                std::make_tuple("r*qbnk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*QBNK*BNR*", pgnparser_ast::NIL, 0, 1, false)
+            },
+            false
+        }
+    },
+    {
+        "Standard - Two Timelines",
+        {
+            8,8,
+            {
+                std::make_tuple("r*nbqk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*NBQK*BNR*", pgnparser_ast::NEGATIVE, 0, 1, false),
+                std::make_tuple("r*nbqk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*NBQK*BNR*", pgnparser_ast::POSITIVE, 0, 1, false),
+            },
+            true
+        }
+    },
+    {
         "Very Small - Open",
         {
             4,4,

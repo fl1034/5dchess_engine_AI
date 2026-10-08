@@ -4,6 +4,7 @@
 #include <pybind11/operators.h>
 #include <ostream>
 #include "game.h"
+#include "core/hash.h"
 
 namespace py = pybind11;
 
@@ -148,6 +149,9 @@ PYBIND11_MODULE(engine, m) {
         .def("get_current_state", &game::get_current_state)
         .def("get_current_fen", [](const game &g) {
             return g.get_current_state().show_fen();
+        })
+        .def("get_current_hash", [](const game &g) {
+            return hash_state(g.get_current_state());
         })
         .def("get_current_present", &game::get_current_present)
         .def("get_current_boards", &game::get_current_boards)

@@ -103,13 +103,22 @@ Metadata of the game is stored as headers. A header looks like this:
 
 A program that supports Branched 5DPGN should be able to handle these header keys:
 
-+ `Variant`: Which variant is chosen (`Standard Turn - Zero`, `Princess`, etc.)
++ `Variant`: Which variant is chosen (`Standard - Turn Zero`, `Princess`, etc.)
 + `Size`: Size of a board. Values have the form `<m>x<n>`, e.g. `8x8`, `5x5`, etc.
 + `Timeline`: If the starting state has odd or even timelines. Values are `Odd` or `Even`.
 
 Here are some other recommended headers:
 + `Promotions`: A list of capital letters, describing which piece pawns/brawns can promote to.
 + `Puzzle`: indicates what kind of puzzle it is (mate in N, aid mate, find the best move, etc.)
+
+These named variants supply their starting boards and timeline layout without
+explicit 5DFEN or `Timeline` headers:
+
+| Variant | Starting position |
+| --- | --- |
+| `Standard - Half Reflected` | Standard board with White's king on d1 and queen on e1; one odd timeline at turn 1 |
+| `Standard - Defended Pawn` | Standard board with queens on b1/b8 and knights on d1/d8; one odd timeline at turn 1 |
+| `Standard - Two Timelines` | Two standard boards at turn 1, on even timelines -0 and +0 |
 
 If `Promotions` is omitted, it defaults to `Q`. Commas and whitespace in its
 value are ignored, so `RBNQ` and `R B N, Q` are equivalent. `*` allows every

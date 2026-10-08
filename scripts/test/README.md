@@ -21,6 +21,10 @@ From `scripts/`, use `python -m unittest discover -s test -v`.
 | [`scripts/host.py`](../host.py) | HTTP HTML response and socket messages for loading, moving, undo/redo, submission, navigation, cancellation, PGN export/reload, and hints. |
 | [`pymodule.cpp`](../../pymodule.cpp), through compiled `engine` | Coordinate/move objects, legal and illegal moves, undo/redo, submission, history navigation, comments, and PGN round trips. |
 
+The binding tests cover `game.get_current_hash()` across metadata changes
+and history navigation. This hash uses `hash_state`; equal hashes require an
+exact endpoint comparison before removing duplicate fixtures.
+
 Controllers use scripted 5DUCI engine subprocesses with fixed moves/statistics
 and deliberate faults. The actual controllers and compiled rules run normally.
 A separate smoke check uses the real `5dchess zero` engine. Temporary databases,
