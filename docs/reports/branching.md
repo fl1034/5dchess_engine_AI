@@ -55,7 +55,7 @@ For 1,054 positive, uncapped human observations, let $x=\ln S$ and $y=\ln N$. Th
 
 The intercept fit has Pearson correlation $r=0.85049$ and gives $N\approx5.0441S^{0.338328}$. Its reported fit statistics are in-sample, unlike the game-held-out validation of the original pilot.
 
-![Human-game legal-action count versus HC universe volume](branching-human-hc-volume.png)
+![Human-game legal-action count versus HC universe volume](res/branching-hc-volume.png)
 
 The plot excludes zero counts and capped observations. The clusters and spread show why the relationship is a heuristic rather than a position-by-position identity.
 

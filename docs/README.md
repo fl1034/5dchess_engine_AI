@@ -46,3 +46,11 @@ For implementation details, read [Core game logic](architecture/core.md) and [Cl
 ## Reports
 
 Browse [experimental reports](reports/) for recorded experiments and results.
+Report images, data tables, and measurement summaries are stored in
+[`reports/res/`](reports/res/).
+
+The [Turn Zero game-length and rollout-cost report](reports/game-length-turn-zero.md)
+compares human games with independently verified terminal endpoints against
+fresh random rollouts, using the same action unit. It tests rollout length
+distributions, examines stopping probabilities, and measures the cost of bounded
+rollout evaluation from the opening.
