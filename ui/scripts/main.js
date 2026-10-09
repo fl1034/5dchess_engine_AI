@@ -153,6 +153,7 @@ worker.onmessage = (e) => {
     }
     else if (msg.type === 'update_buttons')
     {
+        UI.setHintAvailable(msg.hint);
         for(let key of ['undo', 'redo', 'prev', 'next', 'submit'])
         {
             if(msg[key])

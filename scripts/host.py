@@ -158,7 +158,8 @@ def handle_submit():
 @socketio.on('request_hint')
 def suggest_action():
     print('received hint request', end='')
-    flag = g.suggest_action()
+    act = g.suggest_action()
+    flag = act is not None and g.add_child_action(act)
     global no_more_hint
     no_more_hint = not flag
     print(' ---', 'success' if flag else 'failed')

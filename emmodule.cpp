@@ -280,7 +280,7 @@ EMSCRIPTEN_BINDINGS(engine) {
             switch(status)
             {
                 case match_status_t::PLAYING:
-                    if(self.get_current_present().second)
+                    if(self.get_unmoved_state().get_present().second)
                         return std::string("Black's Move");
                     else
                         return std::string("White's Move");
@@ -337,7 +337,13 @@ EMSCRIPTEN_BINDINGS(engine) {
             obj.set("y", y);
             return obj;
         }))
-        .function("suggest_action", &game::suggest_action)
+        .function("suggest_action", optional_override([](game &g) {
+            auto act = g.suggest_action();
+            return act ? convert_action_to_js(*act) : val::null();
+        }))
+        .function("add_child_action", optional_override([](game &g, val js_action) {
+            return g.add_child_action(convert_js_to_action(js_action, g.get_unmoved_state()));
+        }))
         .function("get_comments", optional_override([](const game &self) {
             val result = val::array();
             auto comments = self.get_comments();

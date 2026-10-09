@@ -408,6 +408,53 @@ class BindingContracts(ContractCase):
         game.visit_child(short[0][0])
         self.assertNotEqual(game.get_current_hash(), position)
 
+    def test_suggestions_stay_private_and_hint_insertion_preserves_draft_and_redo(self):
+        rules = self.bindings()
+        game = rules.game.from_pgn(STANDARD_GAME)
+        witness = game.suggest_action()
+        self.assertIsNotNone(witness)
+        self.assertEqual(game.get_child_actions(), [])
+        self.assertEqual(game.suggest_action(), witness)
+        self.assertEqual(game.get_match_status(), rules.match_status_t.PLAYING)
+        self.assertTrue(game.apply_move(rules.ext_move(
+            rules.vec4(4, 1, 1, 0), rules.vec4(4, 2, 1, 0), rules.NO_PIECE)))
+        draft = game.get_current_fen()
+        self.assertTrue(game.add_child_action(witness))
+        self.assertFalse(game.add_child_action(witness))
+        self.assertEqual(game.get_current_fen(), draft)
+        self.assertTrue(game.undo())
+        self.assertTrue(game.can_redo())
+        next_witness = game.suggest_action()
+        self.assertIsNotNone(next_witness)
+        self.assertNotEqual(witness, next_witness)
+        self.assertTrue(game.add_child_action(next_witness))
+        self.assertTrue(game.can_redo())
+        self.assertTrue(game.redo())
+        self.assertEqual(game.get_current_fen(), draft)
+
+    def test_hint_exhaustion_is_not_terminal_and_navigation_resets_status(self):
+        rules = self.bindings()
+        game = rules.game.from_pgn(STANDARD_GAME)
+        for _ in range(100):
+            witness = game.suggest_action()
+            if witness is None:
+                break
+            self.assertTrue(game.add_child_action(witness))
+        else:
+            self.fail('opening suggestions did not exhaust')
+        self.assertGreater(len(game.get_child_actions()), 0)
+        self.assertIsNone(game.suggest_action())
+        self.assertEqual(game.get_match_status(), rules.match_status_t.PLAYING)
+        terminal = rules.game.from_pgn(STANDARD_GAME + '\n1. f3 / e5 2. g4 / Qh4')
+        self.assertIsNone(terminal.suggest_action())
+        self.assertEqual(terminal.get_match_status(), rules.match_status_t.BLACK_WINS)
+        terminal.visit_parent()
+        self.assertIsNotNone(terminal.suggest_action())
+        self.assertEqual(terminal.get_match_status(), rules.match_status_t.PLAYING)
+        stale = rules.game.from_pgn('[Size "4x4"]\n[Board "Custom"]\n[k*3/4/1q2/3K*:0:1:w]')
+        self.assertIsNone(stale.suggest_action())
+        self.assertEqual(stale.get_match_status(), rules.match_status_t.STALEMATE)
+
     def test_coordinates_and_move_values(self):
         rules = self.bindings()
         point = rules.vec4(3, 1, 1, 0)

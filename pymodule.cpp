@@ -174,6 +174,7 @@ PYBIND11_MODULE(engine, m) {
             return static_cast<uint8_t>(g.get_promotion_options());
         })
         .def("suggest_action", &game::suggest_action)
+        .def("add_child_action", &game::add_child_action)
         .def("get_comments", &game::get_comments)
         .def("set_comments", &game::set_comments)
         .def("has_parent", &game::has_parent)

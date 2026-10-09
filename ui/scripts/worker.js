@@ -13,6 +13,15 @@ function nextTurn(pos) {
 createModule().then((engine) => {
     self.engine = engine;
     self.game = null;
+    let pendingHint = null;
+    let nodeMoveStatus = null;
+
+    function prepareHint(preserveStatus = false) {
+        pendingHint = self.game ? self.game.suggest_action() : null;
+        if (self.game && !preserveStatus) {
+            nodeMoveStatus = self.game.get_current_present().c ? "Black's Move" : "White's Move";
+        }
+    }
     self.has_children;
     self.memorizedActions = {};
 
@@ -213,6 +222,7 @@ createModule().then((engine) => {
         }
         self.postMessage({
             type: 'update_buttons',
+            hint: pendingHint !== null,
             undo: self.game.can_undo(),
             redo: self.game.can_redo(),
             prev: self.game.has_parent(),
@@ -234,7 +244,9 @@ createModule().then((engine) => {
             return;
         }
         // Get match status and comments
-        const matchStatus = self.game.get_match_status();
+        const matchStatus = pendingHint !== null
+            ? nodeMoveStatus
+            : self.game.get_match_status();
         const comments = self.game.get_comments();
         const hudText =
             comments && comments.length > 0
@@ -268,6 +280,7 @@ createModule().then((engine) => {
         const data = e.data;
         if (data.type === 'load') {
             loadGame(data.pgn);
+            prepareHint();
             updateSelect();
             updateButtons();
             updateHudStatus();
@@ -283,6 +296,7 @@ createModule().then((engine) => {
             self.postMessage({ type: 'moves', moves: moves });
         } else if (data.type === 'submit') {
             self.game.submit();
+            prepareHint();
             updateSelect();
             updateMemorizedAction();
             updateButtons();
@@ -298,20 +312,24 @@ createModule().then((engine) => {
             viewGame();
         } else if (data.type === 'prev') {
             self.game.visit_parent();
+            prepareHint();
             updateSelect();
             updateButtons();
             updateHudStatus();
             viewGame();
         } else if (data.type === 'next') {
             self.game.visit_child(data.action);
+            prepareHint();
             updateSelect();
             updateMemorizedAction();
             updateButtons();
             updateHudStatus();
             viewGame();
         } else if (data.type === 'hint') {
-            self.game.suggest_action();
-            updateSelect();
+            if (pendingHint !== null && self.game.add_child_action(pendingHint)) {
+                prepareHint(true);
+                updateSelect(true);
+            }
             updateButtons();
         } else if (data.type === 'update_settings') {
             // Merge incoming settings

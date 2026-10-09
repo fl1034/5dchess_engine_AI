@@ -19,8 +19,9 @@ int main()
     std::cout << s.to_string();
     
     for(int i=0; i < 10; i++)
-        g.suggest_action();
-    bool flag = g.suggest_action();
+        if(auto act = g.suggest_action())
+            g.add_child_action(*act);
+    bool flag = g.suggest_action().has_value();
     std::cout << flag << "\n";
     auto comments = g.get_comments();
     print_range("comments:", comments);

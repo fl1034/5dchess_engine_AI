@@ -52,6 +52,12 @@ The panel stays open until folded and updates when another game is loaded. It is
 
 On desktop, game information, status, and navigation share a top-aligned row with 24-pixel outer margins and 16-pixel gaps (24 pixels on windows at least 1200 pixels wide). The status panel narrows to use the space between the other panels, keeping the move label and indicator on one line. Expanding game information keeps its top-left anchor fixed; on windows too narrow for all three panels, status sits beneath game information. Oversized details scroll within the viewport. The recorded Result is independent of the current position’s move/status display.
 
+Hint reveals one new legal continuation at a time. The next suggestion is
+prepared privately when a position is entered or a hint is revealed; it does not
+appear in variations or exports until requested. Revealing a hint preserves
+partially entered moves and redo history. Hint is disabled when no unseen legal
+continuations remain, including when all legal actions are already listed.
+
 On desktop, Hint uses a separate neutral background above the continuations. Hovering or focusing Hint highlights it independently of the selected continuation.
 
 ## Appearance

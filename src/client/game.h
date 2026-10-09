@@ -22,6 +22,7 @@ class game
     std::vector<cache_t>::iterator now;
     
     game(std::unique_ptr<gnode<comments_t>> gt);
+    mutable std::optional<bool> nonterminal;
     void fresh();
 public:
     std::map<std::string, std::string> metadata;
@@ -53,7 +54,9 @@ public:
     std::pair<int, int> get_board_size() const;
     promotion_options get_promotion_options() const;
     
-    bool suggest_action();
+    std::optional<action> suggest_action();
+    // Insert a validated continuation without navigating or clearing draft moves.
+    bool add_child_action(action act);
 
     comments_t get_comments() const;
     void set_comments(const comments_t &c) const;

@@ -49,9 +49,10 @@ async function runTest() {
     );
     console.log(`mvs: ${JSON.stringify(mvs)}`);
 
-    g.suggest_action();
-    g.suggest_action();
-    g.suggest_action();
+    for (let i = 0; i < 3; i++) {
+        const action = g.suggest_action();
+        if (action !== null) g.add_child_action(action);
+    }
 
     const suggestions = g.get_child_actions();
     console.log('Suggested actions:', suggestions);

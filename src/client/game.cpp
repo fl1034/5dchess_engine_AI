@@ -126,6 +126,7 @@ game game::from_pgn(std::string input)
 
 void game::fresh()
 {
+    nonterminal.reset();
     cached.clear();
     cached.push_back(std::make_pair(current_node->get_state(), std::optional<ext_move>()));
     now = cached.begin();
@@ -219,8 +220,12 @@ std::vector<vec4> game::gen_move_if_playable(vec4 p) const
 match_status_t game::get_match_status() const
 {
     const state &s = current_node->get_state();
-    auto [w, ss] = HC_info::build_HC(s);
-    if(w.search(ss).first().has_value())
+    if(!nonterminal.has_value())
+    {
+        auto [w, ss] = HC_info::build_HC(s);
+        nonterminal = w.search(ss).first().has_value();
+    }
+    if(*nonterminal)
     {
         return match_status_t::PLAYING;
     }
@@ -364,12 +369,17 @@ promotion_options game::get_promotion_options() const
     return gametree->get_stored_state().get_promotion_options();
 }
 
-bool game::suggest_action()
+std::optional<action> game::suggest_action()
 {
+    if(nonterminal.has_value() && !*nonterminal)
+        return std::nullopt;
     const state &s = current_node->get_state();
     auto [w, ss] = HC_info::build_HC(s);
+    bool found_legal_action = false;
     for(moveseq mvs : w.search(ss))
     {
+        found_legal_action = true;
+        nonterminal = true;
         std::vector<ext_move> emvs;
         std::transform(mvs.begin(), mvs.end(), std::back_inserter(emvs), [&s](full_move m){
             return ext_move(m, s);
@@ -377,12 +387,28 @@ bool game::suggest_action()
         action act = action::from_vector(emvs, s);
         if(!current_node->find_child(act))
         {
-            visit_child(act);
-            visit_parent();
-            return true;
+            return act;
         }
     }
-    return false;
+    nonterminal = found_legal_action;
+    return std::nullopt;
+}
+
+bool game::add_child_action(action act)
+{
+    if(current_node->find_child(act))
+    {
+        return false;
+    }
+    auto newstate = current_node->get_state().can_apply(act);
+    if(!newstate || newstate->find_checks(newstate->get_present().second).first().has_value())
+    {
+        return false;
+    }
+    auto child = gnode<comments_t>::create_child(current_node, std::move(newstate), act, comments_t{});
+    current_node->add_child(std::move(child));
+    nonterminal = true;
+    return true;
 }
 
 /////////////////////////////

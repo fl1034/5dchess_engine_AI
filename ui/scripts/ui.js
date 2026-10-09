@@ -138,6 +138,7 @@ export const UI = (() => {
     const selectedDisplay = document.getElementById("selectedDisplay");
     const hintBtn = document.getElementById("hintBtn");
     let hintCallback = null;
+    hintBtn.disabled = true;
 
     // Sample options
     const options = [
@@ -962,7 +963,7 @@ export const UI = (() => {
             const btn = buttonControls.buttons[action];
             if (!btn)
             {
-                if(action === 'hint' && hintCallback)
+                if(action === 'hint' && hintCallback && !hintBtn.disabled)
                 {
                     hintCallback();
                 }
@@ -1181,6 +1182,10 @@ export const UI = (() => {
          */
         setFocusCallback(callback) {
             focusCallback = callback;
+        },
+
+        setHintAvailable(available) {
+            hintBtn.disabled = !available;
         },
 
         setHintCallback(callback) {

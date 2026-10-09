@@ -450,8 +450,10 @@
     transition: background 0.15s;
 }
 
-body:not(.compact-layout) .hint-btn:hover,
-body:not(.compact-layout) .hint-btn:focus-visible {
+.hint-btn:disabled { opacity: 0.5; cursor: default; }
+
+body:not(.compact-layout) .hint-btn:not(:disabled):hover,
+body:not(.compact-layout) .hint-btn:not(:disabled):focus-visible {
     background: color-mix(in srgb, var(--ui-soft) 90%, var(--ui-text));
 }
 
