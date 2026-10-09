@@ -142,27 +142,9 @@ generator<moveseq> HC_info::search(search_space ss, Order order) const
             continue;
         }
 
-        const slice &problem_slice = *problem;
-        search_space adjoined;
-        adjoined.concat(hc.remove_slice(problem_slice));
-        int intersect_count = 1;
-        int disjoint_count = 0;
-        while(!ss.empty() && disjoint_count * 10 < intersect_count)
-        {
-            HC &other_hc = ss.back();
-            if(other_hc.intersects(problem_slice))
-            {
-                adjoined.concat(other_hc.remove_slice_if_good(problem_slice, 1));
-                intersect_count++;
-            }
-            else
-            {
-                disjoint_count++;
-                adjoined.concat({{other_hc}});
-            }
-            ss.pop_back();
-        }
-        ss.concat(std::move(adjoined));
+        // Propagation prunes earlier HCs without moving them ahead of the
+        // current HC's remaining pieces.
+        ss.push_back(std::move(hc));
+        ss.remove_slice_backwards(*problem, true, 10);
     }
 }
-

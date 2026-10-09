@@ -91,11 +91,16 @@ public:
     void pop_back();
     /*
      Starting at back(), remove the slice while intersections remain locally
-     dense. Continue while 2 * disjoint_count < intersect_count.
+     dense. Replace each HC in place to preserve search order. Continue while
+     disjoint_weight * disjoint_count < intersect_count.
+     Limit secondary removals to max_codim; forced back removal ignores it.
      */
     void remove_slice_backwards(
         const slice &s,
-        bool force_back_removal);
+        bool force_back_removal,
+        size_t disjoint_weight = 2,
+        index_t max_codim = 1
+    );
 
     std::list<HC>::iterator begin();
     std::list<HC>::iterator end();

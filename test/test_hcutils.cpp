@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cassert>
 #include "hypercuboid.h"
+#include "pgnparser.h"
 
 void test_hc()
 {
@@ -62,6 +63,15 @@ void test_backward_slice_removal()
     assert(dense_enough.contains(point{5}));
     assert(dense_enough.contains(point{6}));
 
+    // HC search uses a stricter weight of 10, so the same miss stops
+    // propagation before the front HC is reached.
+    search_space sparse_for_search{
+        HC{{0, 4}}, HC{{5}}, HC{{0, 6}}, HC{{0, 3}}, HC{{0, 2}}
+    };
+    sparse_for_search.remove_slice_backwards(problem, false, 10);
+    assert(sparse_for_search.contains(point{0}));
+    assert(sparse_for_search.back().contains(point{2}));
+
     // A slice may only partially intersect an HC on several axes. Backward
     // removal must not introduce slice coordinates that were absent from the
     // original HC.
@@ -80,6 +90,16 @@ void test_backward_slice_removal()
         broad_problem, false);
     assert(rejected_as_too_fragmented.size() == 1);
     assert(rejected_as_too_fragmented.contains(point{0, 0}));
+
+    // Raising the limit permits this two-axis cut without introducing
+    // coordinates outside the original HC.
+    rejected_as_too_fragmented.remove_slice_backwards(
+        broad_problem, false, 2, 2);
+    assert(!rejected_as_too_fragmented.contains(point{0, 0}));
+    assert(rejected_as_too_fragmented.volume() == 3);
+    assert(rejected_as_too_fragmented.contains(point{0, 1}));
+    assert(rejected_as_too_fragmented.contains(point{1, 0}));
+    assert(rejected_as_too_fragmented.contains(point{1, 1}));
 
     // The originating HC must be cut even when the same operation would be
     // rejected for a secondary HC, or exploration could repeat forever.
@@ -107,10 +127,62 @@ void test_backward_slice_removal()
 
 }
 
+void test_backward_slice_order()
+{
+    const slice problem{{{0, {0}}, {1, {0}}}};
+    const HC h1{{9}, {9}};
+    const HC h2{{0, 2}, {0, 2}};
+    const HC h3{{3}, {3}};
+    const HC h4{{0, 4}, {0, 4}};
+    search_space space{h1, h2, h3, h4};
+    // Scan across h3 to cut h2 as well. The pieces must retain both their
+    // own order and their original HC's position in the list. A limit of
+    // two permits both h2 and h4 to produce two pieces.
+    space.remove_slice_backwards(problem, true, 0, 2);
+    search_space expected{h1};
+    expected.concat(h2.remove_slice(problem));
+    expected.push_back(h3);
+    expected.concat(h4.remove_slice(problem));
+    assert(space.to_string() == expected.to_string());
+}
+
+void test_search_branch_order()
+{
+    auto parsed = pgnparser(R"(
+[Board "Standard - Turn Zero"]
+1. e3 / e6
+2. Nf3 / Nc6
+)").parse_game();
+    assert(parsed);
+    const state s(*parsed);
+    for(bool stable : {false, true})
+    {
+        auto [info, space] = HC_info::build_HC(s);
+        auto actions = stable ? info.stable_search(std::move(space))
+                              : info.search(std::move(space));
+        int count = 0;
+        for(const auto &moves : actions)
+        {
+            std::vector<ext_move> extended;
+            for(const auto &move : moves)
+            {
+                extended.emplace_back(move, s);
+            }
+            const action act = action::from_vector(extended, s);
+            assert(act.get_branching_index() == static_cast<int>(moves.size()));
+            assert(s.can_apply(act));
+            if(++count == 10) break;
+        }
+        assert(count == 10);
+    }
+}
+
 int main()
 {
     test_hc();
     test_backward_slice_removal();
+    test_backward_slice_order();
+    test_search_branch_order();
     //test_remove();
 //    HC h2 = {{{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}}};
 //    point b = {20};

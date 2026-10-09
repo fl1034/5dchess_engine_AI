@@ -279,3 +279,23 @@ Moreover, when we found a problem slice, we can remove it from all hypercuboids 
 Empirically, an effective strategy is to start from the last hypercuboid, remove the problem slice from it and then from the previous hypercuboids, until we reach a hypercuboid that does not intersect with the problem slice.
 
 Another strategy, which is probably better, is to remove the problem slice from the last hypercuboid, and only remove the problem slice from the previous hypercuboids if the codimension of the problem slice is 1. We stop trying if the non-intersecting hypercuboid reaches 10% of all the hypercuboids visited. This way, we avoid fragmenting the search space too much, while still removing some invalid points from previous hypercuboids.
+
+The default `HC_info::search()` uses this adaptive strategy, continuing while
+`10 * disjoint_count < intersect_count`, including the current hypercuboid in
+the intersection count. Each pruned hypercuboid is replaced by its remaining
+pieces at its original position in the list. Propagation preserves the order
+of hypercuboids and of the pieces produced by each removal. Search consumes
+the list from the back, so the current hypercuboid's remaining pieces are
+searched before earlier hypercuboids. With the initial partition produced by
+`build_HC()`, this preserves the preference for fewer branching moves.
+
+`stable_search()` propagates a problem through all remaining hypercuboids,
+replacing them in the same order and keeping the current hypercuboid's pieces
+at the back. Rollout action selection first uses iterative search for up to
+100 problems, then uses the same order-preserving adaptive propagation as
+`search()`. Rollout search checks cancellation at each search-loop iteration.
+
+The shared `search_space::remove_slice_backwards()` helper accepts
+`disjoint_weight` (default two) and `max_codim` (default one) to tune propagation
+and secondary fragmentation. Forced removal from the back hypercuboid bypasses
+the codimension limit.

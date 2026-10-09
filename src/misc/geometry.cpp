@@ -160,7 +160,10 @@ void search_space::pop_back()
 
 void search_space::remove_slice_backwards(
     const slice &s,
-    bool force_back_removal)
+    bool force_back_removal,
+    size_t disjoint_weight,
+    index_t max_codim
+)
 {
     if(hcs.empty())
     {
@@ -185,7 +188,7 @@ void search_space::remove_slice_backwards(
             auto after = std::next(current);
             search_space pieces = force_back_removal
                 ? current->remove_slice_carefully(s)
-                : current->remove_slice_if_good(s);
+                : current->remove_slice_if_good(s, max_codim);
             hcs.erase(current);
             hcs.splice(after, pieces.hcs);
             intersect_count++;
@@ -196,7 +199,7 @@ void search_space::remove_slice_backwards(
         }
 
         if(!has_previous
-           || disjoint_count * 2 >= intersect_count)
+           || disjoint_count * disjoint_weight >= intersect_count)
         {
             break;
         }

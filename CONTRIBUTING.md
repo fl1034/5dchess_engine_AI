@@ -21,7 +21,6 @@ Follow the surrounding code, including these conventions:
 - Place pointer and reference symbols next to the variable name: `int *p`, `const auto &x`.
 - When both qualifiers appear, put `const` before `static`.
 - For very long argument lists, put arguments on separate lines like this:
-
 ```cpp
 int very_long_function_name<with_template>(
     (a+b)*c-d?e:f,
@@ -30,8 +29,14 @@ int very_long_function_name<with_template>(
         return a*x;
 });
 ```
-
 - RTTI is forbidden in `src/` and `tools/`.
+- There is no indentation for namespace blocks. On the closing brace, add a comment with `/* namespace <name> */` or `/* anonymous namespace */` if the namespace is anonymous. Example:
+```c
+#ifndef LIBRARY_H
+#define LIBRARY_H
+// code
+#endif /* LIBRARY_H */
+```
 
 ## Testing
 

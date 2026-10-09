@@ -1110,12 +1110,14 @@ generator<moveseq> HC_info::stable_search(search_space ss) const
                 dprint("found problem:", problem.value().to_string());
                 // Remove this slice from every remaining hypercuboid and re-join all pieces.
                 search_space adjoined;
-                adjoined.concat(hc.remove_slice(problem_slice));
                 for(const HC &other_hc : ss)
                 {
                     search_space sstemp = other_hc.remove_slice_carefully(problem_slice);
                     adjoined.concat(std::move(sstemp));
                 }
+                // Keep the selected HC's pieces at the back, where search
+                // will consume them before the earlier HCs.
+                adjoined.concat(hc.remove_slice(problem_slice));
                 // make sure when a leave is removed, so is the corresponding arrive
                 dprint("removed problem from all hcs, continue search:", adjoined.to_string());
                 ss = std::move(adjoined);
