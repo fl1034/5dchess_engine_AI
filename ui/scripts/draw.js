@@ -360,7 +360,7 @@ export default class ChessBoardCanvas
                 if ((l + t) % 2 === 0) {
                     ctx.fillText(
                         `L${this._displayL(l)}`,
-                        t * 2 * this.boardSkipX - this.backgroundShiftX - 2,
+                        t * 2 * this.boardSkipX - this.backgroundShiftX - 2.4,
                         this._timelineLabelBaseline(ctx, l)
                     );
                 }

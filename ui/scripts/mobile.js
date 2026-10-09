@@ -74,6 +74,10 @@ export function initMobileLayout() {
         }
     });
 
+    document.addEventListener('metadata-visibility-change', event => {
+        if (!event.detail.visible && activePanel === 'game') closePanel();
+    });
+
     // Reuse the existing icon and title for a labeled, touch-sized tools menu.
     [...buttons.children].filter(button => button !== focus).forEach(button => {
         const label = document.createElement('span');

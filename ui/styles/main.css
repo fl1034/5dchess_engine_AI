@@ -21,7 +21,8 @@ html, body {
     height: 100%;
     overflow: hidden;
     font-family: system-ui, sans-serif;
-    background: #eee;
+    background: var(--ui-panel);
+    color: var(--ui-text);
     overscroll-behavior: none;
 }
 

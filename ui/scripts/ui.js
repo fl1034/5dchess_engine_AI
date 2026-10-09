@@ -214,51 +214,11 @@ export const UI = (() => {
     }
 
 
-    /* ================= HUD Positioning ================= */
-    function positionHud() {
-        if (compactViewport.matches) return;
-        const screenWidth = window.innerWidth;
-        const controlPanelWidth = 200;
-        const controlPanelRight = 18;
-        const minGap = 20;
-        const hudWidth = Math.min(440, Math.max(150, screenWidth - controlPanelWidth - 18 - 18 - minGap));
-        
-        hud.style.width = hudWidth + 'px';
-        
-        // Calculate if centered HUD would overlap control panel
-        const hudHalfWidth = hudWidth / 2;
-        const hudRightEdge = screenWidth / 2 + hudHalfWidth;
-        const controlPanelLeftEdge = screenWidth - controlPanelRight - controlPanelWidth;
-        
-        if (hudRightEdge + minGap > controlPanelLeftEdge) {
-            // Need to shift left
-            const overlap = hudRightEdge + minGap - controlPanelLeftEdge;
-            const newLeft = 50 - (overlap / screenWidth * 100);
-            const hudWrapper = document.getElementById('hudWrapper');
-            hudWrapper.style.left = Math.max(18, newLeft) + '%';
-        } else {
-            const hudWrapper = document.getElementById('hudWrapper');
-            hudWrapper.style.left = '50%';
-        }
-        
-        // Check if left edge is too close to screen edge
-        const hudWrapper = document.getElementById('hudWrapper');
-        const hudLeft = parseFloat(hudWrapper.style.left) / 100 * screenWidth - hudHalfWidth;
-        if (hudLeft < 18) {
-            hudWrapper.style.left = '18px';
-            hudWrapper.style.transform = 'translateX(0)';
-        } else {
-            hudWrapper.style.transform = 'translateX(-50%)';
-        }
-    }
-
     window.addEventListener('resize', () => {
-        positionHud();
         if (!compactViewport.matches && controlPanel.classList.contains('collapsed')) {
             controlPanel.style.height = calculateCollapasedPanelHeight();
         }
     });
-    positionHud();
 
 
     /* ================= Buttons Panel ================= */

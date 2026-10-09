@@ -1,5 +1,3 @@
-import { compactViewport } from './mobile.js';
-
 // Read-only game headers, independent of the position currently being viewed.
 const panel = document.getElementById('gameMetadata');
 const summary = document.getElementById('gameMetadataSummary');
@@ -9,6 +7,33 @@ const icon = toggle.querySelector('path');
 const expandIcon = 'M6.41421 5H10V3H3V10H5V6.41421L9.29289 10.7071L10.7071 9.29289L6.41421 5ZM21 14H19V17.5858L14.7071 13.2929L13.2929 14.7071L17.5858 19H14V21H21V14Z';
 const foldIcon = 'M9.00008 4.00008H11.0001V11.0001H4.00008V9.00008H7.58586L3.29297 4.70718L4.70718 3.29297L9.00008 7.58586V4.00008ZM20 15H16.4142L20.7071 19.2929L19.2929 20.7071L15 16.4142V20H13V13H20V15Z';
 let expanded = false;
+let hasMetadata = false;
+const showPanelCheckbox = document.getElementById('showMetadataPanel');
+const SHOW_PANEL_KEY = 'show-metadata-panel';
+let showPanel = true;
+try {
+    showPanel = localStorage.getItem(SHOW_PANEL_KEY) !== 'false';
+} catch {
+    // Keep the default when browser storage is unavailable.
+}
+showPanelCheckbox.checked = showPanel;
+
+function updateVisibility() {
+    const visible = showPanel && hasMetadata;
+    panel.hidden = !visible;
+    document.querySelector('.mobile-game-button').hidden = !visible;
+    document.dispatchEvent(new CustomEvent('metadata-visibility-change', { detail: { visible } }));
+}
+
+showPanelCheckbox.addEventListener('change', () => {
+    showPanel = showPanelCheckbox.checked;
+    try {
+        localStorage.setItem(SHOW_PANEL_KEY, String(showPanel));
+    } catch {
+        // The setting still applies for this session when storage is unavailable.
+    }
+    updateVisibility();
+});
 
 function setExpanded(value) {
     expanded = value;
@@ -27,31 +52,15 @@ toggle.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
 });
 setExpanded(false);
-
-// On smaller windows place this panel below the existing HUD instead of covering it.
-function positionPanel() {
-    if (compactViewport.matches) return;
-    const hud = document.getElementById('hudWrapper').getBoundingClientRect();
-    const controls = document.getElementById('controlPanel').getBoundingClientRect();
-    // Reserve the expanded width so toggling never moves the top-left anchor.
-    const right = 18 + Math.min(380, window.innerWidth - 36);
-    const overlapping = [hud, controls].filter(rect => rect.left < right + 12);
-    const top = Math.max(18, ...overlapping.map(rect => rect.bottom + 12));
-    // Keep the toggle reachable even when the other panels fill a short viewport.
-    const boundedTop = Math.min(top, Math.max(18, window.innerHeight - 130));
-    panel.style.top = `${boundedTop}px`;
-    panel.style.maxHeight = `${Math.max(44, window.innerHeight - boundedTop - 18)}px`;
-}
-
-const layoutObserver = new ResizeObserver(positionPanel);
-layoutObserver.observe(document.getElementById('hudWrapper'));
-layoutObserver.observe(document.getElementById('controlPanel'));
-window.addEventListener('resize', positionPanel);
-// Preserve the anchor when extending; only viewport/other-panel changes reposition it.
-positionPanel();
+updateVisibility();
 
 export function setGameMetadata(metadata = {}) {
     const headers = Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key.toLowerCase(), value]));
+    hasMetadata = ['event', 'round', 'white', 'black', 'site', 'date', 'result'].some(key => {
+        const value = String(headers[key] ?? '').trim();
+        return value !== '' && value !== '?' && (key !== 'result' || value !== '*');
+    });
+    updateVisibility();
     for (const element of panel.querySelectorAll('[data-game-header]')) {
         const key = element.dataset.gameHeader;
         const value = String(headers[key] ?? '').trim();

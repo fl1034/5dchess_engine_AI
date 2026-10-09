@@ -1,5 +1,5 @@
 
-const LOD_SIZES = [32, 16, 8, 4, 2];
+const LOD_SIZES = [32, 16, 8, 4, 2, 1];
 
 // Load a single SVG as Image
 function loadSvgImage(filename) {
@@ -63,5 +63,6 @@ export function chooseLOD(pixelSize) {
     if (pixelSize >= 6)  return svgImages.lod[16];
     if (pixelSize >= 3)  return svgImages.lod[8];
     if (pixelSize >= 2)  return svgImages.lod[4];
-    return svgImages.lod[2];
+    if (pixelSize >= 1)  return svgImages.lod[2];
+    return svgImages.lod[1];
 }

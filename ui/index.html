@@ -64,32 +64,6 @@
 
 <body>
 
-<!-- Game metadata: one panel that extends from its top-left corner. -->
-<section id="gameMetadata" class="game-metadata" aria-label="Game information">
-    <div id="gameMetadataSummary" class="game-metadata-summary">
-        <span data-game-header="white" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
-        <span class="game-metadata-separator" aria-hidden="true">/</span>
-        <span data-game-header="black" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
-        <span data-game-header="result" class="game-metadata-result" hidden></span>
-    </div>
-    <div id="gameMetadataDetails" class="game-metadata-details" hidden>
-        <div data-game-header="event" class="game-metadata-event"></div>
-        <div class="game-metadata-players">
-            <div><div data-game-header="white" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">White</span></div>
-            <span data-game-header="result" class="game-metadata-result game-metadata-result-empty">/</span>
-            <div><div data-game-header="black" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">Black</span></div>
-        </div>
-        <dl class="game-metadata-facts">
-            <div class="game-metadata-site"><dt>Site</dt><dd data-game-header="site"></dd></div>
-            <div><dt>Date</dt><dd data-game-header="date"></dd></div>
-            <div><dt>Round</dt><dd data-game-header="round"></dd></div>
-        </dl>
-    </div>
-    <button id="gameMetadataToggle" class="game-metadata-toggle" type="button" aria-expanded="false" aria-controls="gameMetadataDetails" aria-label="Expand game information" title="Expand game information">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path></path></svg>
-    </button>
-</section>
-
 <!-- SVG Icon Definitions -->
 <svg style="display: none;">
     <defs>
@@ -168,7 +142,7 @@
         <button type="button" id="mobileCommentButton" class="mobile-comment-button" data-mobile-panel="comments" aria-expanded="false" aria-controls="mobileSheet" aria-label="Position comment (empty)">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg>
         </button>
-        <button type="button" class="mobile-game-button" data-mobile-panel="game" aria-expanded="false" aria-controls="mobileSheet" aria-label="Game details">
+        <button type="button" class="mobile-game-button" hidden data-mobile-panel="game" aria-expanded="false" aria-controls="mobileSheet" aria-label="Game details">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-price-tag-3-line"></use></svg>
         </button>
         <button type="button" class="mobile-tools-button" data-mobile-panel="tools" aria-expanded="false" aria-controls="mobileSheet" aria-label="Additional actions">
@@ -194,6 +168,34 @@
     </footer>
 </div>
 <canvas id="canvas"></canvas>
+
+<!-- Shared desktop layout; each panel expands independently from the top. -->
+<div class="top-panels">
+<!-- Game metadata: one panel that extends from its top-left corner. -->
+<section id="gameMetadata" class="game-metadata" aria-label="Game information" hidden>
+    <div id="gameMetadataSummary" class="game-metadata-summary">
+        <span data-game-header="white" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
+        <span class="game-metadata-separator" aria-hidden="true">/</span>
+        <span data-game-header="black" class="game-metadata-name game-metadata-unknown">Unknown Player</span>
+        <span data-game-header="result" class="game-metadata-result" hidden></span>
+    </div>
+    <div id="gameMetadataDetails" class="game-metadata-details" hidden>
+        <div data-game-header="event" class="game-metadata-event"></div>
+        <div class="game-metadata-players">
+            <div><div data-game-header="white" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">White</span></div>
+            <span data-game-header="result" class="game-metadata-result game-metadata-result-empty">/</span>
+            <div><div data-game-header="black" class="game-metadata-player game-metadata-unknown">Unknown Player</div><span class="game-metadata-label">Black</span></div>
+        </div>
+        <dl class="game-metadata-facts">
+            <div class="game-metadata-site"><dt>Site</dt><dd data-game-header="site"></dd></div>
+            <div><dt>Date</dt><dd data-game-header="date"></dd></div>
+            <div><dt>Round</dt><dd data-game-header="round"></dd></div>
+        </dl>
+    </div>
+    <button id="gameMetadataToggle" class="game-metadata-toggle" type="button" aria-expanded="false" aria-controls="gameMetadataDetails" aria-label="Expand game information" title="Expand game information">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path></path></svg>
+    </button>
+</section>
 
 <div class="hud-wrapper" id="hudWrapper">
     <div class="hud collapsed" id="hud">
@@ -236,6 +238,8 @@
 
     <div class="panel-toggle" id="panelToggle"></div>
 </div>
+
+</div><!-- .top-panels -->
 
 <div class="buttons-panel" id="buttonsPanel">
     <button class="btn-icon" id="btnFocus" title="Focus">
@@ -375,6 +379,10 @@
                     <span>Automatically toggle comments area</span>
                 </label>
                 <label class="popup-control">
+                    <input type="checkbox" id="showMetadataPanel" checked>
+                    <span>Show metadata panel</span>
+                </label>
+                <label class="popup-control">
                     <input type="checkbox" id="toggleDebugWindow">
                     <span>Show debug window</span>
                 </label>
@@ -484,11 +492,11 @@
             <h4>Game Rules</h4>
             <p>While I am working on the documentation, for rules of 5D Chess with Multiverse Time Travel, please visit:</p>
             <p style="margin-top: 12px; text-align: center;">
-                <a href="https://5d-chess.fandom.com/wiki/Tutorial" target="_blank" style="color: #1976d2; text-decoration: none;">
+                <a href="https://5d-chess.fandom.com/wiki/Tutorial" target="_blank" style="color: var(--ui-primary); text-decoration: none;">
                     5D Chess on Fandom
                 </a>
             </p>
-            <p style="margin-top: 16px; font-size: 13px; color: #777;">
+            <p style="margin-top: 16px; font-size: 13px; color: var(--ui-muted);">
                 This application implements the official rules of 5D Chess with Multiverse Time Travel. Click the link above to learn about piece movements, time dimension mechanics, and game objectives.
             </p>
         </div>

@@ -62,6 +62,7 @@ See the [build guide](docs/usage/building.md) for platform details, Python bindi
 
 | Task | Guide |
 |---|---|
+| Use the web game analyzer | [Web analyzer](docs/usage/analyzer.md) |
 | Build native programs, Python bindings, or the web interface | [Building](docs/usage/building.md) |
 | Choose an engine, configure search, or run autoplay matches | [Engine usage](docs/engine/usage.md) |
 | Inspect positions and enumerate legal actions | [Command-line tools](docs/usage/tools.md) |

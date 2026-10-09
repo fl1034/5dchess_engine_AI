@@ -19,8 +19,9 @@
 }
 
 .popup-window {
+    color: var(--ui-text);
     display: none;
-    background: rgba(255,255,255,0.95);
+    background: var(--ui-panel-dialog);
     border-radius: 10px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.25);
     padding: 24px;
@@ -82,7 +83,7 @@
     width: 6px;
 }
 .popup-window::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.15);
+    background: var(--ui-scrollbar);
     border-radius: 4px;
 }
 .popup-window::-webkit-scrollbar-track {
@@ -99,7 +100,7 @@
 .popup-icon {
     width: 64px;
     height: 64px;
-    color: #1976d2;
+    color: var(--ui-primary);
 }
 
 .popup-title {
@@ -107,11 +108,11 @@
     font-weight: 600;
     text-align: center;
     margin-bottom: 16px;
-    color: #333;
+    color: var(--ui-text);
 }
 
 .popup-content {
-    color: #555;
+    color: var(--ui-text);
     line-height: 1.6;
     font-size: 14px;
 }
@@ -120,7 +121,7 @@
     width: 100%;
     min-height: 200px;
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ui-outline);
     border-radius: 6px;
     font-family: monospace;
     font-size: 13px;
@@ -136,20 +137,20 @@
 }
 
 .popup-textarea:focus {
-    border-color: #1976d2;
+    border-color: var(--ui-primary);
 }
 
 .popup-textarea.drag-over {
-    border-color: #1976d2;
-    background-color: rgba(25, 118, 210, 0.05);
+    border-color: var(--ui-primary);
+    background-color: var(--ui-primary-soft);
 }
 
 .popup-button {
     width: 100%;
     padding: 12px;
     margin-top: 12px;
-    background: #1976d2;
-    color: white;
+    background: var(--ui-primary);
+    color: var(--ui-on-primary);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -159,11 +160,11 @@
 }
 
 .popup-button:hover {
-    background: #1565c0;
+    background: var(--ui-primary-hover);
 }
 
 .popup-button:active {
-    background: #0d47a1;
+    background: var(--ui-primary-pressed);
 }
 
 .popup-button-group {
@@ -194,7 +195,7 @@
     max-width: 100%;
     margin: 8px 0 0;
     padding: 18px 14px 14px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ui-border);
     border-radius: 8px;
     box-sizing: border-box;
 }
@@ -207,8 +208,8 @@
     max-width: calc(100% - 20px);
     transform: translateY(-50%);
     padding: 0 5px;
-    background: #fff;
-    color: #555;
+    background: var(--ui-panel);
+    color: var(--ui-text);
     font-size: 14px;
     line-height: 1.2;
     white-space: nowrap;
@@ -222,7 +223,7 @@
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    color: #555;
+    color: var(--ui-text);
     cursor: pointer;
     line-height: 1.35;
     user-select: none;
@@ -250,7 +251,7 @@
 
 .popup-control-description {
     margin: -2px 0 0 24px;
-    color: #666;
+    color: var(--ui-muted);
     font-size: 0.9em;
     line-height: 1.4;
 }
@@ -259,7 +260,7 @@
 .info-tabs {
     display: flex;
     gap: 4px;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 2px solid var(--ui-border);
     margin-bottom: 16px;
     margin-left: -24px;
     margin-right: -24px;
@@ -272,7 +273,7 @@
     background: transparent;
     border: none;
     border-bottom: 3px solid transparent;
-    color: #666;
+    color: var(--ui-muted);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -281,18 +282,18 @@
 }
 
 .info-tab-btn:hover {
-    color: #333;
-    background: rgba(0, 0, 0, 0.02);
+    color: var(--ui-text);
+    background: var(--ui-hover);
 }
 
 .info-tab-btn.active {
-    color: #1976d2;
-    border-bottom-color: #1976d2;
+    color: var(--ui-primary);
+    border-bottom-color: var(--ui-primary);
 }
 
 .info-tab-content h4 {
     margin: 0 0 12px 0;
-    color: #333;
+    color: var(--ui-text);
     font-size: 16px;
 }
 
@@ -312,7 +313,7 @@
 }
 
 .info-tab-content a {
-    color: #1976d2;
+    color: var(--ui-primary);
     text-decoration: none;
 }
 
@@ -326,7 +327,7 @@
     gap: 8px;
     margin-top: 16px;
     font-size: 14px;
-    color: #555;
+    color: var(--ui-text);
 }
 
 .filename-inputs {
@@ -354,7 +355,7 @@
 
 .filename-inputs input {
     padding: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ui-outline);
     border-radius: 6px;
     font-family: monospace;
     font-size: 13px;
@@ -364,8 +365,8 @@
 }
 
 .filename-inputs input:focus {
-    border-color: #1976d2;
-    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+    border-color: var(--ui-primary);
+    box-shadow: 0 0 0 3px var(--ui-primary-soft);
 }
 
 .filename-inputs .popup-button {
@@ -384,12 +385,12 @@
 .input-group label {
     font-size: 12px;
     font-weight: 600;
-    color: #555;
+    color: var(--ui-text);
 }
 
 .input-group input {
     padding: 8px 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--ui-outline);
     border-radius: 6px;
     font-family: monospace;
     font-size: 13px;
@@ -398,8 +399,8 @@
 }
 
 .input-group input:focus {
-    border-color: #1976d2;
-    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+    border-color: var(--ui-primary);
+    box-shadow: 0 0 0 3px var(--ui-primary-soft);
 }
 
 @keyframes pulse {
@@ -432,8 +433,8 @@
 
 .export-more-options.active,
 .export-more-options.active:hover {
-    background: #777;
-    color: #fff;
+    background: var(--ui-soft);
+    color: var(--ui-text);
 }
 
 .export-options-popup {
@@ -466,7 +467,7 @@
     cursor: pointer;
     user-select: none;
     font-size: 14px;
-    color: #555;
+    color: var(--ui-text);
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -488,7 +489,7 @@
     display: flex;
     opacity: 0;
     align-items: center;
-    color: #4caf50;
+    color: var(--ui-primary);
     font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
@@ -517,3 +518,11 @@
 .dialog-header { display: contents; }
 .mobile-popup-close { display: none; }
 .mobile-export-label, #mobileExportFooter, #mobileExportBasicOptions, .export-preview-status { display: none; }
+
+/* Native form controls inherit the same palette in both layouts. */
+.popup-textarea, .filename-inputs input, .input-group input, .popup-control select {
+    background: var(--ui-panel);
+    color: var(--ui-text);
+}
+.popup-control select { border: 1px solid var(--ui-outline); }
+.popup-window input { accent-color: var(--ui-primary); }
