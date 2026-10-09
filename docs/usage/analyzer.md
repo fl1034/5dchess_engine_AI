@@ -13,7 +13,10 @@ comments, and variations.
 
 The canvas renders at the display's pixel density, including after browser zoom
 or moving between displays. Piece detail is selected using physical pixel size;
-camera movement and pointer coordinates remain in CSS pixels.
+camera movement and pointer coordinates remain in CSS pixels. At smaller zoom
+levels, pieces use raster images cached once in separate canvases at six sizes
+(32, 16, 8, 4, 2, and 1 pixels), retaining level-of-detail rendering without
+converting the cache to `ImageBitmap` objects.
 Timeline and turn labels use upright Playfair with lining numerals. The bundled
 `PlayfairLining-Regular.woff2` is a static instance at weight 400, optical size 14,
 and width 100. Its digit character mappings use the upstream `lnum` glyphs so
@@ -32,6 +35,14 @@ numerals' different heights and overhangs.
 Playfair is bundled in `ui/fonts/` with its SIL Open Font License, which permits
 commercial use. The font and license come from the
 [official Playfair repository](https://github.com/clauseggers/Playfair/tree/b869b3a82f7188b4e790f9ef1ebe2d11630bde8f).
+
+## Move notation
+
+Settings → Game → **Use shortened notation for moves** is enabled by default
+and saved across reloads. It uses unambiguous short notation in the continuation
+summary and expanded variations list. Disabling it shows full notation; changing
+it preserves the selected continuation and current position. Export’s
+**Short Notation** setting is independent.
 
 ## Game information and desktop panels
 
@@ -75,7 +86,9 @@ windows retain the floating desktop panels.
 On phones, the move/status display stays at the top and Previous, Undo, Submit,
 Redo, and Next stay at the bottom with icons above their labels. **Choose** in
 the continuation summary opens the continuations panel, where you can choose a
-recorded action or request a Hint before using Next. The comment button in the
+recorded action or request a Hint before using Next. The footer summary stays
+on one line within the screen width and truncates long continuations with an
+ellipsis; the expanded continuations panel shows the full text. The comment button in the
 header, immediately left of the game-information button, opens the comment panel.
 Its outline/fill indicates whether the panel is closed/open, and dots indicate
 whether the current comment contains text, including an unfinished edit.

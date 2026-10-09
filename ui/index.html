@@ -139,7 +139,7 @@
 <div id="mobileLayout" hidden>
     <header class="mobile-header">
         <div id="mobileStatus"></div>
-        <button type="button" id="mobileCommentButton" class="mobile-comment-button" data-mobile-panel="comments" aria-expanded="false" aria-controls="mobileSheet" aria-label="Position comment (empty)">
+        <button type="button" id="mobileCommentButton" class="mobile-comment-button" data-mobile-panel="comments" aria-expanded="false" aria-controls="mobileSheet" aria-label="Comment (empty)">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg>
         </button>
         <button type="button" class="mobile-game-button" hidden data-mobile-panel="game" aria-expanded="false" aria-controls="mobileSheet" aria-label="Game details">
@@ -205,7 +205,7 @@
         </div>
 
         <div class="hud-content">
-            <div class="hud-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Position comment" aria-multiline="true">
+            <div class="hud-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Comment" aria-multiline="true">
                 Loading WebAssembly module. This may take a while.
             </div>
         </div>
@@ -361,6 +361,10 @@
                     <span>Allow submit with checks</span>
                 </label>
                 <p class="popup-control-description">When checked, submitting legal moves will be allowed even if the current board has checks.</p>
+                <label class="popup-control">
+                    <input type="checkbox" id="useShortMoveNotation" checked>
+                    <span>Use shortened notation for moves</span>
+                </label>
                 <label class="popup-control">
                     <input type="checkbox" id="showMovablePieces">
                     <span>Show movable pieces</span>

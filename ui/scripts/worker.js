@@ -20,6 +20,7 @@ createModule().then((engine) => {
     self.settings = {
         allowSubmitWithChecks: false,
         showMovablePieces: false,
+        useShortMoveNotation: true,
         exportMate: true,
         exportShortNotation: false,
         exportRelativeNotation: false,
@@ -181,8 +182,10 @@ createModule().then((engine) => {
         return self.game.gen_move_if_playable(pos);
     }
 
-    function updateSelect() {
-        let children = self.game.get_child_actions();
+    function updateSelect(preserveSelection = false) {
+        let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
+        if (self.settings.useShortMoveNotation) flags |= engine.SHOW_SHORT;
+        let children = self.game.get_child_actions(flags);
         self.has_children = children.length > 0;
         let action = readMemorizedAction();
         if (action) {
@@ -191,12 +194,14 @@ createModule().then((engine) => {
             });
             self.postMessage({
                 type: 'update_select',
+                preserveSelection,
                 options: children,
                 selectedIndex: found
             });
         } else {
             self.postMessage({
                 type: 'update_select',
+                preserveSelection,
                 options: children
             });
         }
@@ -314,6 +319,7 @@ createModule().then((engine) => {
                 self.settings || {},
                 data.settings || {},
             );
+            if (data.settings?.useShortMoveNotation !== undefined && self.game) updateSelect(true);
             // Update UI state if needed
             updateButtons();
         } else if (data.type === 'export') {

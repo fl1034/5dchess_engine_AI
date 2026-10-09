@@ -412,7 +412,7 @@ void game::visit_parent()
     fresh();
 }
 
-std::vector<std::tuple<action, std::string>> game::get_child_actions() const
+std::vector<std::tuple<action, std::string>> game::get_child_actions(pgn_options show_flags) const
 {
     std::vector<std::tuple<action, std::string>> result;
     auto &children = current_node->get_children();
@@ -420,7 +420,7 @@ std::vector<std::tuple<action, std::string>> game::get_child_actions() const
     for(const auto &child : children)
     {
         const action &act = child->get_action();
-        std::string txt = act.pgn(s);
+        std::string txt = act.pgn(s, show_flags);
         result.push_back({act, txt});
     }
     return result;

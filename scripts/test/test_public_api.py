@@ -391,6 +391,23 @@ class BindingContracts(ContractCase):
         game.visit_parent()
         self.assertEqual(game.get_current_hash(), initial.get_current_hash())
 
+    def test_child_action_notation_flags_preserve_actions_and_position(self):
+        rules = self.bindings()
+        game = rules.game.from_pgn(STANDARD_GAME + '\n1. e4')
+        game.visit_parent()
+        position = game.get_current_hash()
+        flags = rules.SHOW_CAPTURE | rules.SHOW_PROMOTION
+        default = game.get_child_actions()
+        full = game.get_child_actions(flags)
+        short = game.get_child_actions(flags | rules.SHOW_SHORT)
+        self.assertEqual([text for _, text in default], [text for _, text in full])
+        self.assertEqual([text for _, text in short], ['e4'])
+        self.assertNotEqual(full[0][1], short[0][1])
+        self.assertEqual(full[0][0], short[0][0])
+        self.assertEqual(game.get_current_hash(), position)
+        game.visit_child(short[0][0])
+        self.assertNotEqual(game.get_current_hash(), position)
+
     def test_coordinates_and_move_values(self):
         rules = self.bindings()
         point = rules.vec4(3, 1, 1, 0)

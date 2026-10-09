@@ -169,8 +169,11 @@ worker.onmessage = (e) => {
     {
         let options = msg.options.map(obj => obj.pgn);
         nextOptions = msg.options.map(obj => obj.action);
+        const selectedIndex = UI.select.getSelectedIndex();
         UI.select.setOptions(options);
-        if (msg.selectedIndex !== undefined) {
+        if (msg.preserveSelection) {
+            UI.select.setSelectedIndex(selectedIndex);
+        } else if (msg.selectedIndex !== undefined) {
             UI.select.setSelectedIndex(msg.selectedIndex);
         }
     }

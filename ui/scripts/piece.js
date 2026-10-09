@@ -11,23 +11,20 @@ function loadSvgImage(filename) {
     });
 }
 
-const tempCanvas = document.createElement("canvas");
-const tempCtx = tempCanvas.getContext("2d");
-
-// Rasterize Image to given size (returns ImageBitmap)
-async function rasterizeImage(img, size) {
-    tempCanvas.width = size;
-    tempCanvas.height = size;
-    tempCtx.clearRect(0, 0, size, size);
-    tempCtx.drawImage(img, 0, 0, size, size);
-
-    return await createImageBitmap(tempCanvas);
+// Cache a separate raster canvas for each piece and size. Once drawn, these
+// canvases remain unchanged and can be used directly by drawImage at any zoom.
+function rasterizeImage(img, size) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    canvas.getContext('2d').drawImage(img, 0, 0, size, size);
+    return canvas;
 }
 
 async function loadAllSvgs() {
     const svgImages = {
         img: {}, // original SVGs
-        lod: {}  // { size: { name: bitmap, ... } }
+        lod: {}  // { size: { name: canvas, ... } }
     };
 
     // Initialize lod object for each size
@@ -41,10 +38,13 @@ async function loadAllSvgs() {
             const img = await loadSvgImage(filename);
             svgImages.img[name] = img;
 
-            // Generate LODs
+            // Downsample the previous raster so tiny levels retain coverage
+            // instead of sampling a potentially transparent point in the SVG.
+            let rasterSource = img;
             for (const size of LOD_SIZES) {
-                const bitmap = await rasterizeImage(img, size);
-                svgImages.lod[size][name] = bitmap;
+                const raster = rasterizeImage(rasterSource, size);
+                svgImages.lod[size][name] = raster;
+                rasterSource = raster;
             }
         }
     );

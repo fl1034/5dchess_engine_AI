@@ -178,7 +178,9 @@ PYBIND11_MODULE(engine, m) {
         .def("set_comments", &game::set_comments)
         .def("has_parent", &game::has_parent)
         .def("visit_parent", &game::visit_parent)
-        .def("get_child_actions", &game::get_child_actions)
+        .def("get_child_actions", [](const game &g, uint16_t show_flags) {
+            return g.get_child_actions(static_cast<pgn_options>(show_flags));
+        }, py::arg("show_flags") = static_cast<uint16_t>(pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION))
         // Python version of visit_child without newstate argument
         .def("visit_child",
              [](game &g, const action &a) {

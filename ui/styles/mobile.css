@@ -12,6 +12,7 @@
     box-sizing: border-box;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     color: var(--ui-text);
     background: var(--ui-panel);
@@ -38,12 +39,13 @@
 }
 #mobileBoard #btnFocus svg { color: inherit; }
 #mobileLayout.has-mobile-panel #btnFocus { bottom: 64px; }
-.mobile-footer { border-top: 1px solid var(--ui-border); background: var(--ui-panel); }
+.mobile-footer { min-width: 0; width: 100%; max-width: 100%; border-top: 1px solid var(--ui-border); background: var(--ui-panel); }
 #mobileContinuation {
     display: flex; flex-direction: row-reverse; align-items: center; width: 100%; gap: 10px;
+    min-width: 0; max-width: 100%; overflow: hidden;
     min-height: 44px; padding: 0 14px; border: 0; background: transparent; color: inherit; text-align: left;
 }
-#mobileContinuation .selected-display { flex: 1; min-width: 0; min-height: 0; padding: 0; font-size: 12px; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mobileContinuation .selected-display { flex: 1 1 0; width: 0; max-width: 100%; min-width: 0; min-height: 0; padding: 0; font-size: 12px; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mobile-choose { flex-shrink: 0; font-size: 12px; color: var(--ui-muted); }
 #mobileNavigation .remote-control { padding: 0 8px 6px; display: block; }
 #mobileNavigation .remote-grid { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr 1fr; grid-template-rows: 64px; gap: 4px; }
@@ -71,7 +73,7 @@
 #mobileSheetTitle[hidden] ~ .mobile-sheet-content { padding-top: 12px; }
 .mobile-sheet-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 12px 10px; }
 #mobileSheet .select-container { overflow: visible; padding: 0; opacity: 1; }
-#mobileSheet .select-option { min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; color: inherit; }
+#mobileSheet .select-option { overflow-wrap: anywhere; min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; color: inherit; }
 #mobileSheet .select-option.selected { background: var(--ui-soft); border-color: var(--ui-primary); }
 #mobileSheet .hint-btn { min-height: 44px; background: var(--ui-soft); color: var(--ui-primary); border-radius: 8px; }
 #mobileSheet .hud-content { height: auto; padding: 0; }

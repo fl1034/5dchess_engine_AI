@@ -31,7 +31,7 @@ export function initMobileLayout() {
         const hasComment = commentText.textContent.trim().length > 0;
         const icon = hasComment ? 'comment-message' : 'comment-empty';
         commentIcon.setAttribute('href', `#icon-${icon}${activePanel === 'comments' ? '-open' : ''}`);
-        commentButton.setAttribute('aria-label', hasComment ? 'Position comment (has comment)' : 'Position comment (empty)');
+        commentButton.setAttribute('aria-label', hasComment ? 'Comment (has comment)' : 'Comment (empty)');
     }
 
     // Cover typing, discard, saving, and comments arriving from the game worker.
@@ -50,7 +50,7 @@ export function initMobileLayout() {
         panes.forEach(pane => { pane.hidden = pane.dataset.mobilePane !== name; });
         triggers.forEach(button => button.setAttribute('aria-expanded', String(button.dataset.mobilePanel === name)));
         heading.hidden = name === 'tools';
-        heading.textContent = { variations: 'Continuations', comments: 'Position comment', game: 'Game details' }[name] || '';
+        heading.textContent = { variations: 'Continuations', comments: 'Comment', game: 'Game details' }[name] || '';
         if (name === 'tools') sheet.removeAttribute('aria-labelledby');
         else sheet.setAttribute('aria-labelledby', 'mobileSheetTitle');
         if (name && trigger) document.getElementById('mobileSheetClose').focus();

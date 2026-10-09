@@ -160,6 +160,21 @@ inline std::map<std::string, std::string> convert_js_to_metadata(const val& js_m
     return metadata;
 }
 
+val child_actions_to_js(const game &g, pgn_options show_flags)
+{
+    val result = val::array();
+    auto child_actions = g.get_child_actions(show_flags);
+    for(size_t i = 0; i < child_actions.size(); ++i)
+    {
+        const auto &[act, pgn] = child_actions[i];
+        val move_info = val::object();
+        move_info.set("action", convert_action_to_js(act));
+        move_info.set("pgn", pgn);
+        result.set(i, move_info);
+    }
+    return result;
+}
+
 /////////////////////////
 // emscripten bindings //
 /////////////////////////
@@ -344,17 +359,10 @@ EMSCRIPTEN_BINDINGS(engine) {
         .function("has_parent", &game::has_parent)
         .function("visit_parent", &game::visit_parent)
         .function("get_child_actions", optional_override([](const game &self) {
-            val result = val::array();
-            auto child_actions = self.get_child_actions();
-            for (size_t i = 0; i < child_actions.size(); ++i) 
-            {
-                const auto& [act, pgn] = child_actions[i];
-                val move_info = val::object();
-                move_info.set("action", convert_action_to_js(act));
-                move_info.set("pgn", pgn);
-                result.set(i, move_info);
-            }
-            return result;
+            return child_actions_to_js(self, pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION);
+        }))
+        .function("get_child_actions", optional_override([](const game &self, uint16_t show_flags) {
+            return child_actions_to_js(self, static_cast<pgn_options>(show_flags));
         }))
         .function("get_historical_actions", optional_override([](const game &self) {
             val result = val::array();

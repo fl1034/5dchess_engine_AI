@@ -641,6 +641,23 @@ export const UI = (() => {
         });
     }
 
+    const SHORT_MOVE_NOTATION_KEY = 'use-short-move-notation';
+    const shortMoveNotationCheckbox = document.getElementById('useShortMoveNotation');
+    try {
+        shortMoveNotationCheckbox.checked = localStorage.getItem(SHORT_MOVE_NOTATION_KEY) !== 'false';
+    } catch {
+        // Keep the default when storage is unavailable.
+    }
+    shortMoveNotationCheckbox.addEventListener('change', () => {
+        const useShortMoveNotation = shortMoveNotationCheckbox.checked;
+        try {
+            localStorage.setItem(SHORT_MOVE_NOTATION_KEY, String(useShortMoveNotation));
+        } catch {
+            // The preference still applies for this session.
+        }
+        if (settingsChangeCallback) settingsChangeCallback({ useShortMoveNotation });
+    });
+
     // Show movable pieces toggle
     const showMovablePiecesCheckbox = document.getElementById('showMovablePieces');
     if (showMovablePiecesCheckbox) {
@@ -1235,7 +1252,7 @@ export const UI = (() => {
          * @returns {Object} Object with exportMate and exportShortNotation boolean values
          */
         getSettings() {
-            return getExportSettings();
+            return { ...getExportSettings(), useShortMoveNotation: shortMoveNotationCheckbox.checked };
         }
     };
 })();

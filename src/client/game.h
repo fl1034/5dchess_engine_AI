@@ -59,7 +59,8 @@ public:
     void set_comments(const comments_t &c) const;
     bool has_parent() const;
     void visit_parent();
-    std::vector<std::tuple<action, std::string>> get_child_actions() const;
+    std::vector<std::tuple<action, std::string>> get_child_actions(
+        pgn_options show_flags = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
     std::vector<std::tuple<action, std::string>> get_historical_actions() const;
     /*
     visit_child:
