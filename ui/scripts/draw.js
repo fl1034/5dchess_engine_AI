@@ -62,6 +62,13 @@ export default class ChessBoardCanvas
         
         this.infCanvas.startAnimation();
         this._loadColors();
+        // Canvas text does not repaint automatically when a web font arrives.
+        Promise.all([
+            document.fonts.load(`italic ${this.fontSizeforXY}px Playfair`, 'abcdefgh12345678'),
+            document.fonts.load(`${this.fontSizeforLT}px "Playfair Lining"`, 'LT-0123456789')
+        ])
+            .then(() => this.infCanvas.startAnimation())
+            .catch(error => console.warn('Could not load the board coordinate font:', error));
     }
 
     _loadColors() {
@@ -265,6 +272,11 @@ export default class ChessBoardCanvas
         ];
     }
 
+    _timelineLabelBaseline(ctx, l) {
+        const ascent = ctx.measureText('L').actualBoundingBoxAscent;
+        return l * this.boardSkipY - this.backgroundShiftY + ascent;
+    }
+
     // Main drawing method
     drawBoards(ctx, lMin, lMax, vMin, vMax) {
         if (!this.data) return;
@@ -311,8 +323,8 @@ export default class ChessBoardCanvas
             const {x:worldX, y:worldY} = camera.screenToWorld(
                 (2 * this.boardSkipX - this.backgroundShiftX) * zoomLevel,
                 (this.boardSkipY - this.backgroundShiftY) * zoomLevel + 80, // 80 is the approximate height of hud
-                this.infCanvas.canvas.width, 
-                this.infCanvas.canvas.height
+                this.infCanvas.viewportSize.width,
+                this.infCanvas.viewportSize.height
             );
             const {l, t} = this.worldToLT(worldX, worldY);
             const deltaX = Math.min(
@@ -336,7 +348,8 @@ export default class ChessBoardCanvas
             return {l, t, lOpacity, tOpacity};
         })();
         
-        ctx.font = `${this.fontSizeforLT}px serif`;
+        ctx.font = `${this.fontSizeforLT}px "Playfair Lining", serif`;
+        ctx.textBaseline = 'alphabetic';
         ctx.save();
         if(opacityValues.lOpacity > 0)
         {
@@ -348,7 +361,7 @@ export default class ChessBoardCanvas
                     ctx.fillText(
                         `L${this._displayL(l)}`,
                         t * 2 * this.boardSkipX - this.backgroundShiftX - 2,
-                        l * this.boardSkipY - this.backgroundShiftY + this.fontSizeforLT
+                        this._timelineLabelBaseline(ctx, l)
                     );
                 }
             }
@@ -359,7 +372,7 @@ export default class ChessBoardCanvas
                     ctx.fillText(
                         `L${this._displayL(l)}`,
                         t * 2 * this.boardSkipX - this.backgroundShiftX - 2,
-                        l * this.boardSkipY - this.backgroundShiftY + this.fontSizeforLT
+                        this._timelineLabelBaseline(ctx, l)
                     );
                 }
             }
@@ -493,7 +506,27 @@ export default class ChessBoardCanvas
         const labelOpacity = smoothClamp(30.0, 50.0, squareLength);
         if (labelOpacity > 0) {
             ctx.save();
-            ctx.font = `${this.fontSizeforXY}px serif`;
+            ctx.font = `italic ${this.fontSizeforXY}px Playfair, serif`;
+            ctx.textBaseline = 'alphabetic';
+            ctx.textAlign = 'left';
+            // Align visible left edges consistently despite italic side bearings.
+            const labelInsetX = this.fontSizeforXY * 0.05;
+            const rankInsetY = this.fontSizeforXY * 0.1;
+            const rankLabels = Array.from({ length: this.boardLengthY }, (_, row) => {
+                const text = `${this._displayRankForRow(row)}`;
+                const metrics = ctx.measureText(text);
+                return {
+                    text,
+                    x: labelInsetX + metrics.actualBoundingBoxLeft,
+                    y: rankInsetY + metrics.actualBoundingBoxAscent
+                };
+            });
+            const fileLabels = Array.from({ length: this.boardLengthX }, (_, i) => {
+                const text = String.fromCharCode(97 + i);
+                return { text, x: labelInsetX + ctx.measureText(text).actualBoundingBoxLeft };
+            });
+            // Keep a shared baseline while reserving room for descenders.
+            const fileDescent = Math.max(0, ctx.measureText(fileLabels.map(label => label.text).join('')).actualBoundingBoxDescent);
             ctx.globalAlpha = labelOpacity;
             for (const board of cache.filteredBoards) {
                 let l = this._displayL(board.l), v = board.t << 1 | board.c;
@@ -504,18 +537,18 @@ export default class ChessBoardCanvas
                 for (let i = 1; i < this.boardLengthX; i+=2) {
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
-                        String.fromCharCode(97 + i),
-                        shiftX + i * this.squareSize,
-                        shiftY + this.boardLengthY * this.squareSize
+                        fileLabels[i].text,
+                        shiftX + i * this.squareSize + fileLabels[i].x,
+                        shiftY + this.boardLengthY * this.squareSize - fileDescent
                     );
                 }
                 for (let i = 0; i < this.boardLengthY; i+=2) {
                     const drawRow = this._displayBoardRow(i);
                     ctx.fillStyle = this._getLabelTextColor(i, 0);
                     ctx.fillText(
-                        `${this._displayRankForRow(i)}`,
-                        shiftX,
-                        shiftY + drawRow * this.squareSize + this.fontSizeforXY
+                        rankLabels[i].text,
+                        shiftX + rankLabels[i].x,
+                        shiftY + drawRow * this.squareSize + rankLabels[i].y
                     );
                 }
             }
@@ -528,18 +561,18 @@ export default class ChessBoardCanvas
                 for (let i = 0; i < this.boardLengthX; i+=2) {
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
-                        String.fromCharCode(97 + i),
-                        shiftX + i * this.squareSize,
-                        shiftY + this.boardLengthY * this.squareSize
+                        fileLabels[i].text,
+                        shiftX + i * this.squareSize + fileLabels[i].x,
+                        shiftY + this.boardLengthY * this.squareSize - fileDescent
                     );
                 }
                 for (let i = 1; i < this.boardLengthY; i+=2) {
                     const drawRow = this._displayBoardRow(i);
                     ctx.fillStyle = this._getLabelTextColor(i, 0);
                     ctx.fillText(
-                        `${this._displayRankForRow(i)}`,
-                        shiftX,
-                        shiftY + drawRow * this.squareSize + this.fontSizeforXY
+                        rankLabels[i].text,
+                        shiftX + rankLabels[i].x,
+                        shiftY + drawRow * this.squareSize + rankLabels[i].y
                     );
                 }
             }
@@ -561,7 +594,7 @@ export default class ChessBoardCanvas
         
         if(squareLength > 0.7) {
             // Layer 4: Pieces
-            const imgs = chooseLOD(squareLength);
+            const imgs = chooseLOD(squareLength * this.infCanvas.pixelRatio);
             for (const board of cache.filteredBoards) {
                 let l = this._displayL(board.l), v = board.t << 1 | board.c;
                 const shiftX = v * this.boardSkipX;
@@ -737,7 +770,11 @@ export default class ChessBoardCanvas
         if (this.focusPoints[this.focusIndex] !== undefined) {
             const focus = this.focusPoints[this.focusIndex];
             
-            const actualScale = this.infCanvas.canvas.width / 120 / 3;
+            const canvas = this.infCanvas.viewportSize;
+            const actualScale = document.body.classList.contains('compact-layout')
+                ? Math.min(canvas.width / (this.boardLengthX * this.squareSize + 40),
+                           canvas.height / (this.boardLengthY * this.squareSize + 40))
+                : canvas.width / 120 / 3;
             const targetScale = Math.log2(actualScale);
             const targetX = this.boardSkipX * (focus.t << 1 | focus.c) + this.boardLengthX * this.squareSize / 2;
             const targetY = this.boardSkipY * this._displayL(focus.l) + this.boardLengthY * this.squareSize / 2;

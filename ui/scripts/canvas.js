@@ -141,7 +141,7 @@ export class InfiniteScrollableCanvas {
         // Touch state
         this.touchStartDistance = 0;
         this.touchStartScale = 0;
-        this.touchTapTime = 0;
+        this.touchMoved = false;
         this.touchStartPos = { x: 0, y: 0 };
         
         // Animation
@@ -155,6 +155,18 @@ export class InfiniteScrollableCanvas {
         
         this._setupEventListeners();
         this.resize();
+        this._watchPixelRatio();
+    }
+
+    _watchPixelRatio() {
+        // Moving between displays can change density without changing CSS size.
+        this.pixelRatioQuery?.removeEventListener('change', this.pixelRatioListener);
+        this.pixelRatioQuery = window.matchMedia(`(resolution: ${globalThis.devicePixelRatio || 1}dppx)`);
+        this.pixelRatioListener = () => {
+            this.resize();
+            this._watchPixelRatio();
+        };
+        this.pixelRatioQuery.addEventListener('change', this.pixelRatioListener);
     }
 
     _setupEventListeners() {
@@ -171,9 +183,15 @@ export class InfiniteScrollableCanvas {
         this.canvas.addEventListener('touchstart', (e) => this._handleTouchStart(e));
         this.canvas.addEventListener('touchmove', (e) => this._handleTouchMove(e));
         this.canvas.addEventListener('touchend', (e) => this._handleTouchEnd(e));
+        this.canvas.addEventListener('touchcancel', () => {
+            this.touchMoved = true;
+            this.isDragging = false;
+        });
         
         // Window resize
         window.addEventListener('resize', () => this.resize());
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(this.canvas);
     }
 
     _handleMouseDown(e) {
@@ -241,18 +259,18 @@ export class InfiniteScrollableCanvas {
 
     _getMouseWorldPosition(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const screenX = (e.clientX - rect.left) / (rect.right - rect.left) * this.canvas.width;
-        const screenY = (e.clientY - rect.top) / (rect.bottom - rect.top) * this.canvas.height;
+        const screenX = (e.clientX - rect.left) / (rect.right - rect.left) * this.viewportSize.width;
+        const screenY = (e.clientY - rect.top) / (rect.bottom - rect.top) * this.viewportSize.height;
         
-        return this.cameraCurrent.screenToWorld(screenX, screenY, this.canvas.width, this.canvas.height);
+        return this.cameraCurrent.screenToWorld(screenX, screenY, this.viewportSize.width, this.viewportSize.height);
     }
 
     _getTouchWorldPosition(touch) {
         const rect = this.canvas.getBoundingClientRect();
-        const screenX = (touch.clientX - rect.left) / (rect.right - rect.left) * this.canvas.width;
-        const screenY = (touch.clientY - rect.top) / (rect.bottom - rect.top) * this.canvas.height;
+        const screenX = (touch.clientX - rect.left) / (rect.right - rect.left) * this.viewportSize.width;
+        const screenY = (touch.clientY - rect.top) / (rect.bottom - rect.top) * this.viewportSize.height;
         
-        return this.cameraCurrent.screenToWorld(screenX, screenY, this.canvas.width, this.canvas.height);
+        return this.cameraCurrent.screenToWorld(screenX, screenY, this.viewportSize.width, this.viewportSize.height);
     }
 
     _getTouchDistance(touch1, touch2) {
@@ -279,9 +297,10 @@ export class InfiniteScrollableCanvas {
             this.touchStartPos.x = touch.clientX;
             this.touchStartPos.y = touch.clientY;
             this.isDragging = false;
-            this.touchTapTime = Date.now();
+            this.touchMoved = false;
         } else if (e.touches.length === 2) {
             // Two finger pinch - start zoom
+            this.touchMoved = true;
             this.touchStartDistance = this._getTouchDistance(e.touches[0], e.touches[1]);
             this.touchStartScale = this.cameraTarget.scale;
         }
@@ -332,11 +351,11 @@ export class InfiniteScrollableCanvas {
         e.preventDefault();
         
         if (e.touches.length === 0) {
-            // All fingers released
-            const currentTime = Date.now();
+            // A drag or pinch must never become a piece selection on release.
+            if (!e.changedTouches.length) return;
             const touch = e.changedTouches[0];
             const distance = this._getDistance(touch.clientX, touch.clientY, this.touchStartPos.x, this.touchStartPos.y);
-            const isTap = distance <= this.config.dragThreshold || (currentTime - this.touchTapTime) < 300;
+            const isTap = !this.touchMoved && !this.isDragging && distance <= this.config.dragThreshold;
             
             if (isTap && e.changedTouches.length > 0) {
                 // Single tap detected
@@ -355,7 +374,7 @@ export class InfiniteScrollableCanvas {
             this.dragStart.x = dragSpeed * touch.clientX - this.cameraTarget.x;
             this.dragStart.y = dragSpeed * touch.clientY - this.cameraTarget.y;
             this.isDragging = false;
-            this.touchTapTime = Date.now();
+            this.touchMoved = true;
         }
     }
 
@@ -371,12 +390,19 @@ export class InfiniteScrollableCanvas {
     }
 
     _render() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.scale(
+            this.canvas.width / this.viewportSize.width,
+            this.canvas.height / this.viewportSize.height
+        );
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
         
         // Apply camera transform
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
+        const centerX = this.viewportSize.width / 2;
+        const centerY = this.viewportSize.height / 2;
         const zoom = this.cameraCurrent.getZoomLevel();
         
         this.ctx.translate(centerX, centerY);
@@ -386,8 +412,8 @@ export class InfiniteScrollableCanvas {
         // Call user-defined render callback
         if (this.onRender) {
             const bounds = this.cameraCurrent.getVisibleWorldBounds(
-                this.canvas.width, 
-                this.canvas.height
+                this.viewportSize.width,
+                this.viewportSize.height
             );
             this.onRender(this.ctx, bounds);
         }
@@ -400,8 +426,21 @@ export class InfiniteScrollableCanvas {
     }
 
     resize() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+        const rect = this.canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width));
+        const height = Math.max(1, Math.round(rect.height));
+        // Preserve the relative zoom while a sheet or orientation changes the usable area.
+        if (this.viewportSize && document.body.classList.contains('compact-layout')) {
+            const ratio = Math.min(width, height) / Math.min(this.viewportSize.width, this.viewportSize.height);
+            const delta = Math.log2(ratio);
+            for (const camera of [this.cameraCurrent, this.cameraTarget]) {
+                camera.scale = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, camera.scale + delta));
+            }
+        }
+        this.viewportSize = { width, height };
+        this.pixelRatio = globalThis.devicePixelRatio || 1;
+        this.canvas.width = Math.max(1, Math.round(width * this.pixelRatio));
+        this.canvas.height = Math.max(1, Math.round(height * this.pixelRatio));
         this._render();
     }
 
@@ -424,8 +463,8 @@ export class InfiniteScrollableCanvas {
 
     getVisibleBounds() {
         return this.cameraCurrent.getVisibleWorldBounds(
-            this.canvas.width,
-            this.canvas.height
+            this.viewportSize.width,
+            this.viewportSize.height
         );
     }
 }

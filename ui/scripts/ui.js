@@ -1,6 +1,8 @@
 // ui.js
 
-import { setGameMetadata } from './metadata.js';
+import { setGameMetadata as renderGameMetadata } from './metadata.js';
+import { compactViewport } from './mobile.js';
+import { getExportFilename } from './filename.js';
 
 export const UI = (() => {
     /* ================= SVG Icons ================= */
@@ -44,7 +46,7 @@ export const UI = (() => {
     }
 
     function autoToggleHudForText(text) {
-        if (!autoToggleComments) return;
+        if (!autoToggleComments || compactViewport.matches) return;
         const trimmed = (text || '').trim();
         setHudExpanded(trimmed.length > 0);
     }
@@ -163,7 +165,9 @@ export const UI = (() => {
         selectContainer.appendChild(hintBtn);
         
         options.forEach((opt, idx) => {
-            const optEl = document.createElement('div');
+            const optEl = document.createElement('button');
+            optEl.type = 'button';
+            optEl.setAttribute('aria-pressed', String(idx === selectedIndex));
             optEl.className = 'select-option';
             if (idx === selectedIndex) optEl.classList.add('selected');
             optEl.textContent = opt;
@@ -171,11 +175,12 @@ export const UI = (() => {
                 selectedIndex = idx;
                 selectedDisplay.textContent = opt;
                 renderOptions();
+                selectContainer.querySelectorAll('.select-option')[idx]?.focus();
             };
             selectContainer.appendChild(optEl);
         });
         
-        selectedDisplay.textContent = options[selectedIndex];
+        selectedDisplay.textContent = options[selectedIndex] || 'No continuations';
     }
 
     function updatePanelToggle(expanded) {
@@ -211,6 +216,7 @@ export const UI = (() => {
 
     /* ================= HUD Positioning ================= */
     function positionHud() {
+        if (compactViewport.matches) return;
         const screenWidth = window.innerWidth;
         const controlPanelWidth = 200;
         const controlPanelRight = 18;
@@ -246,7 +252,12 @@ export const UI = (() => {
         }
     }
 
-    window.addEventListener('resize', positionHud);
+    window.addEventListener('resize', () => {
+        positionHud();
+        if (!compactViewport.matches && controlPanel.classList.contains('collapsed')) {
+            controlPanel.style.height = calculateCollapasedPanelHeight();
+        }
+    });
     positionHud();
 
 
@@ -282,6 +293,8 @@ export const UI = (() => {
     // Callbacks for import/export
     let importCallback = null;
     let exportCallback = null;
+    let exportRequestId = 0;
+    let gameMetadata = {};
     const popupStack = [];
 
     function showPopup(button, popupName) {
@@ -293,8 +306,12 @@ export const UI = (() => {
         }
         if (activeButton) activeButton.classList.remove('active');
         popupStack.push({ button, popupName });
+        popupStack.forEach((entry, index) => {
+            document.getElementById(entry.popupName).style.zIndex = String(index + 1);
+        });
         popupOverlay.classList.add('show');
         document.getElementById(popupName).classList.add('show');
+        if (compactViewport.matches) document.querySelector(`#${popupName} .mobile-popup-close`)?.focus();
         if (button) {
             button.classList.add('active');
             activeButton = button;
@@ -312,6 +329,11 @@ export const UI = (() => {
         activeButton = previous ? previous.button : null;
         if (activeButton) activeButton.classList.add('active');
         if (popupStack.length === 0) popupOverlay.classList.remove('show');
+        if (compactViewport.matches) {
+            const target = previous ? (entry.button || document.querySelector(`#${previous.popupName} .mobile-popup-close`)) : entry.button;
+            target?.focus();
+            if (entry.popupName === 'popupExportOptions' && exportSettingsChanged()) saveExportSettings();
+        }
     }
 
     function togglePopup(button, popupName) {
@@ -322,6 +344,25 @@ export const UI = (() => {
         }
         showPopup(button, popupName);
     }
+
+    // Full-screen phone dialogs need an explicit, keyboard-accessible close action.
+    document.querySelectorAll('.popup-window').forEach(popup => {
+        const header = document.createElement('div');
+        header.className = 'dialog-header';
+        const title = popup.querySelector('.popup-title');
+        title.id = popup.id + 'Title';
+        popup.setAttribute('role', 'dialog');
+        popup.setAttribute('aria-labelledby', title.id);
+        header.appendChild(title);
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'mobile-popup-close';
+        close.textContent = 'Close';
+        close.setAttribute('aria-label', 'Close dialog');
+        close.addEventListener('click', closePopup);
+        header.appendChild(close);
+        popup.prepend(header);
+    });
 
     // Close popup when clicking overlay (but not the window)
     popupOverlay.onclick = (e) => {
@@ -415,21 +456,22 @@ export const UI = (() => {
         reader.readAsText(file);
     };
 
+    function requestExport() {
+        document.getElementById('copyButton').disabled = true;
+        document.getElementById('saveButton').disabled = true;
+        document.getElementById('exportTextarea').setAttribute('aria-busy', 'true');
+        document.getElementById('exportPreviewStatus').hidden = false;
+        if (exportCallback) exportCallback(++exportRequestId);
+    }
+
     document.getElementById('btnExport').onclick = (event) => {
         setExportControls(appliedExportSettings);
-        showPopup(event.currentTarget, 'popupExport');
-        // Reapply the last saved settings before requesting the preview.
-        if (settingsChangeCallback) {
-            settingsChangeCallback(appliedExportSettings);
-        }
-        // Call export callback to populate textarea
-        if (exportCallback) {
-            exportCallback();
-        }
-        // Populate filename and extension fields
-        const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        document.getElementById('exportFilename').value = `game_${timestamp}`;
+        const defaultFilename = getExportFilename(gameMetadata);
+        document.getElementById('exportFilename').value = defaultFilename.slice(0, -'.5dpgn'.length);
         document.getElementById('exportExtension').value = '.5dpgn';
+        showPopup(event.currentTarget, 'popupExport');
+        if (settingsChangeCallback) settingsChangeCallback(appliedExportSettings);
+        requestExport();
     };
 
     document.getElementById('exportMoreOptionsButton').onclick = (event) => {
@@ -445,12 +487,14 @@ export const UI = (() => {
             return;
         }
         navigator.clipboard.writeText(text).then(() => {
-            // Visual feedback - show copied label and flash button
             const button = document.getElementById('copyButton');
+            const mobileLabel = button.querySelector('.mobile-export-label');
             const label = document.getElementById('copiedLabel');
+            mobileLabel.textContent = 'Copied!';
             button.classList.add('active');
             label.classList.add('visible');
             setTimeout(() => {
+                mobileLabel.textContent = 'Copy';
                 button.classList.remove('active');
                 label.classList.remove('visible');
             }, 2000);
@@ -459,7 +503,7 @@ export const UI = (() => {
         });
     };
 
-    // Save as File button
+    // Download using the loaded game headers, independent of export options.
     document.getElementById('saveButton').onclick = () => {
         const textarea = document.getElementById('exportTextarea');
         const text = textarea.value;
@@ -468,18 +512,16 @@ export const UI = (() => {
             return;
         }
         
-        // Get filename and extension from input fields
-        const filename = document.getElementById('exportFilename').value.trim();
-        const extension = document.getElementById('exportExtension').value.trim();
-        
-        if (!filename) {
-            alert('Please enter a filename.');
-            return;
+        let fullFilename = getExportFilename(gameMetadata);
+        if (!compactViewport.matches) {
+            const filename = document.getElementById('exportFilename').value.trim();
+            if (!filename) {
+                alert('Please enter a filename.');
+                return;
+            }
+            fullFilename = filename + document.getElementById('exportExtension').value.trim();
         }
-        
-        // Construct the full filename
-        const fullFilename = extension ? filename + extension : filename;
-        
+
         // Create blob and download
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -490,7 +532,7 @@ export const UI = (() => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
 
     // Export options checkboxes
@@ -542,7 +584,7 @@ export const UI = (() => {
         }
         appliedExportSettings = settings;
         if (settingsChangeCallback) settingsChangeCallback(settings);
-        if (exportCallback) exportCallback();
+        requestExport();
     };
 
     // Initialize export options from localStorage
@@ -572,11 +614,37 @@ export const UI = (() => {
     }
     appliedExportSettings = getExportSettings();
 
-    // Refresh button
-    const refreshButton = document.getElementById('refreshButton');
-    if (refreshButton) {
-        refreshButton.onclick = saveExportSettings;
+    const exportSettingsChanged = () => Object.entries(getExportSettings())
+        .some(([key, value]) => value !== appliedExportSettings[key]);
+
+    // Desktop keeps explicit Refresh; mobile commits once when Options closes.
+    document.getElementById('refreshButton').onclick = saveExportSettings;
+
+    // Move the same controls on resize so checked values and edited filenames survive.
+    const exportPlacements = [
+        [document.getElementById('exportMoreOptionsButton'), 'mobileExportFooter'],
+        [document.getElementById('copyButton'), 'mobileExportFooter'],
+        [document.getElementById('saveButton'), 'mobileExportFooter'],
+        [exportMateCheckbox.closest('label'), 'mobileExportBasicOptions'],
+        [exportShortNotationCheckbox.closest('label'), 'mobileExportBasicOptions']
+    ].map(([element, destination]) => {
+        const marker = document.createComment('desktop export control');
+        element.before(marker);
+        return { element, destination, marker };
+    });
+    function updateExportLayout() {
+        const compact = compactViewport.matches;
+        for (const { element, destination, marker } of exportPlacements) {
+            if (compact) document.getElementById(destination).appendChild(element);
+            else marker.after(element);
+        }
+        for (const checkbox of [exportMateCheckbox, exportShortNotationCheckbox]) {
+            checkbox.closest('label').classList.toggle('popup-control', compact);
+        }
+        document.getElementById('popupExportOptions').querySelector('.popup-title').textContent = compact ? 'Export Options' : 'More Options';
     }
+    compactViewport.addEventListener('change', updateExportLayout);
+    updateExportLayout();
 
     document.getElementById('btnSettings').onclick = (event) => {
         showPopup(event.currentTarget, 'popupSettings');
@@ -948,6 +1016,8 @@ export const UI = (() => {
          */
         init() {
             document.addEventListener('keydown', (e) => {
+                // Let focused buttons use native Enter/Space activation without game shortcuts.
+                if (e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) return;
                 // Disable shortcuts when editing hud-text or other editable elements
                 const activeElement = document.activeElement;
                 const isEditable = activeElement && (
@@ -1015,7 +1085,7 @@ export const UI = (() => {
         setSelectedIndex(index) {
             if (index >= 0 && index < options.length) {
                 selectedIndex = index;
-                selectedDisplay.textContent = options[selectedIndex];
+                selectedDisplay.textContent = options[selectedIndex] || 'No continuations';
                 renderOptions();
             }
         },
@@ -1040,7 +1110,10 @@ export const UI = (() => {
     };
 
     return {
-        setGameMetadata,
+        setGameMetadata(metadata = {}) {
+            gameMetadata = { ...metadata };
+            renderGameMetadata(metadata);
+        },
         buttons: buttonControls,
         select: selectControls,
         
@@ -1103,7 +1176,7 @@ export const UI = (() => {
 
         /**
          * Set the callback function for when export button is pressed
-         * @param {Function} callback - Function that returns the data to export
+         * @param {Function} callback - Receives the request ID to return with the preview
          */
         setExportCallback(callback) {
             exportCallback = callback;
@@ -1111,10 +1184,18 @@ export const UI = (() => {
 
         /**
          * Set the content of exportTextarea
-         * @param {string} data 
+         * @param {string} data
+         * @param {number} requestId - ID of the preview request that produced this data
          */
-        setExportData (data) {
-            document.getElementById('exportTextarea').value = data;
+        setExportData(data, requestId) {
+            // A superseded preview must not enable downloading stale options.
+            if (requestId !== exportRequestId) return;
+            const textarea = document.getElementById('exportTextarea');
+            textarea.value = data;
+            textarea.setAttribute('aria-busy', 'false');
+            document.getElementById('exportPreviewStatus').hidden = true;
+            document.getElementById('copyButton').disabled = !data;
+            document.getElementById('saveButton').disabled = !data;
         },
 
         /**

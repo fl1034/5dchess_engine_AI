@@ -86,3 +86,18 @@ binding that cannot load fails rather than skips; rebuild for the selected
 interpreter. See the [build guide](../../docs/usage/building.md#python-module) for
 build prerequisites and interpreter selection. Full validation requires a
 passing run with zero skips.
+
+## Browser UI regressions
+
+The dependency-free Node tests cover phone taps, drags, pinch release, and canvas
+resizing when panels reserve screen space, and display-density changes without
+shifting camera bounds or pointer coordinates, plus export filename metadata
+precedence, date validation, sanitization, and byte limits:
+
+```sh
+node --test scripts/test/test_ui_canvas.mjs scripts/test/test_ui_export_filename.mjs
+```
+
+These tests exercise canvas and filename behavior without a browser. Layout and game-control
+integration should also be checked in the built WebAssembly interface at phone
+portrait, phone landscape, tablet, and desktop sizes.

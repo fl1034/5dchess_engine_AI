@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/panels.css">
     <link rel="stylesheet" href="styles/popup.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles/mobile.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <script>
         window.svg_file_mapping = {
             'b': 'assets/bishop-black.svg',
@@ -122,9 +123,76 @@
         <symbol id="icon-flip" viewBox="0 0 24 24">
             <path d="M22 11L2 11L2 13L22 13V11ZM18 2C19.1046 2 20 2.89543 20 4V7C20 8.10457 19.1046 9 18 9L6 9C4.89543 9 4 8.10457 4 7L4 4C4 2.89543 4.89543 2 6 2L18 2ZM18 20H6V17L18 17V20ZM20 17C20 15.8954 19.1046 15 18 15L6 15C4.89543 15 4 15.8954 4 17L4 20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V17Z"></path>
         </symbol>
+        <symbol id="icon-submit" viewBox="0 0 24 24">
+            <path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z"></path>
+        </symbol>
+        <symbol id="icon-previous" viewBox="0 0 24 24">
+            <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
+        </symbol>
+        <symbol id="icon-undo" viewBox="0 0 24 24">
+            <path d="M5.82843 6.99955L8.36396 9.53509L6.94975 10.9493L2 5.99955L6.94975 1.0498L8.36396 2.46402L5.82843 4.99955H13C17.4183 4.99955 21 8.58127 21 12.9996C21 17.4178 17.4183 20.9996 13 20.9996H4V18.9996H13C16.3137 18.9996 19 16.3133 19 12.9996C19 9.68584 16.3137 6.99955 13 6.99955H5.82843Z"></path>
+        </symbol>
+        <symbol id="icon-redo" viewBox="0 0 24 24">
+            <path d="M18.1716 6.99955H11C7.68629 6.99955 5 9.68584 5 12.9996C5 16.3133 7.68629 18.9996 11 18.9996H20V20.9996H11C6.58172 20.9996 3 17.4178 3 12.9996C3 8.58127 6.58172 4.99955 11 4.99955H18.1716L15.636 2.46402L17.0503 1.0498L22 5.99955L17.0503 10.9493L15.636 9.53509L18.1716 6.99955Z"></path>
+        </symbol>
+        <symbol id="icon-comment-empty" viewBox="0 0 24 24">
+            <path d="M5.76282 17H20V5H4V18.3851L5.76282 17ZM6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455Z"></path>
+        </symbol>
+        <symbol id="icon-comment-empty-open" viewBox="0 0 24 24">
+            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455Z"></path>
+        </symbol>
+        <symbol id="icon-comment-message" viewBox="0 0 24 24">
+            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455ZM5.76282 17H20V5H4V18.3851L5.76282 17ZM11 10H13V12H11V10ZM7 10H9V12H7V10ZM15 10H17V12H15V10Z"></path>
+        </symbol>
+        <symbol id="icon-comment-message-open" viewBox="0 0 24 24">
+            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455ZM7 10V12H9V10H7ZM11 10V12H13V10H11ZM15 10V12H17V10H15Z"></path>
+        </symbol>
+        <symbol id="icon-price-tag-3-line" viewBox="0 0 24 24">
+            <path d="M10.9042 2.10025L20.8037 3.51446L22.2179 13.414L13.0255 22.6063C12.635 22.9969 12.0019 22.9969 11.6113 22.6063L1.71184 12.7069C1.32131 12.3163 1.32131 11.6832 1.71184 11.2926L10.9042 2.10025ZM11.6113 4.22157L3.83316 11.9997L12.3184 20.485L20.0966 12.7069L19.036 5.28223L11.6113 4.22157ZM13.7327 10.5855C12.9516 9.80448 12.9516 8.53815 13.7327 7.7571C14.5137 6.97606 15.78 6.97606 16.5611 7.7571C17.3421 8.53815 17.3421 9.80448 16.5611 10.5855C15.78 11.3666 14.5137 11.3666 13.7327 10.5855Z"></path>
+        </symbol>
+        <symbol id="icon-price-tag-3-fill" viewBox="0 0 24 24">
+            <path d="M10.9042 2.10025L20.8037 3.51446L22.2179 13.414L13.0255 22.6063C12.635 22.9969 12.0019 22.9969 11.6113 22.6063L1.71184 12.7069C1.32131 12.3163 1.32131 11.6832 1.71184 11.2926L10.9042 2.10025ZM13.7327 10.5855C14.5137 11.3666 15.78 11.3666 16.5611 10.5855C17.3421 9.80448 17.3421 8.53815 16.5611 7.7571C15.78 6.97606 14.5137 6.97606 13.7327 7.7571C12.9516 8.53815 12.9516 9.80448 13.7327 10.5855Z"></path>
+        </symbol>
+        <symbol id="icon-more-2-fill" viewBox="0 0 24 24">
+            <path d="M12 3C10.9 3 10 3.9 10 5C10 6.1 10.9 7 12 7C13.1 7 14 6.1 14 5C14 3.9 13.1 3 12 3ZM12 17C10.9 17 10 17.9 10 19C10 20.1 10.9 21 12 21C13.1 21 14 20.1 14 19C14 17.9 13.1 17 12 17ZM12 10C10.9 10 10 10.9 10 12C10 13.1 10.9 14 12 14C13.1 14 14 13.1 14 12C14 10.9 13.1 10 12 10Z"></path>
+        </symbol>
+        <symbol id="icon-close-line" viewBox="0 0 24 24">
+            <path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"></path>
+        </symbol>
     </defs>
 </svg>
 
+<div id="mobileLayout" hidden>
+    <header class="mobile-header">
+        <div id="mobileStatus"></div>
+        <button type="button" id="mobileCommentButton" class="mobile-comment-button" data-mobile-panel="comments" aria-expanded="false" aria-controls="mobileSheet" aria-label="Position comment (empty)">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg>
+        </button>
+        <button type="button" class="mobile-game-button" data-mobile-panel="game" aria-expanded="false" aria-controls="mobileSheet" aria-label="Game details">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-price-tag-3-line"></use></svg>
+        </button>
+        <button type="button" class="mobile-tools-button" data-mobile-panel="tools" aria-expanded="false" aria-controls="mobileSheet" aria-label="Additional actions">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg>
+        </button>
+    </header>
+    <div id="mobileBoard"></div>
+    <section id="mobileSheet" hidden aria-labelledby="mobileSheetTitle">
+        <h2 id="mobileSheetTitle" class="mobile-sheet-title"></h2>
+        <button type="button" id="mobileSheetClose" aria-label="Close panel">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-close-line"></use></svg>
+        </button>
+        <div class="mobile-sheet-content">
+            <div data-mobile-pane="variations" hidden></div>
+            <div data-mobile-pane="comments" hidden></div>
+            <div data-mobile-pane="tools" hidden></div>
+            <div data-mobile-pane="game" hidden></div>
+        </div>
+    </section>
+    <footer class="mobile-footer">
+        <button type="button" id="mobileContinuation" data-mobile-panel="variations" aria-expanded="false" aria-controls="mobileSheet" aria-label="Choose continuation"><span class="mobile-choose">Choose ›</span></button>
+        <div id="mobileNavigation"></div>
+    </footer>
+</div>
 <canvas id="canvas"></canvas>
 
 <div class="hud-wrapper" id="hudWrapper">
@@ -135,7 +203,7 @@
         </div>
 
         <div class="hud-content">
-            <div class="hud-text" contenteditable="true" spellcheck="false">
+            <div class="hud-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Position comment" aria-multiline="true">
                 Loading WebAssembly module. This may take a while.
             </div>
         </div>
@@ -152,18 +220,18 @@
 <div class="control-panel collapsed" id="controlPanel">
     <div class="remote-control">
         <div class="remote-grid">
-            <button class="remote-btn up active">PR<br>EV</button>
-            <button class="remote-btn left active">UN<br>DO</button>
-            <button class="remote-btn ok inactive">SUB<br>MIT</button>
-            <button class="remote-btn right inactive">RE<br>DO</button>
-            <button class="remote-btn down active">NE<br>XT</button>
+            <button class="remote-btn up active" aria-label="Previous"><span class="desktop-remote-label">PR<br>EV</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg><span>Previous</span></span></button>
+            <button class="remote-btn left active" aria-label="Undo"><span class="desktop-remote-label">UN<br>DO</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-undo"></use></svg><span>Undo</span></span></button>
+            <button class="remote-btn ok inactive" aria-label="Submit"><span class="desktop-remote-label">SUB<br>MIT</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-submit"></use></svg><span>Submit</span></span></button>
+            <button class="remote-btn right inactive" aria-label="Redo"><span class="desktop-remote-label">RE<br>DO</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-redo"></use></svg><span>Redo</span></span></button>
+            <button class="remote-btn down active" aria-label="Next"><span class="desktop-remote-label">NE<br>XT</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg><span>Next</span></span></button>
         </div>
     </div>
 
     <div class="selected-display" id="selectedDisplay">Option 1</div>
 
     <div class="select-container" id="selectContainer">
-        <div class="hint-btn" id="hintBtn">+ Hint</div>
+        <button type="button" class="hint-btn" id="hintBtn">+ Hint</button>
     </div>
 
     <div class="panel-toggle" id="panelToggle"></div>
@@ -212,16 +280,16 @@
         <div class="popup-title">Export Data</div>
         <div class="popup-content popup-content-flex">
             <textarea class="popup-textarea popup-textarea-flex" id="exportTextarea" readonly></textarea>
-            <div class="filename-inputs">
+            <div class="filename-inputs desktop-export-controls">
                 <div class="input-group" style="width: 60%;">
-                    <input type="text" id="exportFilename" placeholder="filename">
+                    <input type="text" id="exportFilename" placeholder="filename" aria-label="Filename">
                 </div>
                 <div class="input-group" style="width: 20%;">
-                    <input type="text" id="exportExtension" placeholder=".extension">
+                    <input type="text" id="exportExtension" placeholder=".extension" aria-label="File extension">
                 </div>
-                <button class="popup-button" id="saveButton">Save as File</button>
+                <button class="popup-button" id="saveButton" type="button"><span class="desktop-export-label">Save as File</span><span class="mobile-export-label">Download</span></button>
             </div>
-            <div class="popup-button-group">
+            <div class="popup-button-group desktop-export-controls">
                 <div class="export-options">
                     <label style="display:flex;align-items:center;gap:6px;">
                         <input type="checkbox" id="exportMate">
@@ -231,24 +299,28 @@
                         <input type="checkbox" id="exportShortNotation">
                         <span>Short Notation</span>
                     </label>
-                    <button class="popup-button export-more-options" id="exportMoreOptionsButton" type="button">More Options</button>
+                    <button class="popup-button export-more-options" id="exportMoreOptionsButton" type="button" aria-haspopup="dialog"><span class="desktop-export-label">More Options</span><span class="mobile-export-label">Options</span></button>
                 </div>
                 <div id="copiedLabel" class="copied-label">Copied!</div>
                 <div class="export-actions">
                     <button class="btn-icon" id="refreshButton" title="Refresh export data">
                         <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-refresh"></use></svg>
                     </button>
-                    <button class="btn-icon" id="copyButton" title="Copy to Clipboard">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-copy"></use></svg>
+                    <button class="btn-icon" id="copyButton" type="button" title="Copy to Clipboard" aria-label="Copy to clipboard">
+                        <span class="mobile-export-label">Copy</span>
+                        <svg class="desktop-export-label" viewBox="0 0 24 24" fill="currentColor"><use href="#icon-copy"></use></svg>
                     </button>
                 </div>
             </div>
+            <div id="exportPreviewStatus" class="export-preview-status" role="status" hidden>Updating preview…</div>
+            <div id="mobileExportFooter" class="popup-button-group export-footer"></div>
         </div>
     </div>
 
     <div class="popup-window export-options-popup" id="popupExportOptions">
         <div class="popup-title">More Options</div>
         <div class="popup-content popup-form export-options-dialog-content">
+            <div id="mobileExportBasicOptions"></div>
             <label class="popup-control">
                 <input type="checkbox" id="exportRelativeNotation">
                 <span>Relative Notation</span>
@@ -322,7 +394,7 @@
 
         <div class="popup-content info-tab-content" id="tab-user-interface">
             <p>Welcome to 5D Chess Engine! This guide will help you go through its features.</p>
-            <p>To close this window, simply click anywhere outside the window. If you want to see it again, click the <svg style="width: 12px; height: 12px; flex-shrink: 0;" fill="currentColor"><use href="#icon-info"></use></svg> button on the bottom.</p>
+            <p>To close this window, use Close on phones or click anywhere outside the window on larger screens. If you want to see it again, click the <svg style="width: 12px; height: 12px; flex-shrink: 0;" fill="currentColor"><use href="#icon-info"></use></svg> button on the bottom.</p>
 
             <h4><b>Viewport</b></h4>
             <p>The main area displays the chess boards. You can interact with the boards using mouse or touch:</p>
@@ -341,8 +413,11 @@
                 </li>
             </ul>
 
+            <h4>Phones</h4>
+            <p>On phones, navigation stays at the bottom. Choose opens continuations, the comment icon in the header opens comments, and the three-dot icon at the right of the header opens the action menu. These open one panel at a time; The floating cross button closes the panel and returns the space to the boards; tapping its highlighted header icon or Choose again also closes it. Panels sit below the boards in portrait and beside them on short landscape screens. The tag button at the top opens game details, and Focus stays at the lower-right of the board area. Import, export, settings, and help use full-screen dialogs with a compact title and green Close text button. Export uses Options, Copy, and Download; Options opens all export settings; changes update the preview once when Options closes. Download uses a filename based on the game headers.</p>
+
             <h4><b>Control Panel</b></h4>
-            <p>The control panel on the top right enables tree-shaped travsersal of game states by these navigation buttons:</p>
+            <p>The navigation controls (top right on larger screens, bottom on phones) enable tree-shaped travsersal of game states by these navigation buttons:</p>
             <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
                 <li><b>PREV</b> - Go to previous action (Shortcut: Arrow ↑)</li>
                 <li><b>NEXT</b> - Go to next action (Shortcut: Arrow ↓)</li>
@@ -350,7 +425,7 @@
                 <li><b>REDO</b> - Redo move (Shortcut: Arrow →)</li>
                 <li><b>SUBMIT</b> - Submit move (Shortcut: Enter)</li>
             </ul>
-            <p>To use the <b>NEXT</b> button, you need to expand the control panel and select the desired action first. Actions are added to the list as you submit the moves. If there are still more legal actions not on the list, pressing <b>Hint</b> button (Shortcut: H) adds a computed legal action to the list immediately.</p>
+            <p>To use the <b>NEXT</b> button, select the desired action first: expand the control panel on larger screens, or use Choose on phones. Actions are added to the list as you submit the moves. If there are still more legal actions not on the list, pressing <b>Hint</b> button (Shortcut: H) adds a computed legal action to the list immediately.</p>
             
             <h4><b>Action Buttons</b></h4>
             <p>Action buttons on the bottom:</p>

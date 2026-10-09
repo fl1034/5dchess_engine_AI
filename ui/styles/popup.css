@@ -512,3 +512,8 @@
     height: 42px;
     padding: 9px;
 }
+
+/* Mobile dialogs reuse the desktop titles and controls. */
+.dialog-header { display: contents; }
+.mobile-popup-close { display: none; }
+.mobile-export-label, #mobileExportFooter, #mobileExportBasicOptions, .export-preview-status { display: none; }

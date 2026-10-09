@@ -2,6 +2,9 @@
 
 import { UI } from 'ui';
 import ChessBoardCanvasBase from 'draw';
+import { compactViewport, initMobileLayout } from './mobile.js';
+
+initMobileLayout();
 
 
 let worker = new Worker(window.worker_path, { type: 'module' });
@@ -13,6 +16,7 @@ let generatedMoves = [];
 let presentC;
 let nextOptions = [];
 let showPhantom = true;
+let focusOnNextData = true;
 
 class ChessBoardCanvas extends ChessBoardCanvasBase {
     onClickSquare(l, t, c, x, y) {
@@ -25,6 +29,14 @@ class ChessBoardCanvas extends ChessBoardCanvasBase {
 }
 
 window.chessBoardCanvas = new ChessBoardCanvas('canvas');
+compactViewport.addEventListener('change', () => {
+    if (compactViewport.matches) {
+        requestAnimationFrame(() => {
+            window.chessBoardCanvas.infCanvas.resize();
+            window.chessBoardCanvas.goToNextFocus();
+        });
+    }
+});
 
 function handle_click(pos) {
     if (clicking) {
@@ -124,6 +136,8 @@ worker.onmessage = (e) => {
             UI.setHudLight(false);
         }
         window.chessBoardCanvas.setData(data);
+        if (focusOnNextData && compactViewport.matches) window.chessBoardCanvas.goToNextFocus();
+        focusOnNextData = false;
         clicking = false;
     }
     else if (msg.type === 'moves') {
@@ -162,7 +176,7 @@ worker.onmessage = (e) => {
     }
     else if (msg.type === 'update_pgn')
     {
-        UI.setExportData(msg.pgn);
+        UI.setExportData(msg.pgn, msg.requestId);
     }
     else if (msg.type === 'update_hud_status')
     {
@@ -214,11 +228,12 @@ UI.setFocusCallback(() => {
 });
 
 UI.setImportCallback((data) => {
+    focusOnNextData = true;
     worker.postMessage({type: 'load', pgn: data});
 });
 
-UI.setExportCallback(() => {
-    worker.postMessage({type: 'export'});
+UI.setExportCallback((requestId) => {
+    worker.postMessage({type: 'export', requestId});
 });
 
 UI.setCommentsEditCallback((text) => {

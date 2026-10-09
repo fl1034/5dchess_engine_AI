@@ -335,7 +335,7 @@ createModule().then((engine) => {
                 self.settings.exportCompleteGameTree !== false,
                 self.settings.exportStandardMetadataOnly === true,
             );
-            self.postMessage({ type: 'update_pgn', pgn: pgn });
+            self.postMessage({ type: 'update_pgn', pgn: pgn, requestId: data.requestId });
         } else if (data.type === 'update_comment') {
             let comments = data.comments || [];
             if (comments.length > 0) {

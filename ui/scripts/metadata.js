@@ -1,3 +1,5 @@
+import { compactViewport } from './mobile.js';
+
 // Read-only game headers, independent of the position currently being viewed.
 const panel = document.getElementById('gameMetadata');
 const summary = document.getElementById('gameMetadataSummary');
@@ -28,6 +30,7 @@ setExpanded(false);
 
 // On smaller windows place this panel below the existing HUD instead of covering it.
 function positionPanel() {
+    if (compactViewport.matches) return;
     const hud = document.getElementById('hudWrapper').getBoundingClientRect();
     const controls = document.getElementById('controlPanel').getBoundingClientRect();
     // Reserve the expanded width so toggling never moves the top-left anchor.
