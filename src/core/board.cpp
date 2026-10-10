@@ -244,7 +244,7 @@ std::string board::get_fen() const
     return result;
 }
 
-bitboard_t board::attacks_to(int pos) const
+bitboard_t board::attacks_to(int pos) const noexcept
 {
     bitboard_t w = white(), b = black();
     bitboard_t pawns = lpawn(), all = w | b;
@@ -258,7 +258,7 @@ bitboard_t board::attacks_to(int pos) const
         |  (bishop_attack(pos, all)& lbishop());
 }
 
-bool board::is_under_attack(int pos, int color) const
+bool board::is_under_attack(int pos, int color) const noexcept
 {
     bitboard_t hostile = color ? white() : black();
     bitboard_t pawns = lpawn();

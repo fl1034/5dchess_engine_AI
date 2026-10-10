@@ -16,6 +16,8 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<
     decltype(std::declval<integer_set &>() &= std::declval<const integer_set &>()),
     integer_set &>);
+static_assert(noexcept(std::declval<const integer_set &>().is_subset_of(
+    std::declval<const integer_set &>())));
 
 template <typename T>
 std::vector<uint32_t> snapshot(const T &values)
@@ -25,6 +27,42 @@ std::vector<uint32_t> snapshot(const T &values)
 
 int main()
 {
+    // Compare subset queries against the standard sorted-range algorithm,
+    // including unequal storage lengths and retained zero blocks.
+    std::vector<integer_set> subset_cases{
+        {}, {0}, {1, 63}, {64}, {1, 64, 128}, {65, 4096}, {1, 63, 64, 65, 128, 4096}
+    };
+    integer_set retained_blocks{4096};
+    retained_blocks.erase(4096);
+    subset_cases.push_back(retained_blocks);
+    retained_blocks.insert(1);
+    subset_cases.push_back(retained_blocks);
+    std::mt19937 rng(42);
+    for(int sample = 0; sample < 40; sample++)
+    {
+        integer_set values;
+        for(int i = 0; i < 20; i++)
+        {
+            values.insert(rng() % 512);
+        }
+        subset_cases.push_back(std::move(values));
+    }
+    for(const integer_set &a : subset_cases)
+    {
+        for(const integer_set &b : subset_cases)
+        {
+            const auto a_values = snapshot(a);
+            const auto b_values = snapshot(b);
+            const bool expected = std::includes(
+                b_values.begin(), b_values.end(), a_values.begin(), a_values.end());
+            if(a.is_subset_of(b) != expected)
+            {
+                std::cerr << "Test failed: subset query disagrees with reference\n";
+                return 1;
+            }
+        }
+    }
+
     integer_set s{1,2,3,5,64,65,98};
     std::set<uint32_t> _s{1,2,3,5,64,65,98};
     print_range("s: ", s);

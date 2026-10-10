@@ -94,11 +94,11 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
 }
 
 template<HCOrdering Order>
-generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const
+generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const &
 {
     while(!ss.empty())
     {
-        HC hc = ss.back();
+        HC hc = std::move(ss.back());
         ss.pop_back();
         auto pt_opt = take_point(hc, order);
         if(!pt_opt)
@@ -106,7 +106,7 @@ generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const
             continue;
         }
 
-        point pt = *pt_opt;
+        const point &pt = *pt_opt;
         auto problem = find_problem(pt, hc);
         if(problem)
         {
@@ -121,11 +121,11 @@ generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const
 }
 
 template<HCOrdering Order>
-generator<moveseq> HC_info::search(search_space ss, Order order) const
+generator<moveseq> HC_info::search(search_space ss, Order order) const &
 {
     while(!ss.empty())
     {
-        HC hc = ss.back();
+        HC hc = std::move(ss.back());
         ss.pop_back();
         auto pt_opt = take_point(hc, order);
         if(!pt_opt)
@@ -133,7 +133,7 @@ generator<moveseq> HC_info::search(search_space ss, Order order) const
             continue;
         }
 
-        point pt = *pt_opt;
+        const point &pt = *pt_opt;
         auto problem = find_problem(pt, hc);
         if(!problem)
         {

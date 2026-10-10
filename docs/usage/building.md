@@ -36,6 +36,21 @@ When `TOOLS` or `TEST` is enabled, PGN fixtures are copied from `test/pgn/` to t
 
 All options default to off. With every option disabled, CMake builds only the core C++ library. Enable both `TOOLS` and `TEST` to include tools-related tests. See [Contributing](../../CONTRIBUTING.md#testing) for test commands.
 
+### Building without RTTI
+
+The native libraries, engine, and tools support builds with RTTI disabled. For
+GCC or Clang, configure with `-DCMAKE_CXX_FLAGS=-fno-rtti`, for example:
+
+```sh
+cmake -S . -B build-no-rtti -DENGINE=ON -DTOOLS=ON -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS=-fno-rtti
+cmake --build build-no-rtti --config Release --parallel
+```
+
+For MSVC, use `-DCMAKE_CXX_FLAGS=/GR-` instead. Keep `PYMODULE` disabled for these
+builds because pybind11 requires RTTI. Option debug messages use the readable
+type names `monostate`, `bool`, `int`, `double`, and `string`.
+
 ## IDE setup
 
 Generate an Xcode project:

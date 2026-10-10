@@ -45,10 +45,10 @@ private:
     bitboard_t gen_physical_moves_impl(vec4 p) const;
 
     template<piece_t P, bool C, bool ONLY_SP>
-    movegen_t gen_moves_impl(vec4 p) const;
+    movegen_t gen_moves_impl(vec4 p) const &;
 
     template<bool C>
-    generator<vec4> gen_board_move_impl(vec4 p0) const;
+    generator<vec4> gen_board_move_impl(vec4 p0) const &;
 
     /*
      generate sliding moves in directions that are:
@@ -87,24 +87,24 @@ public:
     void append_board(int l, const std::shared_ptr<board>& b_ptr);
 
     // getters
-    std::pair<int, int> get_board_size() const;
+    std::pair<int, int> get_board_size() const noexcept;
     std::pair<int, int> get_initial_lines_range() const noexcept { return layout.initial_range(); }
-    std::pair<int, int> get_lines_range() const;
-    std::pair<int, int> get_active_range() const;
+    std::pair<int, int> get_lines_range() const noexcept;
+    std::pair<int, int> get_active_range() const noexcept;
     turn_t get_timeline_start(int l) const;
     turn_t get_timeline_end(int l) const;
 
     std::shared_ptr<board> get_board(int l, int t, bool c) const;
     // Borrow an existing board without changing its shared ownership count.
     // Return nullptr when the turn is absent; valid while this multiverse lives.
-    const board* get_board_ptr(int l, int t, bool c) const noexcept;
+    const board *get_board_ptr(int l, int t, bool c) const noexcept;
 
     template<bool SHOW_UMOVE=false>
     std::vector<boards_info_t> get_boards() const;
 
     std::string to_string() const;
     piece_t get_piece(vec4 a, bool color) const;
-    bool get_umove_flag(vec4 a, bool color) const;
+    bool get_umove_flag(vec4 a, bool color) const noexcept;
 
     /*
      This helper function returns (present_t, present_c)
@@ -115,12 +115,15 @@ public:
 
     // move generation
     template<bool C> bitboard_t gen_physical_moves(vec4 p) const;
-    template<bool C> movegen_t gen_superphysical_moves(vec4 p) const;
-    template<bool C> movegen_t gen_moves(vec4 p) const;
-    generator<vec4> gen_piece_move(vec4 p, bool board_color) const;
+    template<bool C> movegen_t gen_superphysical_moves(vec4 p) const &;
+    template<bool C> movegen_t gen_superphysical_moves(vec4 p) const && = delete;
+    template<bool C> movegen_t gen_moves(vec4 p) const &;
+    template<bool C> movegen_t gen_moves(vec4 p) const && = delete;
+    generator<vec4> gen_piece_move(vec4 p, bool board_color) const &;
+    generator<vec4> gen_piece_move(vec4 p, bool board_color) const && = delete;
 
     // help functions
-    bool inbound(vec4 a, bool color) const;
+    bool inbound(vec4 a, bool color) const noexcept;
     std::string pretty_l(int l) const { return layout.pretty_l(l); }
     std::string pretty_lt(vec4 p0) const
     {

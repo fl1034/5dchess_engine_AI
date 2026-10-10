@@ -12,7 +12,7 @@ concept check_emitter = requires(Emit& callback, full_move move) {
     { callback(std::move(move)) } -> std::same_as<bool>;
 };
 
-/* Borrowed view for finding royal captures. Timeline metadata is copied from
+/* Borrowed view for finding royal checks. Timeline metadata is copied from
    the base state; board data is borrowed. The state and any added boards must
    outlive the view and remain unchanged. Moves are neither applied nor validated. */
 class check_position {
@@ -22,7 +22,7 @@ class check_position {
         turn_t start{};
         turn_t end{};
         turn_t added_start{};
-        const board* added = nullptr;
+        const board *added = nullptr;
     };
     const state& base;
     int first_line;
@@ -54,18 +54,22 @@ class check_position {
 
 public:
     explicit check_position(const state& s);
+    check_position(const state &&) = delete;
     /* Reserve [l_min, l_max] for existing and future timelines. The range must
        contain every timeline in s. */
     check_position(const state& s, int l_min, int l_max);
+    check_position(const state &&, int, int) = delete;
 
     /* View s.phantom() without constructing it. For endpoints matching s's
        stored player, reuse the endpoint board on the following turn. */
     static check_position for_phantom(const state& s);
+    static check_position for_phantom(const state &&) = delete;
 
     /* Prepare for candidate checks. Repeat opposite-color endpoint boards on
        the moving player's turn and reserve s.new_line() for a possible branch.
        Supply each move's result boards to gives_check(). */
     static check_position for_move_candidates(const state& s);
+    static check_position for_move_candidates(const state &&) = delete;
 
     /* Borrowed result board first visible at (l,t,c). gives_check() also uses
        it at next_turn({t,c}). */
@@ -73,7 +77,7 @@ public:
         int l;
         int t;
         bool c;
-        const board* value;
+        const board *value;
     };
     /* Historical means a superphysical capture before the target's endpoint. */
     enum class check_kind { physical, superphysical, historical };
@@ -88,9 +92,10 @@ public:
     /* Extend a timeline by one turn, or start a reserved empty one. The borrowed
        board stays in this view; each timeline accepts at most one added board. */
     void add_board(int l, turn_t at, const board& b);
+    void add_board(int, turn_t, const board &&) = delete;
 
     /* Return nullptr when the turn is absent from this view. */
-    const board* get_board_ptr(int l, int t, bool c) const;
+    const board *get_board_ptr(int l, int t, bool c) const;
 
     piece_t get_piece(vec4 p, bool c) const;
 

@@ -43,11 +43,11 @@ void compare_phantom(const state& s)
         const auto [t, c] = s.get_timeline_end(l);
         const auto end = expected.get_timeline_end(l);
         for (turn_t at = start; at <= end; at = next_turn(at)) {
-            const board* actual = view.get_board_ptr(l,at.first,at.second);
+            const board *actual = view.get_board_ptr(l,at.first,at.second);
             assert(actual);
             assert(actual->get_fen<true>() ==
                    expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
-            const board* borrowed = at <= turn_t{t,c}
+            const board *borrowed = at <= turn_t{t,c}
                 ? s.get_board_ptr(l,at.first,at.second) : s.get_board_ptr(l,t,c);
             assert(actual == borrowed);
         }

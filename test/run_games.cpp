@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
             pgns.push_back(contents.str());
         }
 
-        const int repetitions = 2;
+        const int repetitions = 1;
         const auto start = std::chrono::steady_clock::now();
         for(int iteration = 0; iteration < repetitions; ++iteration)
         {

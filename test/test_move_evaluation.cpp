@@ -263,7 +263,7 @@ void test_superphysical_scoring()
 
 void test_latent_threat_weight_dependencies()
 {
-    const auto verify = [](const std::string& board, const char* move,
+    const auto verify = [](const std::string& board, const char *move,
                            bool threatened) {
         const state before = position(board);
         auto [info, space] = HC_info::build_HC(before);

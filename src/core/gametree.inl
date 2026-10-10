@@ -14,7 +14,12 @@ inline state gnode<T>::get_state()
     }
     else if(parent)
     {
-        s = *parent->get_state().can_apply(act);
+        auto next_state = parent->get_state().can_apply(act);
+        if(!next_state)
+        {
+            throw std::runtime_error("gnode::get_state(): Stored action is invalid for the parent state");
+        }
+        s = std::move(next_state);
         return *s;
     }
     else
@@ -25,7 +30,7 @@ inline state gnode<T>::get_state()
 
 template<typename T>
 inline std::string gnode<T>::render_pgn_turn(
-    const std::function<std::string(T)> &show,
+    const std::function<std::string(const T &)> &show,
     pgn_options show_flags,
     turn_t turn,
     bool full_turn_display,
@@ -72,7 +77,7 @@ inline std::string gnode<T>::render_pgn_turn(
 
 template<typename T>
 inline std::string gnode<T>::pgn_tree(
-    std::function<std::string(T)> show,
+    const std::function<std::string(const T &)> &show,
     pgn_options show_flags,
     turn_t start_turn,
     bool full_turn_display
@@ -113,7 +118,7 @@ inline std::string gnode<T>::pgn_tree(
 
 template<typename T>
 inline std::string gnode<T>::pgn_path(
-    std::function<std::string(T)> show,
+    const std::function<std::string(const T &)> &show,
     pgn_options show_flags
 )
 {

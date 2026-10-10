@@ -1,7 +1,7 @@
 #include "integer_set.h"
 #include <sstream>
 
-bool integer_set::contains(value_type value) const
+bool integer_set::contains(value_type value) const noexcept
 {
     size_t block_index = value >> block_shift;
     size_t bit_index = value & block_mask;
@@ -52,7 +52,25 @@ bool integer_set::intersects(const integer_set &other) const noexcept
     return false;
 }
 
-bool integer_set::erase(value_type value)
+bool integer_set::is_subset_of(const integer_set &other) const noexcept
+{
+    if(first_block & ~other.first_block)
+    {
+        return false;
+    }
+    for(size_t i = 0; i < remaining_blocks.size(); i++)
+    {
+        const block_t other_block = i < other.remaining_blocks.size()
+            ? other.remaining_blocks[i] : 0;
+        if(remaining_blocks[i] & ~other_block)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool integer_set::erase(value_type value) noexcept
 {
     size_t block_index = value >> block_shift;
     size_t bit_index = value & block_mask;
@@ -80,7 +98,7 @@ integer_set integer_set::operator&(const integer_set &other) const
     return result;
 }
 
-void integer_set::minus(const integer_set &other)
+void integer_set::minus(const integer_set &other) noexcept
 {
     first_block &= ~other.first_block;
     const size_t min_size

@@ -6,14 +6,14 @@
 
 using turn_t = std::pair<int,bool>;
 
-inline turn_t next_turn(turn_t t)
+inline turn_t next_turn(turn_t t) noexcept
 {
     auto [n,c] = t;
     int v = (n<<1 | static_cast<int>(c)) + 1;
     return std::make_pair(v>>1, v&1);
 }
 
-inline turn_t previous_turn(turn_t t)
+inline turn_t previous_turn(turn_t t) noexcept
 {
     auto [n,c] = t;
     int v = (n<<1 | static_cast<int>(c)) - 1;

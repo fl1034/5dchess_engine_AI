@@ -36,7 +36,7 @@ std::pair<int, int> get_board_size_from_headers(const std::map<std::string, std:
         );
     }
 }
-} // anonymous namespace
+} /* anonymous namespace */
 
 const std::map<std::string, variant_setup_t> default_variants = {
     {

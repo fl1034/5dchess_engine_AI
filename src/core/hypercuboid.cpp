@@ -54,9 +54,9 @@ semimove HC_info::get_semimove(index_t n, index_t i) const
 std::optional<HC_info::move_boards> HC_info::get_move_boards(index_t axis, index_t coordinate) const
 {
     const auto& loc = axis_coords.at(axis).at(coordinate);
-    if (const auto* physical = std::get_if<physical_entry>(&loc))
+    if (const auto *physical = std::get_if<physical_entry>(&loc))
         return move_boards{physical->m, &physical->b, nullptr};
-    if (const auto* arrival = std::get_if<arriving_entry>(&loc)) {
+    if (const auto *arrival = std::get_if<arriving_entry>(&loc)) {
         const auto source_axis = line_to_axis.at(arrival->m.from.l());
         const auto& departure = std::get<departing_entry>(axis_coords[source_axis].at(arrival->idx));
         return move_boards{arrival->m, &arrival->b, &departure.b};
@@ -77,7 +77,7 @@ std::optional<HC_info::move_boards> HC_info::get_move_boards(index_t axis, index
 std::tuple<std::vector<vec4>, int> get_move_path(const check_position &s, full_move fm, int c)
 {
     const vec4 p = fm.from, q = fm.to, d = q - p;
-    const board* b_ptr = s.get_board_ptr(p.l(), p.t(), c);
+    const board *b_ptr = s.get_board_ptr(p.l(), p.t(), c);
     if(b_ptr->sliding() & pmask(p.xy()))
     {
         // this piece is sliding, makes sense to talk about path
@@ -133,7 +133,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
         int line;
         std::pmr::vector<full_move> moves;
 
-        arrival_bucket(int line, std::pmr::memory_resource* resource)
+        arrival_bucket(int line, std::pmr::memory_resource *resource)
             : line(line), moves(resource) {}
     };
     struct axis_moves
@@ -141,7 +141,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
         std::pmr::vector<full_move> stays;
         std::pmr::vector<vec4> departures;
 
-        explicit axis_moves(std::pmr::memory_resource* resource)
+        explicit axis_moves(std::pmr::memory_resource *resource)
             : stays(resource), departures(resource) {}
     };
 
@@ -179,7 +179,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
     };
     std::pmr::vector<jump_index> jump_indices(&temporary_resource);
 
-    auto find_jump_index = [&jump_indices](vec4 from) -> const index_t*
+    auto find_jump_index = [&jump_indices](vec4 from) -> const index_t *
     {
         auto result = std::find_if(
             jump_indices.begin(), jump_indices.end(),
@@ -246,7 +246,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
     for(index_t axis = 0; axis < static_cast<index_t>(playable_timelines.size()); axis++)
     {
         const int l = playable_timelines[axis];
-        const auto* arriving_moves = find_arrivals(l);
+        const auto *arriving_moves = find_arrivals(l);
         std::vector<entry> locs;
         locs.reserve(
             1 + moves_by_axis[axis].stays.size()
@@ -390,7 +390,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
             const board& destination_board = *s.get_board_ptr(q.l(), q.t(), player);
             
             dprint(" ... branching jump");
-            if(const index_t* departure = find_jump_index(m.from))
+            if(const index_t *departure = find_jump_index(m.from))
             {
                 /* only add this arriving move when the corresponding departing move
                  is legal (Otherwise, it shouldn't have been registered in jump_map) */
@@ -438,9 +438,9 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state& s)
         for(index_t i = 0; i < static_cast<index_t>(axis_coords[n].size()); i++)
         {
             entry& loc = axis_coords[n][i];
-            if(auto* p = std::get_if<arriving_entry>(&loc))
+            if(auto *p = std::get_if<arriving_entry>(&loc))
             {
-                if(const index_t* departure = find_jump_index(p->m.from))
+                if(const index_t *departure = find_jump_index(p->m.from))
                 {
                     p->idx = *departure;
 #ifndef NDEBUG
@@ -890,7 +890,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC& hc) const
                 for(index_t i : hc[n2])
                 {
                     const entry& loc = axis_coords[n2][i];
-                    const board* newboard = nullptr;
+                    const board *newboard = nullptr;
                     /* if there isn't a new board on the same place, do nothing*/
                     if(std::holds_alternative<null_entry>(loc) || !is_next(extract_tl(loc).first, check.to.t()))
                     {
@@ -1009,7 +1009,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC& hc) const
 
 
 
-generator<moveseq> HC_info::iterative_search(search_space ss) const
+generator<moveseq> HC_info::iterative_search(search_space ss) const &
 {
     return iterative_search(std::move(ss), natural_HC_ordering{});
 }
@@ -1090,18 +1090,18 @@ moveseq HC_info::to_action(const point &p) const
     return mvs;
 }
 
-generator<moveseq> HC_info::stable_search(search_space ss) const
+generator<moveseq> HC_info::stable_search(search_space ss) const &
 {
     dprint("begining psearch: ", ss.to_string());
     while(!ss.empty())
     {
-        HC hc = ss.back();
+        HC hc = std::move(ss.back());
         dprint("searching ", hc.to_string());
         ss.pop_back();
         auto pt_opt = take_point(hc);
         if(pt_opt)
         {
-            point pt = pt_opt.value();
+            const point &pt = *pt_opt;
             dprint("got point: ", range_to_string(pt));
             auto problem = find_problem(pt, hc);
             if(problem)
@@ -1141,7 +1141,7 @@ generator<moveseq> HC_info::stable_search(search_space ss) const
     co_return;
 }
 
-generator<moveseq> HC_info::search(search_space ss) const
+generator<moveseq> HC_info::search(search_space ss) const &
 {
     return search(std::move(ss), natural_HC_ordering{});
 }

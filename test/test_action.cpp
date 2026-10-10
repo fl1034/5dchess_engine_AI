@@ -62,7 +62,7 @@ int main()
                              & special_move_t::CAPTURE));
 
     state en_passant_position = standard;
-    for (const char* notation : {"(0T1)e2e4", "(0T1)a7a6",
+    for (const char *notation : {"(0T1)e2e4", "(0T1)a7a6",
                                  "(0T2)e4e5", "(0T2)d7d5"}) {
         assert(en_passant_position.apply_move(full_move(notation)));
         assert(en_passant_position.submit());

@@ -4,7 +4,7 @@
 #include "check_position.h"
 
 namespace {
-constexpr const char* empty = "8/8/8/8/8/8/8/8";
+constexpr const char *empty = "8/8/8/8/8/8/8/8";
 
 state cross_line_position(bool mover)
 {
@@ -40,7 +40,7 @@ void compare_phantom(const state& s)
     for (int l = lo; l <= hi; ++l) {
         const auto end = expected.get_timeline_end(l);
         for (auto at = s.get_timeline_start(l); at <= end; at = next_turn(at)) {
-            const auto* b = view.get_board_ptr(l,at.first,at.second);
+            const auto *b = view.get_board_ptr(l,at.first,at.second);
             assert(b);
             assert(b->get_fen<true>() == expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
         }

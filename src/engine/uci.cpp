@@ -1,5 +1,6 @@
 #include <charconv>
 #include <cstdlib>
+#include <type_traits>
 #include "uci.h"
 #include <pgnparser.h>
 #include <sstream>
@@ -220,7 +221,7 @@ void engine::mainloop()
                     {
                         std::string best_move_str = "bestmove";
                         state output_state = get_current_state().value();
-                        for(const auto &ext_mv : best_move->get_moves())
+                        for(const auto &ext_mv : best_move->get_moves_view())
                         {
                             best_move_str += ' ';
                             best_move_str += ext_mv.lan(output_state);
@@ -525,7 +526,20 @@ void engine::set_option(const std::string &key, const option_value_t &value)
             is_debug_mode = true;
         }
     }
-    send_debug_info("option changed: " + key + " type " + std::visit([](const auto &v) { return std::string(typeid(v).name()); }, value));
+    const auto *type_name = std::visit([](const auto &v) {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr(std::is_same_v<T, std::monostate>)
+            return "monostate";
+        else if constexpr(std::is_same_v<T, bool>)
+            return "bool";
+        else if constexpr(std::is_same_v<T, int>)
+            return "int";
+        else if constexpr(std::is_same_v<T, double>)
+            return "double";
+        else
+            return "string";
+    }, value);
+    send_debug_info("option changed: " + key + " type " + type_name);
     on_option_changed(key, value);
 }
 

@@ -219,6 +219,23 @@ int main()
     assert(recovery_io_ptr->output_lines[3].find("7P") != std::string::npos);
     assert(recovery_io_ptr->output_lines[4] == "bye");
 
+    // Debug output uses readable type names for every option alternative.
+    auto debug_io = std::make_unique<scripted_io_handler>(
+        std::vector<scripted_io_handler::scripted_line>{});
+    auto *debug_io_ptr = debug_io.get();
+    dummy_engine debug_eng(std::move(debug_io));
+    debug_eng.set_option("debug", true);
+    debug_eng.set_option("button", std::monostate{});
+    debug_eng.set_option("count", 4);
+    debug_eng.set_option("weight", 0.5);
+    debug_eng.set_option("name", std::string("MyEngine"));
+    assert((debug_io_ptr->output_lines == std::vector<std::string>{
+        "info [debug] option changed: debug type bool",
+        "info [debug] option changed: button type monostate",
+        "info [debug] option changed: count type int",
+        "info [debug] option changed: weight type double",
+        "info [debug] option changed: name type string"}));
+
     std::cout << "All setoption tests passed!\n";
     return 0;
 }

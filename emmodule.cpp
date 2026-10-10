@@ -91,7 +91,7 @@ inline val convert_vector_vec4_to_js(const std::vector<vec4>& vec)
 inline val convert_action_to_js(const action &act)
 {
     val js_act = val::array();
-    const std::vector<ext_move> mvs = act.get_moves();
+    const auto mvs = act.get_moves_view();
     for (size_t i = 0; i < mvs.size(); ++i)
     {
         val js_mv = val::object();

@@ -41,7 +41,7 @@ class state
      test if one of piece on that board with color `C` can capture an enemy royal piece.
      */
     template<bool C>
-    generator<full_move> find_checks_impl(std::vector<int> lines) const;
+    generator<full_move> find_checks_impl(std::vector<int> lines) const &;
 
     state(const pgnparser_ast::game &g, const variant_setup_t &setup);
     
@@ -101,7 +101,7 @@ public:
     /*
      new_line(): return the index of a new line to be created by this->player.
     */
-    int new_line() const;
+    int new_line() const noexcept;
     
     /*
      get_timeline_status() returns `std::make_tuple(mandatory_timelines, optional_timelines, unplayable_timelines)`
@@ -116,7 +116,8 @@ public:
     /*
      find_checks(): Generate moves by `attacker` that capture an enemy royal piece.
      */
-    generator<full_move> find_checks(bool attacker) const;
+    generator<full_move> find_checks(bool attacker) const &;
+    generator<full_move> find_checks(bool attacker) const && = delete;
     
     std::vector<vec4> get_movable_pieces() const;
     std::vector<vec4> get_movable_pieces(const std::vector<int> &lines) const;
@@ -132,26 +133,28 @@ private:
 public:
 
     // wrappers for low-level functions
-    std::pair<int, int> get_board_size() const;
-    promotion_options get_promotion_options() const { return promotions; }
+    std::pair<int, int> get_board_size() const noexcept;
+    promotion_options get_promotion_options() const noexcept { return promotions; }
     std::optional<ext_move> normalize_promotion(ext_move move) const;
     turn_t get_present() const noexcept;
     turn_t apparent_present() const noexcept;
-    std::pair<int, int> get_initial_lines_range() const;
-    std::pair<int, int> get_lines_range() const;
-    std::pair<int, int> get_active_range() const;
+    std::pair<int, int> get_initial_lines_range() const noexcept;
+    std::pair<int, int> get_lines_range() const noexcept;
+    std::pair<int, int> get_active_range() const noexcept;
     turn_t get_timeline_start(int l) const;
     turn_t get_timeline_end(int l) const;
     piece_t get_piece(vec4 p, bool color) const;
     std::shared_ptr<board> get_board(int l, int t, bool c) const;
     // Borrow a board, or return nullptr when the turn is absent.
-    const board* get_board_ptr(int l, int t, bool c) const noexcept {
+    const board *get_board_ptr(int l, int t, bool c) const noexcept {
         return m.get_board_ptr(l,t,c);
     }
     std::vector<std::tuple<int,int,bool,std::string>> get_boards() const;
     // Generators borrow this state; moving, swapping, or modifying it invalidates them.
-    generator<vec4> gen_piece_move(vec4 p) const;
-    generator<vec4> gen_piece_move(vec4 p, bool c) const;
+    generator<vec4> gen_piece_move(vec4 p) const &;
+    generator<vec4> gen_piece_move(vec4 p) const && = delete;
+    generator<vec4> gen_piece_move(vec4 p, bool c) const &;
+    generator<vec4> gen_piece_move(vec4 p, bool c) const && = delete;
     std::string to_string() const;
     std::string show_fen() const;
     std::string pretty_l(int l) const;

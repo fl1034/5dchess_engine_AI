@@ -90,7 +90,7 @@ std::optional<index_t> ordered_search(
     if(stop.stop_requested()) return std::nullopt;
     return node->search(order).first();
 }
-} // namespace uct_detail
+} /* namespace uct_detail */
 
 struct uct_child_selection
 {
@@ -193,7 +193,7 @@ private:
             if(!cached || owner != policy_id)
             {
                 auto built = construct_hc_ordering<Order>(
-                    node->get_context()->hc_info,
+                    node->get_hc_info(),
                     uct_detail::random_engine(rng), stop, score_function);
                 if(!built) return result_t{};
                 cached = std::move(*built);
@@ -205,7 +205,7 @@ private:
         else
         {
             auto built = construct_hc_ordering<Order>(
-                node->get_context()->hc_info,
+                node->get_hc_info(),
                 uct_detail::random_engine(rng), stop, score_function);
             if(!built) return result_t{};
             return use(*built);

@@ -81,8 +81,8 @@ void compare(const state &position, coverage &seen)
 
 void test_superphysical_and_historical_checks()
 {
-    const char* source = "7k/8/8/8/8/8/8/1R2K3";
-    const char* target = "8/8/8/8/8/8/8/k7";
+    const char *source = "7k/8/8/8/8/8/8/1R2K3";
+    const char *target = "8/8/8/8/8/8/8/k7";
     const auto verify = [](const state& position, bool historical) {
         auto [info, space] = HC_info::build_HC(position);
         (void)space;

@@ -9,22 +9,22 @@ HC::HC(std::initializer_list<integer_set> init_axes)
 {
 }
 
-HC::HC(std::vector<integer_set> &&init_axes)
+HC::HC(std::vector<integer_set> &&init_axes) noexcept
     : axes(std::move(init_axes))
 {
 }
 
-const integer_set &HC::operator[](size_t i) const
+const integer_set &HC::operator[](size_t i) const & noexcept
 {
     return axes[i];
 }
 
-integer_set &HC::operator[](size_t i)
+integer_set &HC::operator[](size_t i) & noexcept
 {
     return axes[i];
 }
 
-bool HC::contains(const point &loc) const
+bool HC::contains(const point &loc) const noexcept
 {
     assert(loc.size() == axes.size());
     for(index_t i = 0; i < static_cast<index_t>(axes.size()); i++)
@@ -35,10 +35,10 @@ bool HC::contains(const point &loc) const
     return true;
 }
 
-bool HC::intersects(const slice &s) const
+bool HC::intersects(const slice &s) const noexcept
 {
-    auto fixed_axes = s.get_fixed_axes();
-    for(auto& [i, fixed_coords] : fixed_axes)
+    const auto &fixed_axes = s.get_fixed_axes();
+    for(const auto &[i, fixed_coords] : fixed_axes)
     {
         if(!axes[i].intersects(fixed_coords))
         {
@@ -48,7 +48,7 @@ bool HC::intersects(const slice &s) const
     return true;
 }
 
-bool HC::empty() const
+bool HC::empty() const noexcept
 {
     for(const auto& axis : axes)
     {
@@ -58,7 +58,7 @@ bool HC::empty() const
     return false;
 }
 
-size_t HC::volume() const
+size_t HC::volume() const noexcept
 {
     size_t result = 1;
     for(const auto& axis : axes)
@@ -68,7 +68,7 @@ size_t HC::volume() const
     return result;
 }
 
-bool slice::contains(const point &p) const
+bool slice::contains(const point &p) const noexcept
 {
     for(const auto& [n, coords] : fixed_axes)
     {
@@ -78,12 +78,12 @@ bool slice::contains(const point &p) const
     return true;
 }
 
-slice::slice(std::map<index_t, integer_set> init_fixed_axes)
+slice::slice(std::map<index_t, integer_set> init_fixed_axes) noexcept
     : fixed_axes(std::move(init_fixed_axes))
 {
 }
 
-const std::map<index_t, integer_set> &slice::get_fixed_axes() const
+const std::map<index_t, integer_set> &slice::get_fixed_axes() const & noexcept
 {
     return fixed_axes;
 }
@@ -98,7 +98,7 @@ void slice::free_axis(index_t n)
     fixed_axes.erase(n);
 }
 
-size_t search_space::volume() const
+size_t search_space::volume() const noexcept
 {
     size_t result = 0;
     for(const auto& hc : hcs)
@@ -108,7 +108,7 @@ size_t search_space::volume() const
     return result;
 }
 
-bool search_space::empty() const
+bool search_space::empty() const noexcept
 {
     for(const auto& hc : hcs)
     {
@@ -118,7 +118,7 @@ bool search_space::empty() const
     return true;
 }
 
-bool search_space::contains(point loc) const
+bool search_space::contains(const point &loc) const noexcept
 {
     for(const auto& hc : hcs)
     {
@@ -143,17 +143,17 @@ void search_space::push_front(HC hc)
     hcs.push_front(std::move(hc));
 }
 
-HC &search_space::back()
+HC &search_space::back() & noexcept
 {
     return hcs.back();
 }
 
-const HC &search_space::back() const
+const HC &search_space::back() const & noexcept
 {
     return hcs.back();
 }
 
-void search_space::pop_back()
+void search_space::pop_back() noexcept
 {
     hcs.pop_back();
 }
@@ -208,27 +208,27 @@ void search_space::remove_slice_backwards(
     }
 }
 
-std::list<HC>::iterator search_space::begin()
+std::list<HC>::iterator search_space::begin() & noexcept
 {
     return hcs.begin();
 }
 
-std::list<HC>::iterator search_space::end()
+std::list<HC>::iterator search_space::end() & noexcept
 {
     return hcs.end();
 }
 
-std::list<HC>::const_iterator search_space::begin() const
+std::list<HC>::const_iterator search_space::begin() const & noexcept
 {
     return hcs.begin();
 }
 
-std::list<HC>::const_iterator search_space::end() const
+std::list<HC>::const_iterator search_space::end() const & noexcept
 {
     return hcs.end();
 }
 
-void search_space::concat(search_space &&other)
+void search_space::concat(search_space &&other) noexcept
 {
     hcs.splice(hcs.end(), other.hcs);
 }
@@ -266,7 +266,7 @@ search_space HC::remove_point(const point &p) const
         HC x = remaining;
         x.axes[i].erase(p[i]);
         integer_set singleton = {p[i]};
-        remaining.axes[i] = singleton;
+        remaining.axes[i] = std::move(singleton);
         if(!x.axes[i].empty()) // do not include empty hc
         {
             result.push_back(std::move(x));
@@ -317,7 +317,7 @@ search_space HC::remove_point_carefully(const point &p) const
     }
 }
 
-bool HC::is_slice_good(const slice &s, index_t max_codim) const
+bool HC::is_slice_good(const slice &s, index_t max_codim) const noexcept
 {
     const auto &fixed_axes = s.get_fixed_axes();
     index_t count = 0;
@@ -328,9 +328,7 @@ bool HC::is_slice_good(const slice &s, index_t max_codim) const
             return false;
         }
 
-        integer_set remaining_coords = axes[i];
-        remaining_coords.minus(fixed_coords);
-        if(!remaining_coords.empty())
+        if(!axes[i].is_subset_of(fixed_coords))
         {
             if(count >= max_codim)
             {

@@ -26,6 +26,7 @@ class semimove_feature
 
 public:
     explicit semimove_feature(const HC_info& info);
+    semimove_feature(const HC_info &&) = delete;
     bool is_physical_check(index_t axis, index_t coordinate);
     bool is_sp_check(index_t axis, index_t coordinate);
     bool is_historical_check(index_t axis, index_t coordinate);

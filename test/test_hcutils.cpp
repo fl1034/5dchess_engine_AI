@@ -127,6 +127,23 @@ void test_backward_slice_removal()
 
 }
 
+void test_slice_good()
+{
+    static_assert(noexcept(std::declval<const HC &>().is_slice_good(
+        std::declval<const slice &>())));
+    const HC hc{{1, 64, 4096}, {2, 65}};
+    const slice whole{{{0, {1, 64, 4096, 8192}}, {1, {2, 65}}}};
+    const slice partial{{{0, {64}}, {1, {2}}}};
+    const slice disjoint{{{0, {128}}}};
+    assert(hc.is_slice_good(whole, 0));
+    assert(!hc.is_slice_good(partial, 0));
+    assert(!hc.is_slice_good(partial, 1));
+    assert(hc.is_slice_good(partial, 2));
+    assert(!hc.is_slice_good(disjoint, 2));
+    assert(hc.is_slice_good(slice{}, 0));
+    assert(hc.volume() == 6);
+}
+
 void test_backward_slice_order()
 {
     const slice problem{{{0, {0}}, {1, {0}}}};
@@ -180,6 +197,7 @@ void test_search_branch_order()
 int main()
 {
     test_hc();
+    test_slice_good();
     test_backward_slice_removal();
     test_backward_slice_order();
     test_search_branch_order();

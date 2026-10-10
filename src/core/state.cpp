@@ -127,7 +127,7 @@ state::state(const pgnparser_ast::game &g, const variant_setup_t &setup)
     }
 }
 
-int state::new_line() const
+int state::new_line() const noexcept
 {
     auto [l_min, l_max] = m.get_lines_range();
     if(player == 0)
@@ -169,7 +169,7 @@ std::optional<state> state::can_apply(full_move fm, piece_t promote_to) const
 std::optional<state> state::can_apply(const action &act) const
 {
     state new_state = *this;
-    for(const auto& em : act.get_moves())
+    for(const auto &em : act.get_moves_view())
     {
         bool flag = new_state.apply_move<false>(em);
         if(!flag)
@@ -240,7 +240,7 @@ bool state::apply_move(ext_move mv)
     // physical move, no time travel
     if(d.tl() == vec4(0,0,0,0))
     {
-        const board* b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
         bitboard_t z = pmask(p.xy());
         const auto &[size_x, size_y] = m.get_board_size();
         // en passant
@@ -288,13 +288,13 @@ bool state::apply_move(ext_move mv)
     // non-branching superphysical move
     else if (std::make_pair(q.t(), player) == m.get_timeline_end(q.l()))
     {
-        const board* b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
         const piece_t& pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
         
         bitboard_t z = pmask(p.xy());
         const auto &[size_x, size_y] = m.get_board_size();
-        const board* c_ptr = m.get_board_ptr(q.l(), q.t(), player);
+        const board *c_ptr = m.get_board_ptr(q.l(), q.t(), player);
         
         // promotion (only brawns can do)
         if ((b_ptr->lrawn()&z) && (q.y() == 0 || q.y() == size_y - 1))
@@ -321,10 +321,10 @@ bool state::apply_move(ext_move mv)
     //branching move
     else
     {
-        const board* b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
         const piece_t& pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
-        const board* x_ptr = m.get_board_ptr(q.l(), q.t(), player);
+        const board *x_ptr = m.get_board_ptr(q.l(), q.t(), player);
         auto [t, c] = next_turn({q.t(), player});
         
         bitboard_t z = pmask(p.xy());
@@ -493,7 +493,7 @@ std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> state::get_time
  **
  */
 
-generator<full_move> state::find_checks(bool attacker) const
+generator<full_move> state::find_checks(bool attacker) const &
 {
     auto [l_min, l_max] = m.get_lines_range();
     std::vector<int> lines;
@@ -516,7 +516,7 @@ generator<full_move> state::find_checks(bool attacker) const
 }
 
 template<bool C>
-generator<full_move> state::find_checks_impl(std::vector<int> lines) const
+generator<full_move> state::find_checks_impl(std::vector<int> lines) const &
 {
 //    print_range(__PRETTY_FUNCTION__, lines);
     for (int l : lines)
@@ -524,7 +524,7 @@ generator<full_move> state::find_checks_impl(std::vector<int> lines) const
         // take the active board
         auto [t, c] = m.get_timeline_end(l);
         assert(c == C);
-        const board* b_ptr = m.get_board_ptr(l, t, C);
+        const board *b_ptr = m.get_board_ptr(l, t, C);
         bitboard_t b_pieces = b_ptr->friendly<C>() & ~b_ptr->wall();
         // for each friendly piece on this board
         for (int src_pos : marked_pos(b_pieces))
@@ -535,7 +535,7 @@ generator<full_move> state::find_checks_impl(std::vector<int> lines) const
             // for each destination board and bit location
             for (const auto& [q0, bb] : moves)
             {
-                const board* b1_ptr = m.get_board_ptr(q0.l(), q0.t(), C);
+                const board *b1_ptr = m.get_board_ptr(q0.l(), q0.t(), C);
                 if (bb)
                 {
                     // if the destination square is royal, this is a check
@@ -582,7 +582,7 @@ std::vector<vec4> state::get_all_pieces(const std::vector<int> &lines) const
     {
         const int t = get_timeline_end(l).first;
         const vec4 p0(0, 0, t, l);
-        const board* b = m.get_board_ptr(l, t, player);
+        const board *b = m.get_board_ptr(l, t, player);
         const bitboard_t pieces = (player ? b->black() : b->white()) & ~b->wall();
         for(int pos : marked_pos(pieces))
         {
@@ -603,7 +603,7 @@ std::vector<vec4> state::gen_movable_pieces_impl(const std::vector<int> &lines) 
         auto [t, c] = get_timeline_end(l);
         const vec4 p0 = vec4(0,0,t,l);
 //        assert(c == C);
-        const board* b_ptr = m.get_board_ptr(l, t, C);
+        const board *b_ptr = m.get_board_ptr(l, t, C);
         bitboard_t b_pieces = b_ptr->friendly<C>() & ~b_ptr->wall();
         // for each friendly piece on this board
         for (int src_pos : marked_pos(b_pieces))
@@ -636,11 +636,11 @@ mate_type state::get_mate_type_impl(bool legal_action_witness) const
 {
     dprint("state::get_mate_type()");
     auto [w, ss] = HC_info::build_HC(*this);
-    auto hc = ss.back();
-    search_space ss1 {{hc}};
+    search_space ss1;
+    ss1.push_back(std::move(ss.back()));
     ss.pop_back();
     // check if there is a non-branching move
-    if(w.search(ss1).first())
+    if(w.search(std::move(ss1)).first())
     {
         dprint("has non-branching action");
         return mate_type::NONE;
@@ -673,7 +673,7 @@ mate_type state::get_mate_type_impl(bool legal_action_witness) const
             });
         }
     }
-    if(w.search(ss2).first())
+    if(w.search(std::move(ss2)).first())
     {
         dprint("has branching non-jump back solution");
         return mate_type::NONE;
@@ -688,7 +688,7 @@ mate_type state::get_mate_type_impl(bool legal_action_witness) const
         dprint("not softmate (legal action witnessed without check)");
         return mate_type::NONE;
     }
-    if(w.search(ss).first())
+    if(w.search(std::move(ss)).first())
     {
         if(has_phantom_check())
         {
@@ -716,7 +716,7 @@ mate_type state::get_mate_type_impl(bool legal_action_witness) const
     }
 }
 
-std::pair<int, int> state::get_board_size() const
+std::pair<int, int> state::get_board_size() const noexcept
 {
     return m.get_board_size();
 }
@@ -741,17 +741,17 @@ turn_t state::apparent_present() const noexcept
     return m.get_present();
 }
 
-std::pair<int, int> state::get_initial_lines_range() const
+std::pair<int, int> state::get_initial_lines_range() const noexcept
 {
     return m.get_initial_lines_range();
 }
 
-std::pair<int, int> state::get_lines_range() const
+std::pair<int, int> state::get_lines_range() const noexcept
 {
     return m.get_lines_range();
 }
 
-std::pair<int, int> state::get_active_range() const
+std::pair<int, int> state::get_active_range() const noexcept
 {
     return m.get_active_range();
 }
@@ -781,12 +781,12 @@ std::vector<std::tuple<int, int, bool, std::string>> state::get_boards() const
     return m.get_boards();
 }
 
-generator<vec4> state::gen_piece_move(vec4 p) const
+generator<vec4> state::gen_piece_move(vec4 p) const &
 {
     return m.gen_piece_move(p, player);
 }
 
-generator<vec4> state::gen_piece_move(vec4 p, bool c) const
+generator<vec4> state::gen_piece_move(vec4 p, bool c) const &
 {
     return m.gen_piece_move(p, c);
 }
@@ -951,7 +951,7 @@ template bool state::apply_move<true>(ext_move);
 template bool state::submit<false>();
 template bool state::submit<true>();
 
-template generator<full_move> state::find_checks_impl<false>(std::vector<int>) const;
-template generator<full_move> state::find_checks_impl<true>(std::vector<int>) const;
+template generator<full_move> state::find_checks_impl<false>(std::vector<int>) const &;
+template generator<full_move> state::find_checks_impl<true>(std::vector<int>) const &;
 template std::vector<vec4> state::gen_movable_pieces_impl<false>(const std::vector<int> &) const;
 template std::vector<vec4> state::gen_movable_pieces_impl<true>(const std::vector<int> &) const;

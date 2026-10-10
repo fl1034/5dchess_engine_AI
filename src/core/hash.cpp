@@ -70,7 +70,7 @@ void append_multiverse(accumulator &hash, const multiverse &m)
         }
     }
 }
-} // namespace
+} /* anonymous namespace */
 
 std::uint64_t hash_board(const board &b) noexcept
 {

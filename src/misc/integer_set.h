@@ -42,7 +42,7 @@ class integer_set
         return first_block == 0 ? 0 : 1;
     }
 
-    constexpr block_t &block_at(size_t block_index)
+    constexpr block_t &block_at(size_t block_index) noexcept
     {
         assert(block_index < block_count());
         return block_index == 0
@@ -50,7 +50,7 @@ class integer_set
             : remaining_blocks[block_index - 1];
     }
 
-    constexpr const block_t &block_at(size_t block_index) const
+    constexpr const block_t &block_at(size_t block_index) const noexcept
     {
         assert(block_index < block_count());
         return block_index == 0
@@ -86,7 +86,7 @@ private:
         if the current block is block_count(), do nothing
         if the current position is set or not set, go to the next set position or end
         */
-        void advance_to_next()
+        void advance_to_next() noexcept
         {
             assert(set != nullptr);
             while(block_index < set->block_count())
@@ -123,24 +123,24 @@ private:
 
         iterator_base() = default;
 
-        iterator_base(set_type *set, value_type block_index, value_type bit_index)
+        iterator_base(set_type *set, value_type block_index, value_type bit_index) noexcept
             : set(set), block_index(block_index), bit_index(bit_index)
         {
             advance_to_next();
         }
 
         template <bool OtherConst, typename = std::enable_if_t<Const && !OtherConst>>
-        iterator_base(const iterator_base<OtherConst> &other)
+        iterator_base(const iterator_base<OtherConst> &other) noexcept
             : set(other.set), block_index(other.block_index), bit_index(other.bit_index)
         {
         }
 
-        value_type operator*() const
+        value_type operator*() const noexcept
         {
             return (block_index << block_shift) | bit_index;
         }
 
-        iterator_base &operator++()
+        iterator_base &operator++() noexcept
         {
             if(set == nullptr)
             {
@@ -157,7 +157,7 @@ private:
             return *this;
         }
 
-        iterator_base operator++(int)
+        iterator_base operator++(int) noexcept
         {
             iterator_base temp = *this;
             ++(*this);
@@ -165,7 +165,7 @@ private:
         }
 
         template <bool OtherConst>
-        bool operator==(const iterator_base<OtherConst> &other) const
+        bool operator==(const iterator_base<OtherConst> &other) const noexcept
         {
             return set == other.set && block_index == other.block_index && bit_index == other.bit_index;
         }
@@ -183,20 +183,25 @@ public:
     integer_set() = default;
     constexpr integer_set(std::initializer_list<value_type> values);
 
-    [[nodiscard]] bool contains(value_type value) const;
+    [[nodiscard]] bool contains(value_type value) const noexcept;
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] size_type size() const noexcept;
     [[nodiscard]] bool intersects(const integer_set &other) const noexcept;
+    [[nodiscard]] bool is_subset_of(const integer_set &other) const noexcept;
 
-    iterator begin() { return iterator(this, 0, 0); }
-    iterator end() { return iterator(this, static_cast<value_type>(block_count()), 0); }
-    const_iterator begin() const { return const_iterator(this, 0, 0); }
-    const_iterator cbegin() const { return const_iterator(this, 0, 0); }
-    const_iterator end() const { return const_iterator(this, static_cast<value_type>(block_count()), 0); }
-    const_iterator cend() const { return const_iterator(this, static_cast<value_type>(block_count()), 0); }
+    iterator begin() & noexcept { return iterator(this, 0, 0); }
+    iterator end() & noexcept { return iterator(this, static_cast<value_type>(block_count()), 0); }
+    const_iterator begin() const & noexcept { return const_iterator(this, 0, 0); }
+    const_iterator cbegin() const & noexcept { return const_iterator(this, 0, 0); }
+    const_iterator end() const & noexcept { return const_iterator(this, static_cast<value_type>(block_count()), 0); }
+    const_iterator cend() const & noexcept { return const_iterator(this, static_cast<value_type>(block_count()), 0); }
+    const_iterator begin() const && = delete;
+    const_iterator cbegin() const && = delete;
+    const_iterator end() const && = delete;
+    const_iterator cend() const && = delete;
 
     inline constexpr void insert(value_type value);
-    bool erase(value_type value);
+    bool erase(value_type value) noexcept;
     template <typename Predicate>
     void erase_if(Predicate pred);
     template <typename UnaryOp>
@@ -205,7 +210,7 @@ public:
     integer_set operator |(const integer_set &other) const;
     integer_set operator &(const integer_set &other) const;
 
-    void minus(const integer_set &other);
+    void minus(const integer_set &other) noexcept;
     integer_set &operator |=(const integer_set &other);
     integer_set &operator &=(const integer_set &other);
 

@@ -109,7 +109,7 @@ piece_t full_move::captured_piece(const state &s) const
 {
     const bool player = s.get_present().second;
     if (from.tl() == to.tl()) {
-        const board* source = s.get_board_ptr(from.l(), from.t(), player);
+        const board *source = s.get_board_ptr(from.l(), from.t(), player);
         const bitboard_t origin = pmask(from.xy());
         if ((source->king() & origin)
             && std::abs(from.x() - to.x()) > 1)
@@ -132,7 +132,7 @@ special_move_t full_move::move_type(const state &s) const
 {
     special_move_t result = special_move_t::NONE;
     const bool player = s.get_present().second;
-    const board* source = s.get_board_ptr(from.l(), from.t(), player);
+    const board *source = s.get_board_ptr(from.l(), from.t(), player);
     const bitboard_t origin = pmask(from.xy());
     const auto height = s.get_board_size().second;
     const bool physical = from.tl() == to.tl();
@@ -182,12 +182,12 @@ std::string full_move::lan(const state &s, piece_t promote_to) const
     return result;
 }
 
-bool full_move::operator<(const full_move &other) const
+bool full_move::operator<(const full_move &other) const noexcept
 {
     return std::tie(from, to) < std::tie(other.from, other.to); 
 }
 
-bool full_move::operator==(const full_move &other) const
+bool full_move::operator==(const full_move &other) const noexcept
 {
     return std::tie(from, to) == std::tie(other.from, other.to);
 }
@@ -581,7 +581,6 @@ std::string action::pgn_impl(
     const std::vector<char> &check_symbols
 ) const
 {
-    std::vector<ext_move> mvs = get_moves();
     state s = initial_state;
     std::string pgn;
     bool multimove = mvs.size() > 1;

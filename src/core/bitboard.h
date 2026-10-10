@@ -36,45 +36,45 @@ std::string bb_to_string(bitboard_t);
 constexpr bitboard_t a_file = 0x0101010101010101;
 constexpr bitboard_t h_file = 0x8080808080808080;
 
-constexpr static bitboard_t pmask(int pos)
+constexpr static bitboard_t pmask(int pos) noexcept
 {
     return bitboard_t(1) << bitboard_t(pos);
 }
 
-constexpr bitboard_t shift_north(bitboard_t b)
+constexpr bitboard_t shift_north(bitboard_t b) noexcept
 {
     return b << BOARD_LENGTH;
 }
-constexpr bitboard_t shift_south(bitboard_t b)
+constexpr bitboard_t shift_south(bitboard_t b) noexcept
 {
     return b >> BOARD_LENGTH;
 }
-constexpr bitboard_t shift_west(bitboard_t b)
+constexpr bitboard_t shift_west(bitboard_t b) noexcept
 {
     return (b & ~a_file) >> 1;
 }
-constexpr bitboard_t shift_east(bitboard_t b)
+constexpr bitboard_t shift_east(bitboard_t b) noexcept
 {
     return (b & ~h_file) << 1;
 }
-constexpr bitboard_t shift_northwest(bitboard_t b)
+constexpr bitboard_t shift_northwest(bitboard_t b) noexcept
 {
     return (b & ~a_file) << (BOARD_LENGTH - 1);
 }
-constexpr bitboard_t shift_northeast(bitboard_t b)
+constexpr bitboard_t shift_northeast(bitboard_t b) noexcept
 {
     return (b & ~h_file) << (BOARD_LENGTH + 1);
 }
-constexpr bitboard_t shift_southwest(bitboard_t b)
+constexpr bitboard_t shift_southwest(bitboard_t b) noexcept
 {
     return (b & ~a_file) >> (BOARD_LENGTH + 1);
 }
-constexpr bitboard_t shift_southeast(bitboard_t b)
+constexpr bitboard_t shift_southeast(bitboard_t b) noexcept
 {
     return (b & ~h_file) >> (BOARD_LENGTH - 1);
 }
 
-constexpr int bb_get_pos(bitboard_t b)
+constexpr int bb_get_pos(bitboard_t b) noexcept
 {
     int n = std::countl_zero(b);
     return std::numeric_limits<bitboard_t>::digits - 1 - n;
@@ -138,27 +138,27 @@ constexpr marked_pos_range marked_pos(bitboard_t bits) noexcept
     return marked_pos_range(bits);
 }
 
-inline bitboard_t white_pawn_attack(int pos)
+inline bitboard_t white_pawn_attack(int pos) noexcept
 {
     bitboard_t z = bitboard_t(1) << pos;
     return shift_northwest(z) | shift_northeast(z);
 }
-inline bitboard_t black_pawn_attack(int pos)
+inline bitboard_t black_pawn_attack(int pos) noexcept
 {
     bitboard_t z = bitboard_t(1) << pos;
     return shift_southwest(z) | shift_southeast(z);
 }
 
-inline bitboard_t knight_attack(int pos);
-inline bitboard_t king_attack(int pos);
+inline bitboard_t knight_attack(int pos) noexcept;
+inline bitboard_t king_attack(int pos) noexcept;
 
-inline bitboard_t rook_copy_mask(int pos, int n);
-inline bitboard_t bishop_copy_mask(int pos, int n);
-inline bitboard_t queen_copy_mask(int pos, int n);
+inline bitboard_t rook_copy_mask(int pos, int n) noexcept;
+inline bitboard_t bishop_copy_mask(int pos, int n) noexcept;
+inline bitboard_t queen_copy_mask(int pos, int n) noexcept;
 
-inline bitboard_t king_jump_attack(int pos);
-inline bitboard_t knight_jump1_attack(int pos);
-inline bitboard_t knight_jump2_attack(int pos);
+inline bitboard_t king_jump_attack(int pos) noexcept;
+inline bitboard_t knight_jump1_attack(int pos) noexcept;
+inline bitboard_t knight_jump2_attack(int pos) noexcept;
 
 #include "bitboard.inl"
 

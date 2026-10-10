@@ -317,7 +317,7 @@ consteval std::array<bitboard_t, rook_data_size> gen_rook_data()
 }
 constexpr auto rook_data = gen_rook_data();
 
-bitboard_t rook_attack(int pos, bitboard_t blocker)
+bitboard_t rook_attack(int pos, bitboard_t blocker) noexcept
 {
     size_t index = ((blocker & rook_mask[pos]) * rook_magic[pos]) >> (64 - rook_shift[pos]);
     return rook_data[index<<(BOARD_BITS*2) | pos];
@@ -361,14 +361,14 @@ consteval std::array<bitboard_t, bishop_data_size> gen_bishop_data()
 }
 constexpr auto bishop_data = gen_bishop_data();
 
-bitboard_t bishop_attack(int pos, bitboard_t blocker)
+bitboard_t bishop_attack(int pos, bitboard_t blocker) noexcept
 {
     size_t index = ((blocker & bishop_mask[pos]) * bishop_magic[pos]) >> (64 - bishop_shift[pos]);
     return bishop_data[index<<(BOARD_BITS*2) | pos];
 }
 
 
-bitboard_t queen_attack(int pos, bitboard_t blocker)
+bitboard_t queen_attack(int pos, bitboard_t blocker) noexcept
 {
     return rook_attack(pos, blocker) | bishop_attack(pos, blocker);
 }

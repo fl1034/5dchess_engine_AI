@@ -157,7 +157,7 @@ void test_states()
     assert(phantom.get_present().first != apparent.get_present().first);
     assert(hash_state(phantom) != hash_state(apparent));
 }
-} // namespace
+} /* anonymous namespace */
 
 int main()
 {

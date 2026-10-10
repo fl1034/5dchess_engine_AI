@@ -512,7 +512,7 @@ int run_checkmate(int argc, const char *argv[])
                 s.apply_move(move);
             }
         }
-        else if(s.phantom().find_checks(!player).first())
+        else if(const state phantom_state = s.phantom(); phantom_state.find_checks(!player).first())
         {
             std::cout << "Checkmate";
         }

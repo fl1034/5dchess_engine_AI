@@ -191,7 +191,7 @@ void test_capture_ordering()
     auto *selected = policy.select(root.get(), {}, obs);
     assert(selected && selected->get_parent() == root.get());
     const auto scores = build_score_table(
-        root->get_context()->hc_info, capture_weights);
+        root->get_hc_info(), capture_weights);
     assert(scores && (*scores)[selected->get_n()][selected->get_i()]
         == 480.0f);
 }
@@ -205,12 +205,12 @@ void test_capture_check_progressive_widening()
     using policy_t = progressive_widening_tree_policy<scored_HC_ordering>;
     auto root = policy_t::node_t::make_root(position);
     const auto scores = build_score_table(
-        root->get_context()->hc_info, capture_check_weights);
+        root->get_hc_info(), capture_check_weights);
     assert(scores);
     bool capture = false, check = false;
-    for(index_t axis = 0; axis < root->get_context()->hc_info.universe.dimension(); ++axis)
+    for(index_t axis = 0; axis < root->get_hc_info().universe.dimension(); ++axis)
     {
-        for(index_t coordinate : root->get_context()->hc_info.universe[axis])
+        for(index_t coordinate : root->get_hc_info().universe[axis])
         {
             capture |= (*scores)[axis][coordinate] == 480.0f;
             check |= (*scores)[axis][coordinate] == 300.0f;
@@ -283,11 +283,11 @@ void test_score_table_and_generic_policies()
     using scored_widening_t = progressive_widening_tree_policy<scored_HC_ordering>;
     auto scored_root = scored_widening_t::node_t::make_root(position);
     auto scored_table = build_score_table(
-        scored_root->get_context()->hc_info, capture_check_weights);
+        scored_root->get_hc_info(), capture_check_weights);
     assert(scored_table);
     std::mt19937 scored_rng(7);
     scored_widening_t::set_ordering(scored_root.get(), scored_HC_ordering(
-        scored_root->get_context()->hc_info.universe, *scored_table, scored_rng));
+        scored_root->get_hc_info().universe, *scored_table, scored_rng));
     scored_widening_t scored_policy(7);
     auto *scored_child = scored_policy.select(scored_root.get(), {}, obs);
     assert(scored_child && (*scored_table)[scored_child->get_n()][scored_child->get_i()]
@@ -326,7 +326,7 @@ void test_multiple_semimoves()
             start = start->get_parent();
         }
         saw_multiple |= semimoves > 1;
-        const state &before = start->get_context()->hc_info.s;
+        const state &before = start->get_hc_info().s;
         auto action = action::from_moveseq(ceiling->to_action(), before);
         assert(before.can_apply(action));
         sum_backpropagation{}.backpropagate(ceiling, reward_t<>{0.0f, {}}, obs);
@@ -396,7 +396,7 @@ void test_promotion_paths()
         bool found = false;
         for(auto index : root->search(natural_HC_ordering{}))
         {
-            auto *ceiling = root->get_child(index)->get_nearby_ceiling();
+            auto *ceiling = finetree_nearby_ceiling(root->get_child(index));
             if(ceiling->to_action() != moveseq{move}) continue;
             found = true;
             assert(detail::state_at_ceiling(*ceiling).get_boards() == expected.get_boards());
