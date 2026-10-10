@@ -50,7 +50,7 @@ class Camera {
     isCloseTo(other, positionThreshold = 0.1, scaleThreshold = 0.02) {
         return Math.abs(this.x - other.x) < positionThreshold 
             && Math.abs(this.y - other.y) < positionThreshold 
-            && Math.abs(this.scale / other.scale - 1) < scaleThreshold;
+            && Math.abs(2 ** (this.scale - other.scale) - 1) < scaleThreshold;
     }
 
     lerpTowards(target, timeDelta, speed = 0.01) {

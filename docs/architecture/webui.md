@@ -13,6 +13,8 @@ remain in [Building](../usage/building.md#webassembly).
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
+| `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and double-Space detection |
+| `scripts/navigation.js` | Nearest-board and directional searches in displayed grid coordinates |
 | `scripts/mobile.js` | Moves the same controls into the compact shell and manages its open sheet |
 | `scripts/metadata.js` | Formats headers and controls metadata visibility and expansion |
 | `scripts/worker.js` | Loads the Wasm module, owns the game and private next hint, handles commands, and assembles display data |
@@ -173,6 +175,40 @@ historical moves, selectable destinations, ordinary checks, and phantom checks
 are drawn as separate highlights and arrows supplied by the worker. Phantom
 visibility is controlled locally and requests refreshed display data.
 
+### Canvas keyboard navigation
+
+F retains the Focus button's cycle through game-provided focus points. Space
+centers the nearest existing board to the current canvas center and uses the
+same zoom calculation as Focus. A second Space press within 300 ms retargets
+the same board at 65% of that scale; Shift+Space requests this wider view
+directly. Holding Space or F does not retrigger it. Pointer activity, wheel
+input, focus changes, and other keys reset the double-press sequence.
+
+W/A/S/D moves up/left/down/right while preserving zoom. Navigation starts at
+the grid position nearest the camera target, uses displayed coordinates after
+flipping, and skips gaps to the closest existing board on that row or column.
+If there is none, it advances one board spacing into empty space. Visible phantom
+previews participate in both directional navigation and nearest-board zoom; hidden
+previews are excluded. Repeated presses chain from the last destination while
+animation is still running; held direction keys are limited to one step every
+120 ms. All commands call the existing camera `moveTo`/interpolation path and
+do not select pieces or modify the game. Zoom convergence compares actual zoom
+ratios, including when the logarithmic target scale is zero.
+
+Shortcuts are available outside text entry without requiring canvas focus.
+Editable descendants, form fields, IME composition, browser modifier commands,
+open dialogs, and the compact tools menu take priority. Native Space/Enter
+activation on buttons is retained. Pointer activation of game-navigation
+buttons returns focus to the canvas; keyboard activation retains button focus.
+Clicking the canvas explicitly focuses it without scrolling the page. The
+editor's caret and an opaque, uniform theme tint across its status/comment panel
+show only while the editor has focus. In compact layout, the comment sheet receives
+the tint. The editing surface mixes 10% primary color into the panel color to
+separate text entry from the busy canvas. Focusing other panel controls does not activate it. Leaving the editor
+preserves the draft and remembers the text selection for keyboard return. The
+canvas and editor have no large focus outlines; the canvas remains in the normal
+Tab order, and buttons retain their keyboard focus indicators.
+
 ### Desktop panels and metadata
 
 Game information, status, and navigation share a top-aligned grid with 24-pixel
@@ -180,6 +216,9 @@ outer margins and gaps. Metadata stays at the top left and the 200-pixel-wide
 navigation panel stays at the top right. Status and the bottom toolbar share
 the full viewport's horizontal center; the toolbar sits 24 pixels above the
 bottom edge. The canvas remains full width beneath these floating panels.
+The status title is centered independently of the light, which sits 16 pixels
+from the right edge. Symmetric header padding reserves space for the light; long
+status titles truncate rather than overlap it.
 
 The HUD is at most 440 pixels wide, narrowing to 244 pixels at a viewport width
 of 1100 pixels to leave a 24-pixel gap beside expanded metadata. Its width and
@@ -230,7 +269,10 @@ Next submits its action to the worker for navigation.
 
 The HUD's editable comment area tracks the current node's comment, draft edits,
 and Update/Discard actions. Worker updates refresh the HUD text; saving sends
-`update_comment`. Automatic comment expansion is suppressed in compact mode.
+`update_comment`. The shared comment reader preserves editable block boundaries,
+blank lines, and Shift+Enter breaks while ignoring trailing browser caret
+placeholders. Saving, dirty-state checks, validation, and draft reads use the
+same text representation. Automatic comment expansion is suppressed in compact mode.
 The compact panel heading and matching accessibility labels use “Comment”.
 Its header icon reflects open/closed state and whether text exists, including
 an unfinished edit. Changing the active compact sheet does not discard edits.

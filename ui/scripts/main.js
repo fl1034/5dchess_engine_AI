@@ -231,6 +231,11 @@ UI.setFocusCallback(() => {
     window.chessBoardCanvas.goToNextFocus();
 });
 
+UI.setCanvasNavigationCallback((action, options) => {
+    if (action === 'nearby') window.chessBoardCanvas.zoomNearestBoard(options);
+    else window.chessBoardCanvas.navigateBoard(action);
+});
+
 UI.setImportCallback((data) => {
     focusOnNextData = true;
     worker.postMessage({type: 'load', pgn: data});

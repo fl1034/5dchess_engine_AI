@@ -76,6 +76,7 @@
 #mobileSheet .select-option { overflow-wrap: anywhere; min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; color: inherit; }
 #mobileSheet .select-option.selected { background: var(--ui-soft); border-color: var(--ui-primary); }
 #mobileSheet .hint-btn { min-height: 44px; background: var(--ui-soft); color: var(--ui-primary); border-radius: 8px; }
+#mobileSheet:has(.hud-text:focus) { background: var(--ui-panel-editing); }
 #mobileSheet .hud-content { height: auto; padding: 0; }
 #mobileSheet .hud-text { min-height: 90px; padding: 10px; background: var(--ui-soft); border: 1px solid var(--ui-border); border-radius: 8px; font-size: 16px; }
 #mobileSheet .hud-comment-actions { display: none; margin-top: 8px; flex-wrap: wrap; }

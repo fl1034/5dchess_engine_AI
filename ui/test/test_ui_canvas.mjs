@@ -5,7 +5,7 @@ import test from 'node:test';
 
 // The browser sources are ES modules; load without changing ui/'s local Node configuration.
 const source = await readFile(new URL('../scripts/canvas.js', import.meta.url), 'utf8');
-const { InfiniteScrollableCanvas } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { InfiniteScrollableCanvas, Camera } = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { Camera };').toString('base64')}`);
 
 function fixture() {
     const clicks = [];
@@ -127,5 +127,17 @@ test('display density changes preserve camera bounds and mouse/touch positions',
             if (value === undefined) delete globalThis[key];
             else globalThis[key] = value;
         }
+    }
+});
+
+test('camera animation settles at unit zoom and negative logarithmic scales', () => {
+    for (const scale of [0, -2, 2]) {
+        const current = new Camera(0, 0, scale - 1);
+        const target = new Camera(300, -200, scale);
+        for (let frame = 0; frame < 200 && !current.isCloseTo(target); frame++) {
+            current.lerpTowards(target, 16, 0.01);
+        }
+        assert(current.isCloseTo(target));
+        assert(Math.abs(current.getZoomLevel() / target.getZoomLevel() - 1) < 0.02);
     }
 });

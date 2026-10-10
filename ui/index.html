@@ -167,7 +167,7 @@
         <div id="mobileNavigation"></div>
     </footer>
 </div>
-<canvas id="canvas"></canvas>
+<canvas id="canvas" tabindex="0" aria-label="Chess board canvas"></canvas>
 
 <!-- Shared desktop layout; each panel expands independently from the top. -->
 <div class="top-panels">
@@ -242,7 +242,7 @@
 </div><!-- .top-panels -->
 
 <div class="buttons-panel" id="buttonsPanel">
-    <button class="btn-icon" id="btnFocus" title="Focus">
+    <button class="btn-icon" id="btnFocus" title="Focus (F)">
         <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-focus"></use></svg>
     </button>
     <button class="btn-icon" id="btnFlip" title="Flip">
@@ -425,6 +425,15 @@
                 </li>
             </ul>
 
+            <h4>Canvas keyboard navigation</h4>
+            <ul>
+                <li><b>F</b> cycles through the game's focus boards.</li>
+                <li><b>Space</b> centers the board nearest the canvas center at the Focus zoom level. Double-tap Space within 300 ms, or press <b>Shift+Space</b>, for a wider view.</li>
+                <li><b>W / A / S / D</b> moves up / left / down / right without changing zoom. Navigation skips gaps to the closest existing board in the same column or row. If none exists, it moves one board spacing into empty space. Directions follow the displayed layout when flipped.</li>
+            </ul>
+            <p>Camera movement is animated and does not move pieces or change game history. Shortcuts pause while typing in comments or other fields, and while a dialog or the tools menu is open. Space and Enter still activate a focused button. Clicking a game-navigation button returns keyboard focus to the canvas; activating it with the keyboard keeps focus on the button.</p>
+            <p>The comment editor shows a caret and its panel gains an opaque theme tint only while editing. Click the canvas to leave editing without losing your draft. Tab can move between the canvas and controls.</p>
+
             <h4>Phones</h4>
             <p>On phones, navigation stays at the bottom. Choose opens continuations, the comment icon in the header opens comments, and the three-dot icon at the right of the header opens the action menu. These open one panel at a time; The floating cross button closes the panel and returns the space to the boards; tapping its highlighted header icon or Choose again also closes it. Panels sit below the boards in portrait and beside them on short landscape screens. The tag button at the top opens game details, and Focus stays at the lower-right of the board area. Import, export, settings, and help use full-screen dialogs with a compact title and green Close text button. Export uses Options, Copy, and Download; Options opens all export settings; changes update the preview once when Options closes. Download uses a filename based on the game headers.</p>
 
@@ -444,7 +453,7 @@
             <ul style="margin: 8px; list-style: none; padding-left: 0;">
                 <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-focus"></use></svg>
-                    <span><b>Focus</b> - Center view on current board state (Shortcut: Space)</span>
+                    <span><b>Focus</b> - Cycle through the game's focus boards (Shortcut: F)</span>
                 </li>
                 <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-flip"></use></svg>

@@ -3,6 +3,8 @@
 import { setGameMetadata as renderGameMetadata } from './metadata.js';
 import { compactViewport } from './mobile.js';
 import { getExportFilename } from './filename.js';
+import { createKeyboardShortcuts } from './keyboard.js';
+import { readCommentText } from './comment.js';
 
 export const UI = (() => {
     /* ================= SVG Icons ================= */
@@ -21,6 +23,7 @@ export const UI = (() => {
     const toggle = document.getElementById("toggle");
     const hudText = document.querySelector('.hud-text');
     const hudTitle = document.querySelector('.hud-title');
+    const boardCanvas = document.getElementById('canvas');
     const hudCommentActions = document.getElementById('hudCommentActions');
     const hudUpdateComment = document.getElementById('hudUpdateComment');
     const hudDiscardChanges = document.getElementById('hudDiscardChanges');
@@ -65,7 +68,7 @@ export const UI = (() => {
     /* ================= HUD Text Content ================= */
     let hudTextChangeCallback = null;
     let commentsEditCallback = null;
-    let hudTextOriginal = hudText ? hudText.textContent : '';
+    let hudTextOriginal = hudText ? readCommentText(hudText) : '';
 
     function setHudTextOriginal(value) {
         hudTextOriginal = value;
@@ -84,11 +87,11 @@ export const UI = (() => {
 
     function updateHudCommentActions() {
         if (!hudCommentActions || !hudText || !hudUpdateComment) return;
-        const hasChanges = hudText.textContent !== hudTextOriginal;
+        const hasChanges = readCommentText(hudText) !== hudTextOriginal;
         hudCommentActions.classList.toggle('visible', hasChanges);
         
         if (hasChanges) {
-            const text = hudText.textContent.trim();
+            const text = readCommentText(hudText).trim();
             const isEmpty = text.length === 0;
             const isBalanced = areBracesBalanced(text);
             
@@ -110,7 +113,7 @@ export const UI = (() => {
     // Listen for changes in hud-text
     hudText.addEventListener('input', () => {
         if (hudTextChangeCallback) {
-            hudTextChangeCallback(hudText.textContent);
+            hudTextChangeCallback(readCommentText(hudText));
         }
         updateHudCommentActions();
     });
@@ -118,9 +121,9 @@ export const UI = (() => {
     if (hudUpdateComment) {
         hudUpdateComment.addEventListener('click', () => {
             if (commentsEditCallback) {
-                commentsEditCallback(hudText.textContent);
+                commentsEditCallback(readCommentText(hudText));
             }
-            setHudTextOriginal(hudText.textContent);
+            setHudTextOriginal(readCommentText(hudText));
         });
     }
 
@@ -130,6 +133,28 @@ export const UI = (() => {
             updateHudCommentActions();
         });
     }
+    // Clicking the canvas transfers real keyboard focus away from the editor.
+    boardCanvas.addEventListener('pointerdown', () => boardCanvas.focus({ preventScroll: true }));
+    let commentSelection = null;
+    let pointerFocusingComment = false;
+    hudText.addEventListener('pointerdown', () => { pointerFocusingComment = true; });
+    document.addEventListener('pointerup', () => { pointerFocusingComment = false; });
+    document.addEventListener('pointercancel', () => { pointerFocusingComment = false; });
+    hudText.addEventListener('blur', () => {
+        const selection = window.getSelection();
+        if (selection.rangeCount && hudText.contains(selection.anchorNode) && hudText.contains(selection.focusNode)) {
+            commentSelection = selection.getRangeAt(0).cloneRange();
+            selection.removeAllRanges();
+        }
+    });
+    hudText.addEventListener('focus', () => {
+        if (!pointerFocusingComment && commentSelection && hudText.contains(commentSelection.startContainer)) {
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(commentSelection);
+        }
+    });
+
     /* ================= Light Toggle ================= */
     const light = document.getElementById("light");
     let lightCallback = null;
@@ -231,6 +256,7 @@ export const UI = (() => {
     /* ================= Buttons Panel ================= */
     // Focus button callback
     let focusCallback = null;
+    let canvasNavigationCallback = null;
 
     document.getElementById('btnFocus').onclick = () => {
         if (focusCallback) focusCallback();
@@ -689,7 +715,7 @@ export const UI = (() => {
             if (settingsChangeCallback) {
                 settingsChangeCallback({ autoToggleComments });
             }
-            autoToggleHudForText(hudText ? hudText.textContent : '');
+            autoToggleHudForText(hudText ? readCommentText(hudText) : '');
         });
     }
 
@@ -865,9 +891,11 @@ export const UI = (() => {
             const btn = this.buttons[action];
             if (!btn) return;
 
-            btn.onclick = () => {
+            btn.onclick = (event) => {
                 const callback = this.buttonDefinitions[action].callback;
                 if (callback) callback();
+                // Pointer users can navigate immediately; keyboard users keep their button focus.
+                if (event.detail > 0) boardCanvas.focus({ preventScroll: true });
             };
         },
 
@@ -949,23 +977,12 @@ export const UI = (() => {
 
     /* ================= Keyboard Shortcuts ================= */
     const keyboardShortcuts = {
-        // Map of key codes to button actions
-        shortcuts: {
-            'ArrowUp': 'prev',
-            'ArrowDown': 'next',
-            'ArrowLeft': 'undo',
-            'ArrowRight': 'redo',
-            'Enter': 'submit',
-            'h': 'hint',
-            ' ': 'focus'
-        },
-
         /**
          * Simulate button press with visual feedback
          * @private
          * @param {string} action - Button action name
          */
-        _pressButton(action) {
+        _pressButton(action, options) {
             const btn = buttonControls.buttons[action];
             if (!btn)
             {
@@ -976,6 +993,9 @@ export const UI = (() => {
                 else if(action === 'focus' && focusCallback)
                 {
                     focusCallback();
+                }
+                else if (canvasNavigationCallback && ['nearby', 'up', 'left', 'down', 'right'].includes(action)) {
+                    canvasNavigationCallback(action, options);
                 }
                 return;
             }
@@ -999,36 +1019,17 @@ export const UI = (() => {
          * Initialize keyboard event listener
          */
         init() {
-            document.addEventListener('keydown', (e) => {
-                // Let focused buttons use native Enter/Space activation without game shortcuts.
-                if (e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) return;
-                // Disable shortcuts when editing hud-text or other editable elements
-                const activeElement = document.activeElement;
-                const isEditable = activeElement && (
-                    activeElement.tagName === 'INPUT' ||
-                    activeElement.tagName === 'TEXTAREA' ||
-                    activeElement.contentEditable === 'true'
-                );
-                
-                // Early return if in an editable element (let all keys work normally)
-                if (isEditable) {
-                    return;
-                }
-                
-                // Check if the key is a valid shortcut
-                let key = e.key;
-                
-                // For space key, prevent default scrolling when not in editable elements
-                if (key === ' ') {
-                    e.preventDefault();
-                }
-                
-                // Check if the key matches any shortcut
-                if (Object.prototype.hasOwnProperty.call(this.shortcuts, key)) {
-                    const action = this.shortcuts[key];
-                    this._pressButton(action);
-                }
+            const shortcuts = createKeyboardShortcuts({
+                onAction: (action, options) => this._pressButton(action, options),
+                isBlocked: () => popupStack.length > 0 || (compactViewport.matches
+                    && document.getElementById('mobileLayout').classList.contains('has-mobile-panel')
+                    && !document.querySelector('[data-mobile-pane="tools"]').hidden)
             });
+            document.addEventListener('keydown', shortcuts.handleKeyDown);
+            for (const event of ['focusin', 'pointerdown', 'wheel', 'visibilitychange']) {
+                document.addEventListener(event, shortcuts.reset, { capture: true });
+            }
+            window.addEventListener('blur', shortcuts.reset);
         }
     };
 
@@ -1116,7 +1117,7 @@ export const UI = (() => {
          * @returns {string} The current text content
          */
         getHudText() {
-            return hudText.textContent;
+            return readCommentText(hudText);
         },
                 /**
          * Set the title text of hud-title element
@@ -1188,6 +1189,10 @@ export const UI = (() => {
          */
         setFocusCallback(callback) {
             focusCallback = callback;
+        },
+
+        setCanvasNavigationCallback(callback) {
+            canvasNavigationCallback = callback;
         },
 
         setHintAvailable(available) {

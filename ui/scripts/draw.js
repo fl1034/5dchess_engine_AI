@@ -2,6 +2,7 @@
 // chess board specific implementation
 
 import { InfiniteScrollableCanvas } from 'canvas';
+import { nearestBoard, directionalTarget } from './navigation.js';
 
 import { chooseLOD } from 'piece';
 import { loadColors, applyFadeToColors, applyFadeToColorString, resolveColor } from 'color';
@@ -765,22 +766,62 @@ export default class ChessBoardCanvas
         }
     }
 
+    _focusScale(wide = false) {
+        const canvas = this.infCanvas.viewportSize;
+        const actualScale = document.body.classList.contains('compact-layout')
+            ? Math.min(canvas.width / (this.boardLengthX * this.squareSize + 40),
+                       canvas.height / (this.boardLengthY * this.squareSize + 40))
+            : canvas.width / 120 / 3;
+        return Math.log2(actualScale * (wide ? 0.65 : 1));
+    }
+
+    _navigationBoards() {
+        return (this.data?.boards || [])
+            .filter(board => board.fen != null)
+            .map(board => ({ x: 2 * board.t + Number(board.c), y: this._displayL(board.l) }));
+    }
+
+    _cameraGridPosition(camera) {
+        return {
+            x: (-camera.x - this.boardLengthX * this.squareSize / 2) / this.boardSkipX,
+            y: (-camera.y - this.boardLengthY * this.squareSize / 2) / this.boardSkipY
+        };
+    }
+
+    _moveToBoard(board, scale = null) {
+        this.infCanvas.moveTo(
+            board.x * this.boardSkipX + this.boardLengthX * this.squareSize / 2,
+            board.y * this.boardSkipY + this.boardLengthY * this.squareSize / 2,
+            scale
+        );
+    }
+
+    zoomNearestBoard({ wide = false, reuse = false } = {}) {
+        const board = reuse && this.nearbyBoard ? this.nearbyBoard : nearestBoard(
+            this._navigationBoards(), this._cameraGridPosition(this.infCanvas.cameraCurrent),
+            { x: this.boardSkipX, y: this.boardSkipY }
+        );
+        if (!board) return;
+        this.nearbyBoard = board;
+        this._moveToBoard(board, this._focusScale(wide));
+    }
+
+    navigateBoard(direction) {
+        const directions = {
+            up: { x: 0, y: -1 }, left: { x: -1, y: 0 },
+            down: { x: 0, y: 1 }, right: { x: 1, y: 0 }
+        };
+        if (!directions[direction]) return;
+        const target = directionalTarget(this._navigationBoards(),
+            this._cameraGridPosition(this.infCanvas.cameraTarget), directions[direction]);
+        this._moveToBoard(target);
+    }
+
     goToNextFocus() {
+        if (!this.focusPoints.length) return;
         this.focusIndex = (this.focusIndex + 1) % this.focusPoints.length;
-        if (this.focusPoints[this.focusIndex] !== undefined) {
-            const focus = this.focusPoints[this.focusIndex];
-            
-            const canvas = this.infCanvas.viewportSize;
-            const actualScale = document.body.classList.contains('compact-layout')
-                ? Math.min(canvas.width / (this.boardLengthX * this.squareSize + 40),
-                           canvas.height / (this.boardLengthY * this.squareSize + 40))
-                : canvas.width / 120 / 3;
-            const targetScale = Math.log2(actualScale);
-            const targetX = this.boardSkipX * (focus.t << 1 | focus.c) + this.boardLengthX * this.squareSize / 2;
-            const targetY = this.boardSkipY * this._displayL(focus.l) + this.boardLengthY * this.squareSize / 2;
-            
-            this.infCanvas.moveTo(targetX, targetY, targetScale);
-        }
+        const focus = this.focusPoints[this.focusIndex];
+        this._moveToBoard({ x: 2 * focus.t + Number(focus.c), y: this._displayL(focus.l) }, this._focusScale());
     }
 
     addFocusPoint(l, t, c) {

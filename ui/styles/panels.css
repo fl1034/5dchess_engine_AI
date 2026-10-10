@@ -63,9 +63,13 @@
     user-select: none;
 }
 
-.top-panels .hud-header { padding: 0 16px; gap: 16px; }
-.top-panels .hud-title { white-space: nowrap; }
-.top-panels #light { position: static; }
+.top-panels .hud-header { padding: 0 36px; }
+.top-panels .hud-title {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 .hud-title {
     font-size: 18px;
@@ -149,6 +153,15 @@
     line-height: 1.45;
     outline: none;
     cursor: text;
+}
+
+/* Focus belongs to the editor, not the other controls in this panel. */
+.hud:has(.hud-text:focus) {
+    background: var(--ui-panel-editing);
+}
+.hud-text:not(:focus) { caret-color: transparent; }
+.hud-text:focus {
+    caret-color: var(--ui-text);
 }
 
 .hud-comment-actions {
