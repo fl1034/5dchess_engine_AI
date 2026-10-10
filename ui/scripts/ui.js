@@ -645,6 +645,22 @@ export const UI = (() => {
 
     // Settings change callback wiring
     let settingsChangeCallback = null;
+    const doNotReverseFilesCheckbox = document.getElementById('doNotReverseFilesWhenFlipped');
+    const DO_NOT_REVERSE_FILES_KEY = 'do-not-reverse-files-when-flipped';
+    try {
+        doNotReverseFilesCheckbox.checked = localStorage.getItem(DO_NOT_REVERSE_FILES_KEY) === 'true';
+    } catch {
+        // Keep the default when storage is unavailable.
+    }
+    doNotReverseFilesCheckbox.addEventListener('change', () => {
+        const doNotReverseFilesWhenFlipped = doNotReverseFilesCheckbox.checked;
+        try {
+            localStorage.setItem(DO_NOT_REVERSE_FILES_KEY, String(doNotReverseFilesWhenFlipped));
+        } catch {
+            // The preference still applies for this session.
+        }
+        if (settingsChangeCallback) settingsChangeCallback({ doNotReverseFilesWhenFlipped });
+    });
     const allowSubmitCheckbox = document.getElementById('allowSubmitWithChecks');
     if (allowSubmitCheckbox) {
         allowSubmitCheckbox.addEventListener('change', () => {
@@ -994,7 +1010,7 @@ export const UI = (() => {
                 {
                     focusCallback();
                 }
-                else if (canvasNavigationCallback && ['nearby', 'up', 'left', 'down', 'right'].includes(action)) {
+                else if (canvasNavigationCallback && ['nearby', 'navigate', 'up', 'left', 'down', 'right'].includes(action)) {
                     canvasNavigationCallback(action, options);
                 }
                 return;
@@ -1026,6 +1042,7 @@ export const UI = (() => {
                     && !document.querySelector('[data-mobile-pane="tools"]').hidden)
             });
             document.addEventListener('keydown', shortcuts.handleKeyDown);
+            document.addEventListener('keyup', shortcuts.handleKeyUp);
             for (const event of ['focusin', 'pointerdown', 'wheel', 'visibilitychange']) {
                 document.addEventListener(event, shortcuts.reset, { capture: true });
             }
@@ -1209,6 +1226,7 @@ export const UI = (() => {
          */
         setSettingsChangeCallback(callback) {
             settingsChangeCallback = callback;
+            callback({ doNotReverseFilesWhenFlipped: doNotReverseFilesCheckbox.checked });
         },
 
         /**

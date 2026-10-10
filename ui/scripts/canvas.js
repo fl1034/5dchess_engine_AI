@@ -22,7 +22,7 @@ export class AnimationManager {
     _animate(timeNow) {
         let timeDiff = 20;
         if (timeNow && this.timeRecord) {
-            timeDiff = Math.min(timeNow - this.timeRecord, 100);
+            timeDiff = Math.max(timeNow - this.timeRecord, 0);
         }
         this.timeRecord = timeNow;
 
@@ -54,12 +54,48 @@ class Camera {
     }
 
     lerpTowards(target, timeDelta, speed = 0.01) {
-        if (this.isCloseTo(target)) return;
-        
-        const lerpFactor = 1.0 - 1.0 / (1.0 + timeDelta * speed);
-        this.x += (target.x - this.x) * lerpFactor;
-        this.y += (target.y - this.y) * lerpFactor;
-        this.scale += (target.scale - this.scale) * lerpFactor;
+        const axes = ['x', 'y', 'scale'];
+        if (!this.motion || axes.some(axis => this.motion.target[axis] !== target[axis])) {
+            // Normalize remaining errors by the original stopping gauges.
+            const gauge = Math.max(Math.abs(target.x - this.x) / 0.1,
+                Math.abs(target.y - this.y) / 0.1,
+                Math.abs(target.scale - this.scale) * Math.LN2 / Math.log1p(0.02));
+            const decay = Math.log1p(speed * (1000 / 60)) / (1000 / 60);
+            const duration = Math.log1p(gauge) / decay;
+            this.motion = {
+                start: this.clone(), target: target.clone(), elapsed: 0, duration, decay
+            };
+        }
+        const motion = this.motion;
+        motion.elapsed = Math.min(motion.duration, motion.elapsed + timeDelta);
+        this.velocity = {};
+        if (motion.elapsed === motion.duration) {
+            for (const axis of axes) {
+                this[axis] = motion.target[axis];
+                this.velocity[axis] = 0;
+            }
+            return;
+        }
+        const t = motion.elapsed, duration = motion.duration, k = motion.decay;
+        const u = t / duration, q = k * duration;
+        const tail = Math.exp(-q);
+        // Series avoid cancellation for nearly identical camera positions.
+        const denominator = q < 0.001
+            ? q*q * (0.5 - q/3 + q*q/8 - q*q*q/30)
+            : -Math.expm1(-q) - q * tail;
+        const numerator = q < 0.001
+            ? q*q * (u - u*u/2 + q*(u*u*u/6 - u/2)
+                + q*q*(u/6 - u**4/24) + q**3*(u**5/120 - u/24))
+            : -Math.expm1(-k*t) - k*t * tail;
+        const progress = numerator / denominator;
+        const slope = k * (Math.expm1(-k*t) - Math.expm1(-q)) / denominator;
+        for (const axis of axes) {
+            const distance = motion.target[axis] - motion.start[axis];
+            // Analytic solution of the shared remaining-error ODE. Position and
+            // logarithmic zoom start and decelerate together, also on retargeting.
+            this[axis] = motion.start[axis] + distance * progress;
+            this.velocity[axis] = distance * slope;
+        }
     }
 
     getZoomLevel() {
@@ -199,8 +235,9 @@ export class InfiniteScrollableCanvas {
         
         this.isMouseDown = true;
         const dragSpeed = this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
-        this.dragStart.x = dragSpeed * e.clientX - this.cameraTarget.x;
-        this.dragStart.y = dragSpeed * e.clientY - this.cameraTarget.y;
+        this.dragStart.speed = dragSpeed;
+        this.dragStart.x = dragSpeed * e.clientX - this.cameraCurrent.x;
+        this.dragStart.y = dragSpeed * e.clientY - this.cameraCurrent.y;
         this.mouseStartPos.x = e.clientX;
         this.mouseStartPos.y = e.clientY;
         this.isDragging = false;
@@ -236,7 +273,9 @@ export class InfiniteScrollableCanvas {
             
             // Only perform drag if we've exceeded the threshold
             if (this.isDragging) {
-                const dragSpeed = this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
+                const dragSpeed = this.dragStart.speed ?? this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
+                this.cameraCurrent.motion = null;
+                this.cameraTarget.scale = this.cameraCurrent.scale;
                 this.cameraTarget.x = dragSpeed * e.clientX - this.dragStart.x;
                 this.cameraTarget.y = dragSpeed * e.clientY - this.dragStart.y;
                 this.startAnimation();
@@ -292,8 +331,9 @@ export class InfiniteScrollableCanvas {
             // Single finger touch - start potential drag or tap
             const touch = e.touches[0];
             const dragSpeed = this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
-            this.dragStart.x = dragSpeed * touch.clientX - this.cameraTarget.x;
-            this.dragStart.y = dragSpeed * touch.clientY - this.cameraTarget.y;
+            this.dragStart.speed = dragSpeed;
+            this.dragStart.x = dragSpeed * touch.clientX - this.cameraCurrent.x;
+            this.dragStart.y = dragSpeed * touch.clientY - this.cameraCurrent.y;
             this.touchStartPos.x = touch.clientX;
             this.touchStartPos.y = touch.clientY;
             this.isDragging = false;
@@ -320,7 +360,9 @@ export class InfiniteScrollableCanvas {
             
             // Only perform drag if we've exceeded the threshold
             if (this.isDragging) {
-                const dragSpeed = this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
+                const dragSpeed = this.dragStart.speed ?? this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
+                this.cameraCurrent.motion = null;
+                this.cameraTarget.scale = this.cameraCurrent.scale;
                 this.cameraTarget.x = dragSpeed * touch.clientX - this.dragStart.x;
                 this.cameraTarget.y = dragSpeed * touch.clientY - this.dragStart.y;
                 this.startAnimation();
@@ -371,8 +413,9 @@ export class InfiniteScrollableCanvas {
             // Start drag with remaining finger
             const touch = e.touches[0];
             const dragSpeed = this.config.dragSpeed / this.cameraCurrent.getZoomLevel();
-            this.dragStart.x = dragSpeed * touch.clientX - this.cameraTarget.x;
-            this.dragStart.y = dragSpeed * touch.clientY - this.cameraTarget.y;
+            this.dragStart.speed = dragSpeed;
+            this.dragStart.x = dragSpeed * touch.clientX - this.cameraCurrent.x;
+            this.dragStart.y = dragSpeed * touch.clientY - this.cameraCurrent.y;
             this.isDragging = false;
             this.touchMoved = true;
         }
@@ -386,7 +429,7 @@ export class InfiniteScrollableCanvas {
         this._render();
         
         // Continue animating if camera hasn't reached target
-        return !this.cameraCurrent.isCloseTo(this.cameraTarget);
+        return ['x', 'y', 'scale'].some(axis => this.cameraCurrent[axis] !== this.cameraTarget[axis]);
     }
 
     _render() {

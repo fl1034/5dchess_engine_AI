@@ -13,7 +13,7 @@ remain in [Building](../usage/building.md#webassembly).
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
-| `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and double-Space detection |
+| `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and Space dispatch |
 | `scripts/navigation.js` | Nearest-board and directional searches in displayed grid coordinates |
 | `scripts/mobile.js` | Moves the same controls into the compact shell and manages its open sheet |
 | `scripts/metadata.js` | Formats headers and controls metadata visibility and expansion |
@@ -175,25 +175,74 @@ historical moves, selectable destinations, ordinary checks, and phantom checks
 are drawn as separate highlights and arrows supplied by the worker. Phantom
 visibility is controlled locally and requests refreshed display data.
 
+Flip reverses timeline order and both ranks and files inside each board, giving
+Black's perspective. Under Settings → Interface, **Do not reverse files when
+flipped** keeps files running left to right while retaining the flipped ranks
+and timeline order. The checkbox defaults to off and is saved in browser storage.
+Changing it redraws board contents immediately without moving boards or the
+camera. Pieces, square colors, coordinate labels, highlights, arrows, and click
+coordinates all follow the selected orientation; artwork and text stay upright.
+
 ### Canvas keyboard navigation
 
 F retains the Focus button's cycle through game-provided focus points. Space
-centers the nearest existing board to the current canvas center and uses the
-same zoom calculation as Focus. A second Space press within 300 ms retargets
-the same board at 65% of that scale; Shift+Space requests this wider view
-directly. Holding Space or F does not retrigger it. Pointer activity, wheel
-input, focus changes, and other keys reset the double-press sequence.
+centers the nearest visible board at the normal Focus zoom. If the camera is
+already at a normal Focus view, Space widens around that board to show at least
+a 3 × 3 neighborhood, including gaps; its zoom is at most 40% of the Focus scale.
+There is no timing window. During motion, the destination is checked instead,
+so rapid presses can widen the same board before the first animation finishes.
+Position matching allows 0.5 CSS pixels per axis and zoom matching allows a
+0.1% relative difference. From the wide view, Space returns to normal Focus.
+Shift+Space requests the wide view directly. Holding Space or F does not repeat.
 
-W/A/S/D moves up/left/down/right while preserving zoom. Navigation starts at
-the grid position nearest the camera target, uses displayed coordinates after
-flipping, and skips gaps to the closest existing board on that row or column.
-If there is none, it advances one board spacing into empty space. Visible phantom
-previews participate in both directional navigation and nearest-board zoom; hidden
-previews are excluded. Repeated presses chain from the last destination while
-animation is still running; held direction keys are limited to one step every
-120 ms. All commands call the existing camera `moveTo`/interpolation path and
-do not select pieces or modify the game. Zoom convergence compares actual zoom
-ratios, including when the logarithmic target scale is zero.
+W/A/S/D moves up/left/down/right while preserving zoom. Held keys combine into
+a direction vector: W+A is up-left, opposite keys cancel per axis, and releasing
+one key continues along the remaining direction. The initial step waits up to
+40 ms to recognize a chord, or commits on key release for shorter taps. Chords
+within that window select the same diagonal regardless of key order.
+
+Navigation starts at the grid position nearest the camera target, uses displayed
+coordinates after flipping, and skips gaps to the closest visible board on the
+cardinal or diagonal ray. If there is none, it advances one grid step into empty
+space. Visible phantom previews participate; hidden previews are excluded.
+
+Holding starts automatic movement after 250 ms, accelerating over 1.5 seconds
+from four to ten horizontal board spacings per second at normal Focus zoom.
+The speed budget is measured in screen distance: smaller zoom means more grid
+steps per second, and diagonal travel is normalized by its actual step length.
+Fractional steps accumulate across frames; distant views batch multiple steps
+into one destination, including sparse-board skips. Adding or releasing a key
+preserves acceleration. Browser key repeat does not drive movement. Release of
+all keys stops further destinations; focus changes, pointer/wheel activity,
+window blur, and blocked input cancel held keys and the pending chord. All
+commands use the camera `moveTo` path and do not select pieces or modify the game.
+
+Camera position and logarithmic zoom use a corrected exponential curve with a
+finite duration, ending exactly at the destination with zero velocity. Duration
+is `ln(1 + G) / k` milliseconds, where
+`G = max(abs(dx)/0.1, abs(dy)/0.1, abs(targetScale-currentScale)*ln(2)/ln(1.02))`.
+Position differences use world coordinates directly, and the gauges reproduce
+the original stopping tolerances: 0.1 world units and approximately 2% zoom.
+Scale is logarithmic base two, so multiplying its difference by `ln(2)` gives
+`ln(newZoom / oldZoom)`. At the default decay rate, one horizontal board
+(100 world units) takes about 747 ms, and a zoom-only doubling or halving takes
+about 388 ms. Duration is independent of starting zoom for equal world movement.
+The decay constant matches the original smoothing at 60 FPS. Motion is the
+analytic solution of `dc/dt = lambda(T-t) * (target-c)`, where
+`lambda(tau) = k * expm1(k*tau) / (expm1(k*tau) - k*tau)`.
+The remaining error is proportional to
+`(expm1(k*(T-t)) - k*(T-t)) / (expm1(k*T) - k*T)`. Position and
+logarithmic zoom share this response on every frame, including after a target
+change. Retargeting starts from the current camera and recomputes duration;
+there are no independent velocity-preserving curves per component. All axes
+start and decelerate together, and reach zero remaining error and velocity at
+the endpoint. Small durations use a series expansion to avoid numerical
+cancellation. Frame subdivision does not change the trajectory. The same
+duration rule applies to held navigation.
+
+Mouse and touch drags take over from the rendered camera, use the starting drag
+zoom for pointer displacement, cancel pending zoom, and restart the shared
+response as pointer targets change. Rendering continues until the exact endpoint.
 
 Shortcuts are available outside text entry without requiring canvas focus.
 Editable descendants, form fields, IME composition, browser modifier commands,

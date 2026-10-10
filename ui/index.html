@@ -372,6 +372,10 @@
             </div>
             <div class="popup-fieldset" role="group" aria-labelledby="settingsInterfaceLabel">
                 <div class="popup-fieldset-title" id="settingsInterfaceLabel">Interface</div>
+                <label class="popup-control">
+                    <input type="checkbox" id="doNotReverseFilesWhenFlipped">
+                    <span>Do not reverse files when flipped</span>
+                </label>
                 <label class="popup-control popup-control-select">
                     <span>Color scheme</span>
                     <select id="colorSchemeSelect">
@@ -428,10 +432,10 @@
             <h4>Canvas keyboard navigation</h4>
             <ul>
                 <li><b>F</b> cycles through the game's focus boards.</li>
-                <li><b>Space</b> centers the board nearest the canvas center at the Focus zoom level. Double-tap Space within 300 ms, or press <b>Shift+Space</b>, for a wider view.</li>
+                <li><b>Space</b> centers the board nearest the canvas center at the Focus zoom level. When already focused on a board, Space widens the view to show surrounding boards. Press Space again to return, or use <b>Shift+Space</b> to widen directly.</li>
                 <li><b>W / A / S / D</b> moves up / left / down / right without changing zoom. Navigation skips gaps to the closest existing board in the same column or row. If none exists, it moves one board spacing into empty space. Directions follow the displayed layout when flipped.</li>
             </ul>
-            <p>Camera movement is animated and does not move pieces or change game history. Shortcuts pause while typing in comments or other fields, and while a dialog or the tools menu is open. Space and Enter still activate a focused button. Clicking a game-navigation button returns keyboard focus to the canvas; activating it with the keyboard keeps focus on the button.</p>
+            <p>Combine W/A/S/D for diagonal movement. Holding accelerates navigation, and zooming out increases the number of boards traversed. Camera movement is animated and does not move pieces or change game history. Shortcuts pause while typing in comments or other fields, and while a dialog or the tools menu is open. Space and Enter still activate a focused button. Clicking a game-navigation button returns keyboard focus to the canvas; activating it with the keyboard keeps focus on the button.</p>
             <p>The comment editor shows a caret and its panel gains an opaque theme tint only while editing. Click the canvas to leave editing without losing your draft. Tab can move between the canvas and controls.</p>
 
             <h4>Phones</h4>
@@ -457,7 +461,7 @@
                 </li>
                 <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-flip"></use></svg>
-                    <span><b>Flip</b> - Switch between White's and Black's perspectives</span>
+                    <span><b>Flip</b> - Switch between White's and Black's perspectives. To keep files running left to right inside flipped boards, enable “Do not reverse files when flipped” under Settings → Interface.</span>
                 </li>
                 <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-screenshot"></use></svg>

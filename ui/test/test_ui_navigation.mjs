@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const load = async name => import(`data:text/javascript;base64,${Buffer.from(await readFile(new URL(`../scripts/${name}.js`, import.meta.url), 'utf8')).toString('base64')}`);
-const { nearestBoard, directionalTarget } = await load('navigation');
+const { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } = await load('navigation');
 const { createKeyboardShortcuts } = await load('keyboard');
 const directions = { up: { x: 0, y: -1 }, left: { x: -1, y: 0 }, down: { x: 0, y: 1 }, right: { x: 1, y: 0 } };
 
@@ -39,30 +39,39 @@ function keyboard() {
     const calls = [];
     let time = 0;
     let blocked = false;
-    const handler = createKeyboardShortcuts({ onAction: (...args) => calls.push(args), isBlocked: () => blocked, now: () => time });
+    let scheduled = null;
+    const handler = createKeyboardShortcuts({ requestFrame: callback => { scheduled = callback; return 1; }, cancelFrame: () => { scheduled = null; }, onAction: (...args) => calls.push(args), isBlocked: () => blocked, now: () => time });
     const press = (key, overrides = {}) => {
         const event = { key, target: { closest: () => null }, preventDefault() { this.defaultPrevented = true; }, ...overrides };
         handler.handleKeyDown(event);
         return event;
     };
-    return { calls, press, reset: handler.reset, tick: ms => { time += ms; }, block: value => { blocked = value; } };
+    return { calls, press, reset: handler.reset, tick: ms => { time += ms; const callback = scheduled; scheduled = null; callback?.(); }, release: key => handler.handleKeyUp({ key }), block: value => { blocked = value; } };
 }
 
-test('Space responds immediately, double Space widens the same board, and Shift+Space is direct', () => {
+test('Space delegates camera-state decisions without a timing window; Shift+Space is direct', () => {
     const k = keyboard();
     assert(k.press(' ').defaultPrevented);
-    assert.deepEqual(k.calls.pop(), ['nearby', { wide: false, reuse: false }]);
-    k.tick(150);
-    k.press(' ', { repeat: true });
+    assert.deepEqual(k.calls.pop(), ['nearby', { wide: false }]);
+    k.tick(20000); k.press(' ', { repeat: true });
     assert.equal(k.calls.length, 0);
     k.press(' ');
-    assert.deepEqual(k.calls.pop(), ['nearby', { wide: true, reuse: true }]);
-    k.tick(400); k.press(' ');
-    assert.deepEqual(k.calls.pop(), ['nearby', { wide: false, reuse: false }]);
+    assert.deepEqual(k.calls.pop(), ['nearby', { wide: false }]);
     k.press(' ', { shiftKey: true });
-    assert.deepEqual(k.calls.pop(), ['nearby', { wide: true, reuse: false }]);
-    k.reset(); k.press(' ');
-    assert.deepEqual(k.calls.pop(), ['nearby', { wide: false, reuse: false }]);
+    assert.deepEqual(k.calls.pop(), ['nearby', { wide: true }]);
+});
+
+test('focus view recognition uses screen-position and relative-zoom tolerance', () => {
+    const boards = [{ x: 3, y: -2 }, { x: 0, y: 0 }];
+    const spacing = { x: 100, y: 112 }, size = { x: 80, y: 80 };
+    const camera = { x: -340, y: 184, scale: 2 };
+    const match = value => focusViewBoard(boards, value, spacing, size, 2);
+    assert.equal(match(camera), boards[0]);
+    assert.equal(match({ ...camera, x: camera.x + 0.1 }), boards[0]);
+    assert.equal(match({ ...camera, x: camera.x + 0.2 }), null);
+    assert.equal(match({ ...camera, scale: 2 + Math.log2(1.0005) }), boards[0]);
+    assert.equal(match({ ...camera, scale: 1 }), null);
+    assert.equal(focusViewBoard([], camera, spacing, size, 2), null);
 });
 
 test('editing, composition, browser modifiers, dialogs and native activation are untouched', () => {
@@ -80,21 +89,76 @@ test('editing, composition, browser modifiers, dialogs and native activation are
     k.block(true); assert(!k.press('w').defaultPrevented); k.block(false);
     assert.equal(k.calls.length, 0);
     k.press('w', { target: button });
+    k.tick(40);
     k.press('F', { target: button });
-    assert.deepEqual(k.calls.map(([action]) => action), ['up', 'focus']);
+    assert.deepEqual(k.calls.map(([action]) => action), ['navigate', 'focus']);
 });
 
-test('distinct navigation presses chain immediately; held keys are bounded and focus does not repeat', () => {
+test('distinct taps move once, OS repeat is ignored, and focus does not repeat', () => {
     const k = keyboard();
-    k.press('d'); k.press('d'); k.press('d', { repeat: true });
+    k.press('d'); k.release('d'); k.press('d'); k.release('d');
     assert.equal(k.calls.length, 2);
-    k.tick(120); k.press('d', { repeat: true });
+    k.press('d'); k.press('d', { repeat: true }); k.tick(40);
     k.press('f'); k.press('f', { repeat: true });
-    assert.deepEqual(k.calls.map(([action]) => action), ['right', 'right', 'right', 'focus']);
+    assert.deepEqual(k.calls.map(([action]) => action), ['navigate', 'navigate', 'navigate', 'focus']);
 });
 
 test('existing history-arrow shortcuts retain key-repeat behavior', () => {
     const k = keyboard();
     k.press('ArrowUp'); k.press('ArrowUp', { repeat: true });
     assert.deepEqual(k.calls.map(([action]) => action), ['prev', 'prev']);
+});
+
+
+test('held directions accelerate independently of OS repeat and stop on release or reset', () => {
+    const k = keyboard();
+    k.press('w'); k.tick(249); assert.equal(k.calls.length, 1);
+    k.tick(1); const slow = k.calls.at(-1)[1].rate;
+    for (let i = 0; i < 100; i++) k.tick(16);
+    assert(k.calls.at(-1)[1].rate > slow * 2);
+    k.release('w'); const count = k.calls.length; k.tick(1000);
+    assert.equal(k.calls.length, count);
+    k.press('d'); k.reset(); k.tick(1000); assert.equal(k.calls.length, count);
+    k.press('a'); k.block(true); k.tick(300); assert.equal(k.calls.length, count);
+});
+
+test('diagonal chords ignore key order and remaining held keys continue after release', () => {
+    for (const keys of [['w', 'a'], ['a', 'w']]) {
+        const k = keyboard();
+        k.press(keys[0]); k.tick(10); k.press(keys[1]); k.tick(30);
+        assert.deepEqual(k.calls[0], ['navigate', { direction: { x: -1, y: -1 }, held: false }]);
+        k.tick(300); assert.deepEqual(k.calls.at(-1)[1].direction, { x: -1, y: -1 });
+        k.release('w'); k.tick(16);
+        assert.deepEqual(k.calls.at(-1)[1].direction, { x: -1, y: 0 });
+        k.release('a'); const count = k.calls.length; k.tick(1000);
+        assert.equal(k.calls.length, count);
+    }
+    const k = keyboard(); k.press('w'); k.press('a'); k.release('a'); k.release('w');
+    assert.deepEqual(k.calls, [['navigate', { direction: { x: -1, y: -1 }, held: false }]]);
+});
+
+test('opposite keys cancel per axis without resetting hold acceleration', () => {
+    const k = keyboard(); k.press('w'); k.press('s'); k.tick(300);
+    assert.equal(k.calls.length, 0);
+    k.press('d'); k.tick(1500);
+    assert.deepEqual(k.calls.at(-1)[1].direction, { x: 1, y: 0 });
+    assert.equal(k.calls.at(-1)[1].rate, 10);
+});
+
+test('diagonal rays skip gaps, ignore other quadrants, and batch repeated steps', () => {
+    const boards = [{ x: -3, y: -3 }, { x: -8, y: -8 }, { x: -1, y: -2 }];
+    const direction = { x: -1, y: -1 };
+    assert.deepEqual(directionalTarget(boards, { x: 0, y: 0 }, direction), boards[0]);
+    assert.deepEqual(directionalTarget(boards, { x: 0, y: 0 }, direction, 2), boards[1]);
+    assert.deepEqual(directionalTarget(boards, { x: 0, y: 0 }, direction, 4), { x: -10, y: -10 });
+    assert.deepEqual(directionalTarget([], { x: 0, y: 0 }, direction), { x: -1, y: -1 });
+});
+
+test('held screen-speed budget scales with zoom and normalizes diagonal travel', () => {
+    const options = { spacing: { x: 100, y: 112 }, referenceZoom: 1, rate: 10, elapsed: 1000 };
+    const normal = heldNavigationSteps({ ...options, direction: { x: 1, y: 0 }, zoom: 1 });
+    const far = heldNavigationSteps({ ...options, direction: { x: 1, y: 0 }, zoom: 0.25 });
+    const diagonal = heldNavigationSteps({ ...options, direction: { x: 1, y: 1 }, zoom: 1 });
+    assert.equal(normal.steps, 10); assert.equal(far.steps, 40);
+    assert(Math.abs((diagonal.steps + diagonal.remainder) * Math.hypot(100,112) - 1000) < 1e-9);
 });
