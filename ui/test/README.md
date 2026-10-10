@@ -18,3 +18,10 @@ integration should also be checked in the built WebAssembly interface at phone
 portrait, phone landscape, tablet, and desktop sizes.
 
 From `ui/`, run `node --test test/*.mjs`.
+
+For panel keyboard checks, build with `cd build-wasm && ./build.sh` and serve
+`build-wasm/ui/`. With both desktop panels collapsed, repeatedly press Tab:
+the comment editor, hidden Update/Discard actions, and Hint/continuation options
+must be skipped, and the status title must not shift vertically. Expand each
+panel and verify its controls become reachable. In compact mode, open Comment
+and Continuations and verify those same controls remain accessible.

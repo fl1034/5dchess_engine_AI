@@ -205,6 +205,14 @@ metadata and centered shallow highlights for HUD and navigation (480 × 50 and
 320 × 48 pixels respectively). Hint has its own neutral surface above the
 continuations and highlights independently of the selected option.
 
+The HUD and navigation expand/fold controls are native buttons with accessible
+names, controlled-region references, and synchronized expanded states. Tab
+focuses them and Enter or Space activates them without triggering game shortcuts.
+Their normal and hover appearance is unchanged; keyboard focus adds an inset
+outline. Automatic comment expansion also updates the HUD button state. Hidden comment content,
+inactive comment actions, and collapsed continuations are excluded from keyboard
+focus; focusing invisible content must not scroll a collapsed panel.
+
 ### Continuations and move notation
 
 The worker formats child actions through `get_child_actions(flags)`. The saved

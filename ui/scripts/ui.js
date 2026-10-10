@@ -7,12 +7,12 @@ import { getExportFilename } from './filename.js';
 export const UI = (() => {
     /* ================= SVG Icons ================= */
     const ICON_UP = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#555">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#555" aria-hidden="true" focusable="false">
 <path d="M12 4.83582L5.79291 11.0429L7.20712 12.4571L12 7.66424L16.7929 12.4571L18.2071 11.0429L12 4.83582ZM12 10.4857L5.79291 16.6928L7.20712 18.107L12 13.3141L16.7929 18.107L18.2071 16.6928L12 10.4857Z"/>
 </svg>`;
 
     const ICON_DOWN = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#555">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#555" aria-hidden="true" focusable="false">
 <path d="M12 19.1642L18.2071 12.9571L16.7929 11.5429L12 16.3358L7.20712 11.5429L5.79291 12.9571L12 19.1642ZM12 13.5143L18.2071 7.30722L16.7929 5.89301L12 10.6859L7.20712 5.89301L5.79291 7.30722L12 13.5143Z"/>
 </svg>`;
 
@@ -36,12 +36,15 @@ export const UI = (() => {
     function updateToggle(expanded) {
         if (!toggle) return;
         toggle.innerHTML = expanded ? ICON_UP : ICON_DOWN;
+        toggle.setAttribute('aria-expanded', String(expanded));
+        toggle.setAttribute('aria-label', expanded ? 'Collapse comment' : 'Expand comment');
     }
 
     function setHudExpanded(expanded) {
         if (!hud) return;
         hud.classList.toggle("expanded", expanded);
         hud.classList.toggle("collapsed", !expanded);
+        if (!expanded) hud.scrollTop = 0;
         updateToggle(expanded);
     }
 
@@ -186,11 +189,14 @@ export const UI = (() => {
 
     function updatePanelToggle(expanded) {
         panelToggle.innerHTML = expanded ? ICON_UP : ICON_DOWN;
+        panelToggle.setAttribute('aria-expanded', String(expanded));
+        panelToggle.setAttribute('aria-label', expanded ? 'Collapse continuations' : 'Expand continuations');
     }
 
     panelToggle.onclick = () => {
         const isExpanded = controlPanel.classList.toggle('expanded');
         controlPanel.classList.toggle('collapsed', !isExpanded);
+        if (!isExpanded) controlPanel.scrollTop = 0;
         
         if (isExpanded) {
             controlPanel.style.height = '500px';

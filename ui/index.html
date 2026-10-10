@@ -204,13 +204,13 @@
             <div class="hud-light" id="light"></div>
         </div>
 
-        <div class="hud-content">
+        <div class="hud-content" id="hudContent">
             <div class="hud-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Comment" aria-multiline="true">
                 Loading WebAssembly module. This may take a while.
             </div>
         </div>
 
-        <div class="hud-toggle" id="toggle"></div>
+        <button class="hud-toggle" id="toggle" type="button" aria-label="Expand comment" aria-expanded="false" aria-controls="hudContent"></button>
     </div>
 
     <div class="hud-comment-actions" id="hudCommentActions">
@@ -236,7 +236,7 @@
         <button type="button" class="hint-btn" id="hintBtn">+ Hint</button>
     </div>
 
-    <div class="panel-toggle" id="panelToggle"></div>
+    <button class="panel-toggle" id="panelToggle" type="button" aria-label="Expand continuations" aria-expanded="false" aria-controls="selectContainer"></button>
 </div>
 
 </div><!-- .top-panels -->
