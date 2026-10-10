@@ -112,9 +112,9 @@ void test_superphysical_and_historical_checks()
         assert(found);
         assert(found_physical);
     };
-    multiverse_odd endpoint({{0,1,false,source},{1,1,true,target}});
+    multiverse endpoint(timeline_layout::odd(), {{0,1,false,source},{1,1,true,target}});
     verify(state(endpoint), false);
-    multiverse_odd history({{0,1,false,source},{1,2,false,target},
+    multiverse history(timeline_layout::odd(), {{0,1,false,source},{1,2,false,target},
                             {1,2,true,target},{1,3,false,target},
                             {1,3,true,target}});
     verify(state(history), true);
@@ -127,12 +127,12 @@ int main()
     coverage seen;
     compare(parse("[Size \"4x4\"]\n[3k/4/Kp2/1R2:0:1:w]"), seen);
 
-    multiverse_odd promotion_boards({
+    multiverse promotion_boards(timeline_layout::odd(), {
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });
     compare(state(promotion_boards, promotion_options::QUEEN), seen);
 
-    multiverse_odd jump_boards({
+    multiverse jump_boards(timeline_layout::odd(), {
         {-1, 1, false, "r6k/8/8/8/8/8/8/K7"},
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });

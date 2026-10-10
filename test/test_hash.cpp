@@ -61,11 +61,11 @@ void test_multiverses()
         {0, 1, true, empty}, {0, 2, false, empty},
         {1, 2, false, empty}
     };
-    multiverse_odd original(boards);
+    multiverse original(timeline_layout::odd(), boards);
     const auto original_hash = hash_multiverse(original);
-    assert(hash_multiverse(*original.clone()) == original_hash);
+    assert(hash_multiverse(multiverse(original)) == original_hash);
     std::reverse(boards.begin(), boards.end());
-    const multiverse_odd reordered(boards);
+    const multiverse reordered(timeline_layout::odd(), boards);
     assert(hash_multiverse(reordered) == original_hash);
 
     // Equal endpoint boards do not make different histories duplicates.
@@ -76,20 +76,20 @@ void test_multiverses()
     original.get_board(0, 1, true)->set_piece(ppos(0, 0), NO_PIECE);
     assert(hash_multiverse(original) == original_hash);
 
-    const multiverse_odd shifted({{0, 3, false, empty}});
-    const multiverse_odd earlier({{0, 2, false, empty}});
-    const multiverse_odd other_color({{0, 2, true, empty}});
+    const multiverse shifted(timeline_layout::odd(), {{0, 3, false, empty}});
+    const multiverse earlier(timeline_layout::odd(), {{0, 2, false, empty}});
+    const multiverse other_color(timeline_layout::odd(), {{0, 2, true, empty}});
     assert(hash_multiverse(shifted) != hash_multiverse(earlier));
     assert(hash_multiverse(other_color) != hash_multiverse(earlier));
 
-    const multiverse_odd odd(boards);
-    const multiverse_even even(boards);
+    const multiverse odd(timeline_layout::odd(), boards);
+    const multiverse even(timeline_layout::even(), boards);
     assert(hash_multiverse(odd) != hash_multiverse(even));
 
     // A 4x4 board and an 8x8 board with matching walls have equal contents,
     // irrespective of nominal dimensions.
-    multiverse_odd square({{0, 1, false, empty}});
-    multiverse_odd small({{0, 1, false, "3k/4/4/K3"}}, 4, 4);
+    multiverse square(timeline_layout::odd(), {{0, 1, false, empty}});
+    multiverse small(timeline_layout::odd(), {{0, 1, false, "3k/4/4/K3"}}, 4, 4);
     for(int square_index = 0; square_index < BOARD_SIZE; ++square_index)
     {
         square.get_board(0, 1, false)->set_piece(
@@ -100,11 +100,11 @@ void test_multiverses()
     assert(hash_multiverse(square) == hash_multiverse(small));
     assert(hash_state(state(square)) == hash_state(state(small)));
 
-    auto extended = earlier.clone();
-    extended->append_board(0, std::make_shared<board>(empty));
-    assert(hash_multiverse(*extended) != hash_multiverse(earlier));
+    auto extended = earlier;
+    extended.append_board(0, std::make_shared<board>(empty));
+    assert(hash_multiverse(extended) != hash_multiverse(earlier));
 
-    multiverse_odd inactive({{0, 2, false, empty},
+    multiverse inactive(timeline_layout::odd(), {{0, 2, false, empty},
                              {1, 2, false, empty},
                              {2, 2, false, empty}});
     assert(inactive.get_active_range().second == 1);
@@ -126,7 +126,7 @@ void test_states()
     assert(hash_state(position) == hash_state(annotated.get_current_state()));
     assert(hash_state(position) == hash_state(state(position)));
 
-    multiverse_odd universe({{0, 1, false, "8/8/8/8/8/8/8/8"}});
+    multiverse universe(timeline_layout::odd(), {{0, 1, false, "8/8/8/8/8/8/8/8"}});
     const state queen(universe, promotion_options::QUEEN);
     const state knight(universe, promotion_options::KNIGHT);
     assert(hash_state(queen) != hash_state(knight));
@@ -150,7 +150,7 @@ void test_states()
     // Phantom states retain their stored present. Advancing both colors
     // changes its time while retaining the same player and board contents.
     const state phantom = queen.phantom(false).phantom(true);
-    multiverse_odd phantom_universe(phantom.get_boards());
+    multiverse phantom_universe(timeline_layout::odd(), phantom.get_boards());
     const state apparent(phantom_universe, promotion_options::QUEEN);
     assert(phantom.show_fen() == apparent.show_fen());
     assert(phantom.get_present().second == apparent.get_present().second);

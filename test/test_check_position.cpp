@@ -87,7 +87,7 @@ void randomized_differential()
             for (int ply = begin; ply <= end; ++ply)
                 boards.emplace_back(l,ply/2,ply%2,random_board(rng,width,height)->get_fen<true>());
         }
-        multiverse_odd original(boards,width,height);
+        multiverse original(timeline_layout::odd(), boards,width,height);
         state s(original);
         check_position view(s,-3,3);
         compare(view,s);
@@ -95,7 +95,7 @@ void randomized_differential()
 
         // Simultaneously add boards on several existing lines, and branches
         // on both sides. The independently materialized position is the oracle.
-        auto materialized = original.clone();
+        auto materialized = original;
         std::vector<std::shared_ptr<board>> additions;
         for (int l = -3; l <= 3; ++l) {
             if (l != -3 && l != 3 && rng()%2) continue;
@@ -104,10 +104,10 @@ void randomized_differential()
                 ? turn_t{static_cast<int>(rng()%8),static_cast<bool>(rng()%2)}
                 : next_turn(s.get_timeline_end(l));
             view.add_board(l,at,*b);
-            materialized->insert_board(l,at.first,at.second,b);
+            materialized.insert_board(l,at.first,at.second,b);
             additions.push_back(std::move(b));
         }
-        state expected(*materialized);
+        state expected(materialized);
         compare(view,expected);
         compare_phantom(expected);
     }
@@ -125,7 +125,7 @@ void long_rays_and_blockers()
             if (blocked && ply == 10) b.set_piece(ppos(3,3),PAWN_B);
             boards.emplace_back(0,ply/2,ply%2,b.get_fen<true>());
         }
-        multiverse_odd m(boards);
+        multiverse m(timeline_layout::odd(), boards);
         state s(m);
         check_position view(s);
         compare(view,s);
@@ -137,23 +137,23 @@ void long_rays_and_blockers()
     board attacker(empty), target(empty), bridge(empty);
     attacker.set_piece(ppos(3,3),ROOK_W);
     target.set_piece(ppos(3,3),KING_B);
-    multiverse_odd m({{0,3,false,attacker.get_fen<true>()},
+    multiverse m(timeline_layout::odd(), {{0,3,false,attacker.get_fen<true>()},
                       {1,2,true,empty}, {2,3,false,target.get_fen<true>()}});
     state s(m);
     check_position view(s);
     compare(view,s);
     assert(!view.first_check(false,false));
     view.add_board(1,{3,false},bridge);
-    auto expected = m.clone();
-    expected->append_board(1,std::make_shared<board>(bridge));
-    compare(view,state(*expected));
+    auto expected = m;
+    expected.append_board(1,std::make_shared<board>(bridge));
+    compare(view,state(expected));
     assert(view.first_check(false,false));
 }
 
 void new_boards_check_each_other()
 {
     for (bool mover : {false,true}) {
-        multiverse_odd original({{0,2,mover,"8/8/8/8/8/8/8/8"}});
+        multiverse original(timeline_layout::odd(), {{0,2,mover,"8/8/8/8/8/8/8/8"}});
         state s(original);
         check_position view(s,-1,1);
         auto attacker = std::make_shared<board>("8/8/8/8/8/8/8/8");
@@ -163,10 +163,10 @@ void new_boards_check_each_other()
         const auto at = next_turn({2,mover});
         view.add_board(0,at,*attacker);
         view.add_board(1,at,*target);
-        auto expected = original.clone();
-        expected->append_board(0,attacker);
-        expected->insert_board(1,at.first,at.second,target);
-        compare(view,state(*expected));
+        auto expected = original;
+        expected.append_board(0,attacker);
+        expected.insert_board(1,at.first,at.second,target);
+        compare(view,state(expected));
         assert(view.first_check(!mover,false));
         // A branch has no inherited history and uncreated reserved lines are absent.
         assert(!view.get_board_ptr(1,2,mover));

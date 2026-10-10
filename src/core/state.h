@@ -17,11 +17,13 @@
 #include "generator.h"
 #include "ast.h"
 
+struct variant_setup_t;
+
 class state
 {
     friend std::uint64_t hash_state(const state &s);
 
-    std::unique_ptr<multiverse> m;
+    multiverse m;
     /*
      `present` is in L,T coordinate (i.e. not u,v corrdinated).
      These numbers can be inherited from copy-construction; thus they are not necessarily equal to `m.get_present()`.
@@ -41,14 +43,16 @@ class state
     template<bool C>
     generator<full_move> find_checks_impl(std::vector<int> lines) const;
 
+    state(const pgnparser_ast::game &g, const variant_setup_t &setup);
+    
 public:
-    state(multiverse &mtv, promotion_options promotions = promotion_options::QUEEN) noexcept;
+    state(const multiverse &mtv, promotion_options promotions = promotion_options::QUEEN);
+    state(multiverse &&mtv, promotion_options promotions = promotion_options::QUEEN) noexcept;
     state(const pgnparser_ast::game &g);
     virtual ~state() = default;
     
     // standard copy-constructors
-    state(const state &other)
-    : m{other.m->clone()}, present{other.present}, player{other.player}, promotions{other.promotions} {}
+    state(const state &other) = default;
     state(state&&) noexcept = default;
     state &operator=(state other) noexcept {
         swap(*this, other);
@@ -131,8 +135,8 @@ public:
     std::pair<int, int> get_board_size() const;
     promotion_options get_promotion_options() const { return promotions; }
     std::optional<ext_move> normalize_promotion(ext_move move) const;
-    turn_t get_present() const;
-    turn_t apparent_present() const;
+    turn_t get_present() const noexcept;
+    turn_t apparent_present() const noexcept;
     std::pair<int, int> get_initial_lines_range() const;
     std::pair<int, int> get_lines_range() const;
     std::pair<int, int> get_active_range() const;
@@ -142,9 +146,10 @@ public:
     std::shared_ptr<board> get_board(int l, int t, bool c) const;
     // Borrow a board, or return nullptr when the turn is absent.
     const board* get_board_ptr(int l, int t, bool c) const noexcept {
-        return m->get_board_ptr(l,t,c);
+        return m.get_board_ptr(l,t,c);
     }
     std::vector<std::tuple<int,int,bool,std::string>> get_boards() const;
+    // Generators borrow this state; moving, swapping, or modifying it invalidates them.
     generator<vec4> gen_piece_move(vec4 p) const;
     generator<vec4> gen_piece_move(vec4 p, bool c) const;
     std::string to_string() const;

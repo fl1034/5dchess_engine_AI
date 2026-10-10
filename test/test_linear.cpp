@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #include "linear.h"
-#include "multiverse_variants.h"
+#include "multiverse.h"
 #include "pgnparser.h"
 
 namespace
@@ -123,7 +123,7 @@ void test_rollout_policy_preserves_input()
 
 void test_stalemate_rollout_termination()
 {
-    multiverse_odd multiverse({
+    multiverse multiverse(timeline_layout::odd(), {
         {0, 1, true, "k7/2Q5/2K5/8/8/8/8/8"}
     });
     observer obs;
@@ -136,7 +136,7 @@ void test_stalemate_rollout_termination()
 
 void test_winner_rollout_termination()
 {
-    multiverse_odd white_win_multiverse({
+    multiverse white_win_multiverse(timeline_layout::odd(), {
         {0, 1, true, "k7/1Q6/2K5/8/8/8/8/8"}
     });
     observer obs;
@@ -146,7 +146,7 @@ void test_winner_rollout_termination()
     assert(white_win->data.end == rollout_details::termination::WHITE_WINS);
     assert(white_win->data.num_actions == 0);
 
-    multiverse_odd black_win_multiverse({
+    multiverse black_win_multiverse(timeline_layout::odd(), {
         {0, 1, false, "K7/1q6/2k5/8/8/8/8/8"}
     });
     const auto black_win = policy.evaluate(state(black_win_multiverse), {}, obs);

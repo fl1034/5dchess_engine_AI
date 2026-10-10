@@ -45,7 +45,7 @@ int main()
         const std::string fen = black
             ? (brawn ? "k7/8/8/8/8/8/w7/7K" : "k7/8/8/8/8/8/p7/7K")
             : (brawn ? "7k/W7/8/8/8/8/8/K7" : "7k/P7/8/8/8/8/8/K7");
-        multiverse_odd boards({{0, 1, black, fen}});
+        multiverse boards(timeline_layout::odd(), {{0, 1, black, fen}});
         const state before(boards, rules);
         const full_move promotion(black ? "(0T1)a2a1" : "(0T1)a7a8");
         compare_overloads(before, promotion);

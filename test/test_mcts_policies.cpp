@@ -54,7 +54,7 @@ void test_rollout()
         std::tuple{false, "K7/1q6/2k5/8/8/8/8/8", -1.0f},
         std::tuple{true, "k7/2Q5/2K5/8/8/8/8/8", 0.0f}})
     {
-        multiverse_odd boards({{0, 1, player, fen}});
+        multiverse boards(timeline_layout::odd(), {{0, 1, player, fen}});
         state s(boards);
         rollout_default_policy policy({}, {}, 1, 42);
         auto result = policy.evaluate(s, {}, obs);
@@ -76,7 +76,7 @@ void test_rollout()
 
 void test_weighted_action_selection()
 {
-    multiverse_odd boards({{0, 1, false, "3k/4/1p2/KR2"}});
+    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/1p2/KR2"}});
     const state position(boards);
 
     move_evaluation_weights weights{};
@@ -183,7 +183,7 @@ void test_completion()
 
 void test_capture_ordering()
 {
-    multiverse_odd boards({{0, 1, false, "3k/4/1p2/KR2"}});
+    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/1p2/KR2"}});
     const state position(boards);
     auto root = uct_tree_policy<scored_HC_ordering>::node_t::make_root(position);
     observer obs;
@@ -199,7 +199,7 @@ void test_capture_ordering()
 void test_capture_check_progressive_widening()
 {
     // Rxb2 captures without check; Rd1 checks without capture.
-    multiverse_odd boards({{0, 1, false, "3k/4/Kp2/1R2"}});
+    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/Kp2/1R2"}});
     const state position(boards);
     observer obs;
     using policy_t = progressive_widening_tree_policy<scored_HC_ordering>;
@@ -235,7 +235,7 @@ void test_capture_check_progressive_widening()
 void test_score_table_and_generic_policies()
 {
     // Rxd2 both captures the pawn and checks the king on d4.
-    multiverse_odd boards({{0, 1, false, "3k/4/3p/K2R"}});
+    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/3p/K2R"}});
     const state position(boards);
     auto [info, space] = HC_info::build_HC(position);
     (void)space;
@@ -382,7 +382,7 @@ void test_promotion_paths()
                       promotion_options::NONE})
     {
         const full_move move(black ? "(0T1)a2a1" : "(0T1)a7a8");
-        multiverse_odd boards({{0, 1, black, black
+        multiverse boards(timeline_layout::odd(), {{0, 1, black, black
             ? "k7/8/8/8/8/8/p7/7K" : "7k/P7/8/8/8/8/8/K7"}});
         state before(boards, rules);
         state expected = before;

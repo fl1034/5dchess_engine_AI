@@ -1,7 +1,7 @@
 #include "hash.h"
 #include <array>
 #include "board.h"
-#include "multiverse_base.h"
+#include "multiverse.h"
 #include "state.h"
 
 namespace
@@ -44,8 +44,8 @@ void append_board(accumulator &hash, const board &b) noexcept
 void append_multiverse(accumulator &hash, const multiverse &m)
 {
     hash.add(UINT64_C(0x6d74762d7632)); // "mtv-v2"
-    // The supported layouts are odd (0,0) and even (-1,0). Virtual dispatch
-    // provides this distinction without RTTI or hashing the bounds themselves.
+    // The supported layouts are odd (0,0) and even (-1,0). Encode the
+    // distinction without hashing the bounds themselves.
     const auto initial_lines = m.get_initial_lines_range();
     hash.add(initial_lines.first != initial_lines.second);
 
@@ -90,7 +90,7 @@ std::uint64_t hash_state(const state &s)
 {
     accumulator hash;
     hash.add(UINT64_C(0x73746174652d7632)); // "state-v2"
-    append_multiverse(hash, *s.m);
+    append_multiverse(hash, s.m);
     const auto [present, player] = s.get_present();
     hash.add(static_cast<std::uint64_t>(present));
     hash.add(player);

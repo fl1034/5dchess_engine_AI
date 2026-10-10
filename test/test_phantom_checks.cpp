@@ -11,7 +11,7 @@ state cross_line_position(bool mover)
     board source(empty), target(empty);
     source.set_piece(ppos(3,3),mover ? ROOK_W : ROOK_B);
     target.set_piece(ppos(3,3),mover ? KING_B : KING_W);
-    multiverse_odd m({{0,1,mover,source.get_fen<true>()},
+    multiverse m(timeline_layout::odd(), {{0,1,mover,source.get_fen<true>()},
                       {1,1,mover,target.get_fen<true>()}});
     return state(m);
 }
@@ -21,7 +21,7 @@ state physical_position(bool mover)
     board b(empty);
     b.set_piece(ppos(3,3),mover ? KING_B : KING_W);
     b.set_piece(ppos(3,6),mover ? ROOK_W : ROOK_B);
-    multiverse_odd m({{0,1,mover,b.get_fen<true>()}});
+    multiverse m(timeline_layout::odd(), {{0,1,mover,b.get_fen<true>()}});
     return state(m);
 }
 
@@ -66,7 +66,7 @@ void test_phantom_cases()
         // During an action the stored player must be used, even after the
         // apparent present has changed to the opponent before submit().
         const std::string fen = mover ? "8/8/8/8/8/8/8/r7" : "8/8/8/8/8/8/8/R7";
-        multiverse_odd m({{0,1,mover,fen}, {1,1,mover,fen}});
+        multiverse m(timeline_layout::odd(), {{0,1,mover,fen}, {1,1,mover,fen}});
         state partial(m);
         compare_phantom(partial);
         assert(partial.apply_move<true>(full_move(vec4(0,0,1,0),vec4(0,1,1,0))));
@@ -84,7 +84,7 @@ void test_phantom_cases()
         assert(partial.submit());
         compare_phantom(partial);
 
-        multiverse_even even({{-1,1,mover,fen}, {0,1,mover,fen}});
+        multiverse even(timeline_layout::even(), {{-1,1,mover,fen}, {0,1,mover,fen}});
         compare_phantom(state(even));
     }
 }

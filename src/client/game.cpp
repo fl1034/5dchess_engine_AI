@@ -39,9 +39,8 @@ game game::from_pgn(std::string input)
         throw std::runtime_error("Bad input, parse failed");
     pgnparser_ast::gametree &gt_ast = ag->gt;
     variant_setup_t variant_setup = derive_variant_setup(*ag);
-    std::unique_ptr<multiverse> m = create_multiverse_from_variant_setup(variant_setup);
     game g(gnode<comments_t>::create_root(
-        state(*m, variant_setup.promotions), ag->comments));
+        state(create_multiverse_from_variant_setup(variant_setup), variant_setup.promotions), ag->comments));
     g.metadata = ag->headers;
     g.metadata["timeline"] = variant_setup.is_even_timelines ? "even" : "odd";
     g.metadata["size"] = std::to_string(variant_setup.size_x) + "x" + std::to_string(variant_setup.size_y);

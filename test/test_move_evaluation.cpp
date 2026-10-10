@@ -237,7 +237,7 @@ void test_pruned_coordinate_gaps()
 
 void test_superphysical_scoring()
 {
-    multiverse_odd boards({
+    multiverse boards(timeline_layout::odd(), {
         {-1, 1, false, "r6k/8/8/8/8/8/8/K7"},
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });

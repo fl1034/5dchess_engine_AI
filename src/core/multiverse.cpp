@@ -1,4 +1,4 @@
-#include "multiverse_base.h"
+#include "multiverse.h"
 #include "utils.h"
 #include "magic.h"
 #include <bit>
@@ -19,7 +19,7 @@
 l_to_u make use of the bijection from integers to non-negative integers:
 x -> ~(x>>1)
  */
-constexpr static int l_to_u(int l)
+constexpr static int l_to_u(int l) noexcept
 {
     if(l >= 0)
         return static_cast<int>(static_cast<unsigned int>(l) << 1);
@@ -29,9 +29,9 @@ constexpr static int l_to_u(int l)
 
 constexpr static int tc_to_v(int t, bool c)
 {
-    const unsigned int encoded = static_cast<unsigned int>(t) << 1
-                               | static_cast<unsigned int>(c);
-    return std::bit_cast<int>(encoded);
+    const unsigned int v = static_cast<unsigned int>(t) << 1
+                         | static_cast<unsigned int>(c);
+    return std::bit_cast<int>(v);
 }
 
 constexpr static int u_to_l(int u)
@@ -42,13 +42,13 @@ constexpr static int u_to_l(int u)
         return u >> 1;
 }
 
-constexpr static std::pair<int, bool> v_to_tc(int v)
+constexpr static std::pair<int, bool> v_to_tc(int v) noexcept
 {
     return {v >> 1, static_cast<bool>(v & 1)};
 }
 
-multiverse::multiverse(std::vector<std::tuple<int, int, bool, std::string>> bds, int size_x, int size_y)
-: size_x(size_x), size_y(size_y), l_min(0), l_max(0)
+multiverse::multiverse(timeline_layout layout, std::vector<boards_info_t> bds, int size_x, int size_y)
+: layout(layout), size_x(size_x), size_y(size_y), l_min(0), l_max(0)
 {
     if(bds.empty())
         throw std::runtime_error("multiverse(): Empty input");
@@ -70,9 +70,10 @@ multiverse::multiverse(std::vector<std::tuple<int, int, bool, std::string>> bds,
             }
         }
     }
+    std::tie(active_min, active_max) = calculate_active_range();
 }
 
-turn_t multiverse::get_present() const
+turn_t multiverse::get_present() const noexcept
 {
     int present_v = std::numeric_limits<int>::max();
     for(int l = active_min; l <= active_max; l++)
@@ -207,9 +208,12 @@ void multiverse::insert_board(int l, int t, bool c, const std::shared_ptr<board>
     assert(std::make_pair(active_min, active_max) == calculate_active_range());
 }
 
-void multiverse::update_active_range()
+std::pair<int,int> multiverse::calculate_active_range() const noexcept
 {
-    std::tie(active_min, active_max) = calculate_active_range();
+    const int left_extent = layout.mirror(l_min);
+    const int common_extent = std::min(left_extent, l_max);
+    const int radius = common_extent + (common_extent < std::max(left_extent, l_max));
+    return {std::max(l_min, layout.mirror(radius)), std::min(l_max, radius)};
 }
 
 template<bool SHOW_UMOVE>

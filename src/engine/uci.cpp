@@ -429,8 +429,7 @@ void engine::set_position(const std::string &position, const std::string &moves)
 
         vs.is_even_timelines = is_even;
 
-        auto mv = create_multiverse_from_variant_setup(vs);
-        candidate.emplace(*mv);
+        candidate.emplace(create_multiverse_from_variant_setup(vs));
     }
 
     // apply moves if any
