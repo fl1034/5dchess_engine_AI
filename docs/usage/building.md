@@ -106,8 +106,8 @@ cmake --build build-wasm --parallel
 
 The static website is generated in the `build-wasm/ui/`.
 
-For controls, settings, game information, and exports, see the
-[web analyzer guide](analyzer.md).
+For interface structure and behavior, see
+[Web UI architecture](../architecture/webui.md).
 
 ### Serving the browser interface
 

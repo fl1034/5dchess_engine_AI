@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const source = await readFile(new URL('../../ui/scripts/piece.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../scripts/piece.js', import.meta.url), 'utf8');
 
 test('piece LOD caches remain independent and are reused across zoom changes', async () => {
     const originals = new Map(['window', 'document', 'Image', 'createImageBitmap'].map(key =>

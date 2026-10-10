@@ -1,5 +1,6 @@
-// One set of game controls, reparented when a phone-sized viewport needs a compact layout.
-export const compactViewport = window.matchMedia('(max-width: 600px), (max-width: 960px) and (max-height: 500px)');
+// Reuse the compact shell unless the viewport meets every desktop requirement.
+// `not all` negates the entire condition, including the minimum width/height ratio.
+export const compactViewport = window.matchMedia('not all and (min-width: 1100px) and (min-height: 600px) and (min-aspect-ratio: 4/5)');
 
 export function initMobileLayout() {
     const shell = document.getElementById('mobileLayout');

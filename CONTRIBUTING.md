@@ -58,9 +58,9 @@ For Python scripts and bindings, run from the repository root:
 python -m unittest discover -s scripts/test -v
 ```
 
-See the [Python test guide](scripts/test/README.md) for dependencies and coverage. Skipped tests do not verify the skipped behavior.
+See the [Python test guide](scripts/test/README.md) for dependencies and coverage. Skipped tests do not verify the skipped behavior. JavaScript UI tests live in `ui/test/`; see the [web UI test guide](ui/test/README.md).
 
-Add a regression test for behavior fixes when a practical test is available.
+Add a regression test for behavior fixes only when the test is practical, maintainable and useful for future development. Do introduce tests in this repository that are platform-specific, requires new dependencies, or requires files from external or gitignored sources.
 
 ## Documentation
 

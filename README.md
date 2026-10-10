@@ -62,13 +62,13 @@ See the [build guide](docs/usage/building.md) for platform details, Python bindi
 
 | Task | Guide |
 |---|---|
-| Use the web game analyzer | [Web analyzer](docs/usage/analyzer.md) |
 | Build native programs, Python bindings, or the web interface | [Building](docs/usage/building.md) |
 | Choose an engine, configure search, or run autoplay matches | [Engine usage](docs/engine/usage.md) |
 | Inspect positions and enumerate legal actions | [Command-line tools](docs/usage/tools.md) |
 | Manage engine ratings and schedule matches | [Elo registry and matchmaker](docs/engine/elo-matchmaker.md) |
 | Understand the linear evaluation model | [Linear features](docs/engine/linear-features.md) |
 | Understand game logic and client design | [Core architecture](docs/architecture/core.md) · [Client architecture](docs/architecture/client.md) |
+| Understand the web interface | [Web UI architecture](docs/architecture/webui.md) |
 | Integrate an engine or read game notation | [5DUCI](docs/5duci.md) · [Branched 5DPGN](docs/branched-5dpgn.md) |
 
 See the [documentation guide](docs/README.md) for algorithm explanations, formal grammar, and experimental reports.

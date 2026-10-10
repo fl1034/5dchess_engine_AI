@@ -1,41 +1,26 @@
-/* Shared desktop supporting panels, using Material 3 spacing increments. */
+/* Shared desktop anchors; the canvas remains usable between floating panels. */
 .top-panels {
     --panel-margin: 24px;
-    --panel-gap: 16px;
+    --panel-gap: 24px;
+    --metadata-expanded-width: 380px;
     position: fixed;
     inset: var(--panel-margin) var(--panel-margin) auto;
     display: grid;
-    grid-template-columns: auto minmax(200px, 1fr) 200px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: start;
     gap: var(--panel-gap);
     pointer-events: none;
     z-index: 100;
 }
 .top-panels > * { pointer-events: auto; }
-.top-panels .game-metadata { grid-column: 1; grid-row: 1; }
-.top-panels .hud-wrapper { grid-column: 2; grid-row: 1; }
-.top-panels .control-panel { grid-column: 3; grid-row: 1; }
-@media (min-width: 1200px) {
-    .top-panels { --panel-gap: 24px; }
+.top-panels .game-metadata { grid-column: 1; grid-row: 1; justify-self: start; }
+.top-panels .hud-wrapper {
+    grid-column: 2;
+    grid-row: 1;
+    /* Keep the same centered width for every metadata visibility/expansion state. */
+    width: min(440px, calc(100vw - 2 * (var(--panel-margin) + var(--metadata-expanded-width) + var(--panel-gap))));
 }
-/* Stack status only when its minimum width no longer fits alongside metadata. */
-@media (max-width: 859px) {
-    .top-panels:has(.game-metadata.expanded:not([hidden])) { grid-template-columns: minmax(200px, 1fr) 200px; }
-    .top-panels:has(.game-metadata.expanded:not([hidden])) .hud-wrapper { grid-column: 1; grid-row: 2; }
-    .top-panels:has(.game-metadata.expanded:not([hidden])) .control-panel { position: absolute; top: 0; right: 0; }
-}
-@media (max-width: 769px) {
-    .top-panels { grid-template-columns: minmax(200px, 1fr) 200px; }
-    .top-panels .hud-wrapper { grid-column: 1; grid-row: 2; }
-    .top-panels .control-panel { position: absolute; top: 0; right: 0; }
-}
-
-
-
-/* Hidden metadata releases its column and the status panel's second row. */
-.top-panels:has(> .game-metadata[hidden]) { grid-template-columns: minmax(200px, 1fr) 200px; }
-.top-panels:has(> .game-metadata[hidden]) .hud-wrapper { grid-column: 1; grid-row: 1; }
-.top-panels:has(> .game-metadata[hidden]) .control-panel { grid-column: 2; }
+.top-panels .control-panel { grid-column: 3; grid-row: 1; justify-self: end; }
 .game-metadata[hidden] { display: none; }
 
 /* ================= HUD Wrapper ================= */
@@ -509,7 +494,7 @@ body:not(.compact-layout) .hint-btn:focus-visible {
 .buttons-panel {
     color: var(--ui-text);
     position: fixed;
-    bottom: 18px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     background: var(--ui-panel-floating);
@@ -579,7 +564,7 @@ body:not(.compact-layout) .hint-btn:focus-visible {
     overflow: hidden;
     transition: width 0.25s ease;
 }
-.game-metadata.expanded { width: 380px; }
+.game-metadata.expanded { width: var(--metadata-expanded-width, 380px); }
 .game-metadata [hidden] { display: none; }
 .game-metadata-summary {
     display: flex;

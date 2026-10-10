@@ -1,10 +1,10 @@
-// UI gesture regressions. Run with: node --test scripts/test/test_ui_canvas.mjs
+// UI gesture regressions. Run with: node --test ui/test/test_ui_canvas.mjs
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 // The browser sources are ES modules; load without changing ui/'s local Node configuration.
-const source = await readFile(new URL('../../ui/scripts/canvas.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../scripts/canvas.js', import.meta.url), 'utf8');
 const { InfiniteScrollableCanvas } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 function fixture() {
