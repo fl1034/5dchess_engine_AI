@@ -117,3 +117,100 @@ test('changing the preference redraws without moving boards or the camera', () =
     assert.equal(before[0] - after[0], 70);
     assert.equal(before[1], after[1]);
 });
+
+function arrowCanvas(zoom, flipped = false) {
+    const canvas = board(8, 8, flipped, false);
+    canvas.infCanvas.viewportSize = { width: 500, height: 400 };
+    canvas.infCanvas.cameraCurrent.getZoomLevel = () => zoom;
+    canvas.data = { boards: [], highlights: [{ color: 'arrow', arrows: [{
+        from: { l: 0, t: -1, c: true, x: 7, y: 7 },
+        to: { l: 0, t: 2, c: true, x: 0, y: 7 },
+    }] }] };
+    canvas.colors = {};
+    canvas.cameraElement = {};
+    canvas.filterCache = { bounds: [] };
+    canvas._resolveColor = color => color;
+    const fills = [];
+    let paths = 0, gradients = 0;
+    canvas._drawArrow = () => paths++;
+    const ctx = {
+        save() {}, restore() {}, fillRect() {}, fillText() {},
+        measureText() { return { actualBoundingBoxAscent: 2 }; },
+        fill() { fills.push(this.globalAlpha); },
+        createLinearGradient() { gradients++; return { addColorStop() {} }; },
+    };
+    return { canvas, ctx, fills, work: () => ({ paths, gradients }) };
+}
+
+test('arrows fade by proportional endpoint distance at every canvas size, zoom and orientation', () => {
+    for (const [width, height] of [[500, 400], [800, 600], [400, 500], [600, 800]]) {
+        for (const zoom of [1, 2, 4]) {
+            for (const flipped of [false, true]) {
+                const { canvas, ctx, fills, work } = arrowCanvas(zoom, flipped);
+                canvas.infCanvas.viewportSize = { width, height };
+                const fadeDistance = 0.2 * Math.max(width, height);
+                const arrow = canvas.data.highlights[0].arrows[0];
+                const [fromX, fromY] = canvas._getCoordinate(arrow.from);
+                const [toX] = canvas._getCoordinate(arrow.to);
+                const leftEndpoint = Math.min(fromX, toX) + 5;
+                const rightEndpoint = Math.max(fromX, toX) + 5;
+                const render = distance => canvas.renderBoards(ctx, {
+                    left: leftEndpoint + distance / 100 * fadeDistance / zoom,
+                    right: rightEndpoint - distance / 100 * fadeDistance / zoom,
+                    top: fromY, bottom: fromY + 10,
+                });
+                render(0);
+                render(25);
+                render(50);
+                render(75);
+                render(99);
+                assert.equal(fills[0], 0.8);
+                assert(Math.abs(fills[2] - 0.4) < 1e-12);
+                assert(fills.every((alpha, i) => i === 0 || alpha < fills[i - 1]));
+                const before = work();
+                render(100);
+                render(125);
+                assert.deepEqual(work(), before, 'fully faded arrows create no paths or gradients');
+                render(0);
+                assert.equal(fills.at(-1), 0.8, 'returning to an endpoint restores opacity');
+            }
+        }
+    }
+});
+
+test('resizing the canvas updates arrow opacity without changing the camera', () => {
+    const { canvas, ctx, fills } = arrowCanvas(1);
+    const bounds = { left: 75, right: 355, top: 0, bottom: 10 };
+    canvas.renderBoards(ctx, bounds);
+    assert.equal(fills.length, 0, '100 pixel distance reaches the original fade limit');
+    canvas.infCanvas.viewportSize = { width: 1000, height: 400 };
+    canvas.renderBoards(ctx, bounds);
+    assert.equal(fills.at(-1), 0.4, '100 pixel distance is halfway through the resized fade range');
+});
+
+test('arrow candidates survive board cutoffs and refilter when the zoom margin changes', () => {
+    const { canvas, ctx, fills } = arrowCanvas(1);
+    // Both endpoint boards are outside the original grid filter; the nearer
+    // endpoint is only 50 CSS pixels outside the viewport.
+    canvas.renderBoards(ctx, { left: 25, right: 355, top: 0, bottom: 10 });
+    assert.deepEqual(fills, [0.4]);
+    canvas._filterBoardData(0, 1, 0, 4, 0, 0);
+    assert.equal(canvas.filterCache.filteredArrowHighlight.arrow.length, 0);
+    canvas._filterBoardData(0, 1, 0, 4, 1, 1);
+    assert.equal(canvas.filterCache.filteredArrowHighlight.arrow.length, 1);
+    canvas._filterBoardData(0, 1, 0, 4, 0, 0);
+    assert.equal(canvas.filterCache.filteredArrowHighlight.arrow.length, 0);
+});
+
+test('a visible endpoint keeps full opacity and corner distance fades smoothly', () => {
+    const { canvas, ctx, fills } = arrowCanvas(1);
+    canvas.renderBoards(ctx, { left: -30, right: 200, top: 0, bottom: 100 });
+    assert.equal(fills.at(-1), 0.8, 'one visible endpoint is enough');
+    // The nearer endpoint is 30 pixels left and 40 pixels above the viewport.
+    canvas.renderBoards(ctx, { left: 5, right: 200, top: 45, bottom: 100 });
+    assert.equal(fills.at(-1), 0.4);
+    // With both endpoints directly above the viewport, vertical distance alone
+    // controls fading.
+    canvas.renderBoards(ctx, { left: -30, right: 510, top: 55, bottom: 100 });
+    assert.equal(fills.at(-1), 0.4);
+});

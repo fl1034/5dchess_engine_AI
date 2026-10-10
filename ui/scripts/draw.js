@@ -7,6 +7,13 @@ import { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } 
 import { chooseLOD } from 'piece';
 import { loadColors, applyFadeToColors, applyFadeToColorString, resolveColor } from 'color';
 
+function distanceToBounds(x, y, bounds) {
+    return Math.hypot(
+        Math.max(bounds.left - x, 0, x - bounds.right),
+        Math.max(bounds.top - y, 0, y - bounds.bottom)
+    );
+}
+
 function smoothClamp(a, b, x) {
   if (x <= a) return 0;
   if (x >= b) return 1;
@@ -204,10 +211,13 @@ export default class ChessBoardCanvas
     }
 
     // Filter board data based on visible bounds (with caching)
-    _filterBoardData(displayLMin, displayLMax, vMin, vMax) {
+    _filterBoardData(displayLMin, displayLMax, vMin, vMax, arrowMarginL = 0, arrowMarginV = 0) {
         const cache = this.filterCache;
-        const bounds = [displayLMin, displayLMax, vMin, vMax, this.flipped];
+        const bounds = [displayLMin, displayLMax, vMin, vMax, this.flipped, arrowMarginL, arrowMarginV];
         const [lMin, lMax] = this._actualLRangeFromDisplay(displayLMin, displayLMax);
+        const [arrowLMin, arrowLMax] = this._actualLRangeFromDisplay(
+            displayLMin - arrowMarginL, displayLMax + arrowMarginL
+        );
         
         // Check if cache is still valid
         if (cache.bounds.length === bounds.length && cache.bounds.every((v, i) => v === bounds[i])) {
@@ -249,8 +259,8 @@ export default class ChessBoardCanvas
                     cache.filteredArrowHighlight[color] = colorBlock.arrows.filter((pos) => {
                         let l1 = pos.from.l, v1 = pos.from.t << 1 | pos.from.c;
                         let l2 = pos.to.l, v2 = pos.to.t << 1 | pos.to.c;
-                        return !(l1 < lMin || l1 > lMax || v1 < vMin || v1 > vMax) ||
-                               !(l2 < lMin || l2 > lMax || v2 < vMin || v2 > vMax);
+                        return !(l1 < arrowLMin || l1 > arrowLMax || v1 < vMin - arrowMarginV || v1 > vMax + arrowMarginV) ||
+                               !(l2 < arrowLMin || l2 > arrowLMax || v2 < vMin - arrowMarginV || v2 > vMax + arrowMarginV);
                     });
                 }
                 
@@ -291,7 +301,7 @@ export default class ChessBoardCanvas
     }
 
     // Main drawing method
-    drawBoards(ctx, lMin, lMax, vMin, vMax) {
+    drawBoards(ctx, lMin, lMax, vMin, vMax, bounds = null) {
         if (!this.data) return;
         
         // Update camera status display
@@ -300,10 +310,15 @@ export default class ChessBoardCanvas
         }
         
         // Filter data based on visible bounds (with caching)
-        this._filterBoardData(lMin, lMax, vMin, vMax);
+        const zoom = this.infCanvas.cameraCurrent.getZoomLevel();
+        const { width, height } = this.infCanvas.viewportSize;
+        const fadeDistance = 0.2 * Math.max(width, height) / zoom;
+        this._filterBoardData(lMin, lMax, vMin, vMax,
+            bounds ? Math.ceil(fadeDistance / this.boardSkipY) : 0,
+            bounds ? Math.ceil(fadeDistance / this.boardSkipX) : 0);
         
         const cache = this.filterCache;
-        const squareLength = this.infCanvas.cameraCurrent.getZoomLevel() * this.squareSize;
+        const squareLength = zoom * this.squareSize;
         
         // Layer 1: Background grid on multiverse
         ctx.fillStyle = this.colors.spGridWhite;
@@ -639,11 +654,17 @@ export default class ChessBoardCanvas
             ctx.lineWidth = 1;
             
             for (let arrow of cache.filteredArrowHighlight[color]) {
-                ctx.save();
-                
                 const [fromX, fromY] = this._getCoordinate(arrow.from);
                 const [toX, toY] = this._getCoordinate(arrow.to);
                 const r = this.squareSize / 2;
+                const distance = bounds ? Math.min(
+                    distanceToBounds(fromX + r, fromY + r, bounds),
+                    distanceToBounds(toX + r, toY + r, bounds)
+                ) : 0;
+                const opacity = 1 - smoothClamp(0, fadeDistance, distance);
+                if (opacity === 0) continue;
+                ctx.save();
+                ctx.globalAlpha = 0.8 * opacity;
                 
                 this._drawArrow(ctx, fromX + r, fromY + r, toX + r, toY + r);
                 
@@ -705,7 +726,7 @@ export default class ChessBoardCanvas
         const vMax = Math.ceil(bounds.right / this.boardSkipX);
         
         // Call the drawing method (can be overridden)
-        this.drawBoards(ctx, lMin, lMax, vMin, vMax);
+        this.drawBoards(ctx, lMin, lMax, vMin, vMax, bounds);
         
         /*
         // Debug: origin indicator

@@ -147,6 +147,11 @@ moves. Dark marks it in indigo, with cyan White moves and rose Black moves.
 Generated moves use green/teal, and check uses the Material error color.
 The shared palette is defined in
 `ui/styles/color-schemes.css`; hover and pressed colors follow it automatically.
+Scrollable panels, dialog content, and form controls share thin, theme-colored
+scrollbar thumbs with transparent tracks and corners, so no rail is visible.
+WebKit and Chromium use `::-webkit-scrollbar` pseudo-elements with native
+scrollbar properties reset to `auto`. Firefox uses the standard scrollbar color
+and width properties even when it accepts WebKit selectors in feature queries.
 
 ### Stylesheet responsibilities
 
@@ -174,6 +179,15 @@ coordinates, flipping, focus, and chess-specific rendering. Draft moves,
 historical moves, selectable destinations, ordinary checks, and phantom checks
 are drawn as separate highlights and arrows supplied by the worker. Phantom
 visibility is controlled locally and requests refreshed display data.
+
+Arrows retain their normal opacity while either endpoint is inside the viewport.
+When both endpoints leave it, opacity smoothly decreases with the distance of
+the nearer endpoint from the viewport, reaching zero at 20% of the larger canvas
+dimension. This distance scales with the canvas size and stays consistent across
+zoom levels and display densities. The coarse arrow filter includes that fade
+margin, and fully transparent arrows are skipped
+before creating their paths or gradients. Panning or zooming back restores opacity
+using the same distance rule.
 
 Flip reverses timeline order and both ranks and files inside each board, giving
 Black's perspective. Under Settings → Interface, **Do not reverse files when

@@ -23,6 +23,9 @@ These tests exercise canvas, filename, and piece-cache behavior without a browse
 Flip tests cover coordinate and click agreement on rectangular boards, rendering
 alignment of pieces, squares, labels, highlights and arrows, and changing the
 file-order preference without moving boards or the camera.
+Arrow tests cover endpoint-distance fading across canvas sizes, zoom levels and board
+orientations, restoration on returning to an endpoint, skipping paths and
+gradients at zero opacity, and candidate filtering across board boundaries.
 Piece-cache tests use a simulated canvas; actual raster pixels need browser checks. Layout and game-control
 integration should also be checked in the built WebAssembly interface at phone
 portrait, phone landscape, tablet, and desktop sizes.
@@ -49,6 +52,13 @@ files should return to left-to-right order without moving boards or the camera.
 Verify piece selection and arrows in both modes, then reload to confirm the
 checkbox preference persists. Unflipped boards should always show files left to
 right.
+
+For arrow fading, zoom into the middle of a long arrow until both endpoints
+leave the viewport. The shaft should fade smoothly and disappear once the nearer
+endpoint is outside by 20% of the larger canvas dimension. Zoom out or pan back
+to an endpoint and
+verify that opacity returns smoothly. Repeat while flipped and with an endpoint
+leaving through a viewport corner.
 
 For comment saving, type several lines using Enter, including an empty line, then
 click Update Comment. Verify the worker response retains each line and repeat with

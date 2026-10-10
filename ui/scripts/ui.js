@@ -822,6 +822,21 @@ export const UI = (() => {
         }
     }
 
+    // The guide follows the initial browser layout; a manual choice lasts until reload.
+    const interfaceGuideChoices = document.querySelectorAll('input[name="interfaceGuide"]');
+    const interfaceGuideDesktop = document.getElementById('interfaceGuideDesktop');
+    const interfaceGuideMobile = document.getElementById('interfaceGuideMobile');
+    function updateInterfaceGuide() {
+        const mobile = document.querySelector('input[name="interfaceGuide"]:checked').value === 'mobile';
+        interfaceGuideDesktop.hidden = mobile;
+        interfaceGuideMobile.hidden = !mobile;
+    }
+    interfaceGuideChoices.forEach(choice => {
+        choice.checked = choice.value === (compactViewport.matches ? 'mobile' : 'desktop');
+        choice.addEventListener('change', updateInterfaceGuide);
+    });
+    updateInterfaceGuide();
+
     // Handle info popup tabs
     const infoTabBtns = document.querySelectorAll('.info-tab-btn');
     const infoTabContents = document.querySelectorAll('.info-tab-content');

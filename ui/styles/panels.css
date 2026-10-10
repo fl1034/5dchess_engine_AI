@@ -236,18 +236,6 @@
     color: var(--ui-muted);
 }
 
-/* Scrollbar */
-.hud-text::-webkit-scrollbar {
-    width: 6px;
-}
-.hud-text::-webkit-scrollbar-thumb {
-    background: var(--ui-scrollbar);
-    border-radius: 4px;
-}
-.hud-text::-webkit-scrollbar-track {
-    background: transparent;
-}
-
 /* ================= Toggle ================= */
 .hud-toggle, .panel-toggle {
     appearance: none;
@@ -414,17 +402,6 @@
 .control-panel.expanded .select-container {
     opacity: 1;
     transition: opacity 0.25s ease;
-}
-
-.select-container::-webkit-scrollbar {
-    width: 6px;
-}
-.select-container::-webkit-scrollbar-thumb {
-    background: var(--ui-scrollbar);
-    border-radius: 4px;
-}
-.select-container::-webkit-scrollbar-track {
-    background: transparent;
 }
 
 .select-option {

@@ -79,17 +79,6 @@
     display: flex;
 }
 
-.popup-window::-webkit-scrollbar {
-    width: 6px;
-}
-.popup-window::-webkit-scrollbar-thumb {
-    background: var(--ui-scrollbar);
-    border-radius: 4px;
-}
-.popup-window::-webkit-scrollbar-track {
-    background: transparent;
-}
-
 .popup-header {
     display: flex;
     align-items: center;
@@ -247,6 +236,18 @@
 
 .popup-control-select {
     align-items: center;
+}
+
+.interface-guide-options {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.interface-guide-choice {
+    width: auto;
+    align-items: center;
+    gap: 4px;
 }
 
 .popup-control-description {
