@@ -13,6 +13,8 @@ remain in [Building](../usage/building.md#webassembly).
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
+| `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and Space dispatch |
+| `scripts/navigation.js` | Nearest-board and directional searches in displayed grid coordinates |
 | `scripts/mobile.js` | Moves the same controls into the compact shell and manages its open sheet |
 | `scripts/metadata.js` | Formats headers and controls metadata visibility and expansion |
 | `scripts/worker.js` | Loads the Wasm module, owns the game and private next hint, handles commands, and assembles display data |
@@ -145,6 +147,11 @@ moves. Dark marks it in indigo, with cyan White moves and rose Black moves.
 Generated moves use green/teal, and check uses the Material error color.
 The shared palette is defined in
 `ui/styles/color-schemes.css`; hover and pressed colors follow it automatically.
+Scrollable panels, dialog content, and form controls share thin, theme-colored
+scrollbar thumbs with transparent tracks and corners, so no rail is visible.
+WebKit and Chromium use `::-webkit-scrollbar` pseudo-elements with native
+scrollbar properties reset to `auto`. Firefox uses the standard scrollbar color
+and width properties even when it accepts WebKit selectors in feature queries.
 
 ### Stylesheet responsibilities
 
@@ -173,6 +180,98 @@ historical moves, selectable destinations, ordinary checks, and phantom checks
 are drawn as separate highlights and arrows supplied by the worker. Phantom
 visibility is controlled locally and requests refreshed display data.
 
+Arrows retain their normal opacity while either endpoint is inside the viewport.
+When both endpoints leave it, opacity smoothly decreases with the distance of
+the nearer endpoint from the viewport, reaching zero at 20% of the larger canvas
+dimension. This distance scales with the canvas size and stays consistent across
+zoom levels and display densities. The coarse arrow filter includes that fade
+margin, and fully transparent arrows are skipped
+before creating their paths or gradients. Panning or zooming back restores opacity
+using the same distance rule.
+
+Flip reverses timeline order and both ranks and files inside each board, giving
+Black's perspective. Under Settings → Interface, **Do not reverse files when
+flipped** keeps files running left to right while retaining the flipped ranks
+and timeline order. The checkbox defaults to off and is saved in browser storage.
+Changing it redraws board contents immediately without moving boards or the
+camera. Pieces, square colors, coordinate labels, highlights, arrows, and click
+coordinates all follow the selected orientation; artwork and text stay upright.
+
+### Canvas keyboard navigation
+
+F retains the Focus button's cycle through game-provided focus points. Space
+centers the nearest visible board at the normal Focus zoom. If the camera is
+already at a normal Focus view, Space widens around that board to show at least
+a 3 × 3 neighborhood, including gaps; its zoom is at most 40% of the Focus scale.
+There is no timing window. During motion, the destination is checked instead,
+so rapid presses can widen the same board before the first animation finishes.
+Position matching allows 0.5 CSS pixels per axis and zoom matching allows a
+0.1% relative difference. From the wide view, Space returns to normal Focus.
+Shift+Space requests the wide view directly. Holding Space or F does not repeat.
+
+W/A/S/D moves up/left/down/right while preserving zoom. Held keys combine into
+a direction vector: W+A is up-left, opposite keys cancel per axis, and releasing
+one key continues along the remaining direction. The initial step waits up to
+40 ms to recognize a chord, or commits on key release for shorter taps. Chords
+within that window select the same diagonal regardless of key order.
+
+Navigation starts at the grid position nearest the camera target, uses displayed
+coordinates after flipping, and skips gaps to the closest visible board on the
+cardinal or diagonal ray. If there is none, it advances one grid step into empty
+space. Visible phantom previews participate; hidden previews are excluded.
+
+Holding starts automatic movement after 250 ms, accelerating over 1.5 seconds
+from four to ten horizontal board spacings per second at normal Focus zoom.
+The speed budget is measured in screen distance: smaller zoom means more grid
+steps per second, and diagonal travel is normalized by its actual step length.
+Fractional steps accumulate across frames; distant views batch multiple steps
+into one destination, including sparse-board skips. Adding or releasing a key
+preserves acceleration. Browser key repeat does not drive movement. Release of
+all keys stops further destinations; focus changes, pointer/wheel activity,
+window blur, and blocked input cancel held keys and the pending chord. All
+commands use the camera `moveTo` path and do not select pieces or modify the game.
+
+Camera position and logarithmic zoom use a corrected exponential curve with a
+finite duration, ending exactly at the destination with zero velocity. Duration
+is `ln(1 + G) / k` milliseconds, where
+`G = max(abs(dx)/0.1, abs(dy)/0.1, abs(targetScale-currentScale)*ln(2)/ln(1.02))`.
+Position differences use world coordinates directly, and the gauges reproduce
+the original stopping tolerances: 0.1 world units and approximately 2% zoom.
+Scale is logarithmic base two, so multiplying its difference by `ln(2)` gives
+`ln(newZoom / oldZoom)`. At the default decay rate, one horizontal board
+(100 world units) takes about 747 ms, and a zoom-only doubling or halving takes
+about 388 ms. Duration is independent of starting zoom for equal world movement.
+The decay constant matches the original smoothing at 60 FPS. Motion is the
+analytic solution of `dc/dt = lambda(T-t) * (target-c)`, where
+`lambda(tau) = k * expm1(k*tau) / (expm1(k*tau) - k*tau)`.
+The remaining error is proportional to
+`(expm1(k*(T-t)) - k*(T-t)) / (expm1(k*T) - k*T)`. Position and
+logarithmic zoom share this response on every frame, including after a target
+change. Retargeting starts from the current camera and recomputes duration;
+there are no independent velocity-preserving curves per component. All axes
+start and decelerate together, and reach zero remaining error and velocity at
+the endpoint. Small durations use a series expansion to avoid numerical
+cancellation. Frame subdivision does not change the trajectory. The same
+duration rule applies to held navigation.
+
+Mouse and touch drags take over from the rendered camera, use the starting drag
+zoom for pointer displacement, cancel pending zoom, and restart the shared
+response as pointer targets change. Rendering continues until the exact endpoint.
+
+Shortcuts are available outside text entry without requiring canvas focus.
+Editable descendants, form fields, IME composition, browser modifier commands,
+open dialogs, and the compact tools menu take priority. Native Space/Enter
+activation on buttons is retained. Pointer activation of game-navigation
+buttons returns focus to the canvas; keyboard activation retains button focus.
+Clicking the canvas explicitly focuses it without scrolling the page. The
+editor's caret and an opaque, uniform theme tint across its status/comment panel
+show only while the editor has focus. In compact layout, the comment sheet receives
+the tint. The editing surface mixes 10% primary color into the panel color to
+separate text entry from the busy canvas. Focusing other panel controls does not activate it. Leaving the editor
+preserves the draft and remembers the text selection for keyboard return. The
+canvas and editor have no large focus outlines; the canvas remains in the normal
+Tab order, and buttons retain their keyboard focus indicators.
+
 ### Desktop panels and metadata
 
 Game information, status, and navigation share a top-aligned grid with 24-pixel
@@ -180,6 +279,9 @@ outer margins and gaps. Metadata stays at the top left and the 200-pixel-wide
 navigation panel stays at the top right. Status and the bottom toolbar share
 the full viewport's horizontal center; the toolbar sits 24 pixels above the
 bottom edge. The canvas remains full width beneath these floating panels.
+The status title is centered independently of the light, which sits 16 pixels
+from the right edge. Symmetric header padding reserves space for the light; long
+status titles truncate rather than overlap it.
 
 The HUD is at most 440 pixels wide, narrowing to 244 pixels at a viewport width
 of 1100 pixels to leave a 24-pixel gap beside expanded metadata. Its width and
@@ -205,6 +307,14 @@ metadata and centered shallow highlights for HUD and navigation (480 × 50 and
 320 × 48 pixels respectively). Hint has its own neutral surface above the
 continuations and highlights independently of the selected option.
 
+The HUD and navigation expand/fold controls are native buttons with accessible
+names, controlled-region references, and synchronized expanded states. Tab
+focuses them and Enter or Space activates them without triggering game shortcuts.
+Their normal and hover appearance is unchanged; keyboard focus adds an inset
+outline. Automatic comment expansion also updates the HUD button state. Hidden comment content,
+inactive comment actions, and collapsed continuations are excluded from keyboard
+focus; focusing invisible content must not scroll a collapsed panel.
+
 ### Continuations and move notation
 
 The worker formats child actions through `get_child_actions(flags)`. The saved
@@ -222,7 +332,10 @@ Next submits its action to the worker for navigation.
 
 The HUD's editable comment area tracks the current node's comment, draft edits,
 and Update/Discard actions. Worker updates refresh the HUD text; saving sends
-`update_comment`. Automatic comment expansion is suppressed in compact mode.
+`update_comment`. The shared comment reader preserves editable block boundaries,
+blank lines, and Shift+Enter breaks while ignoring trailing browser caret
+placeholders. Saving, dirty-state checks, validation, and draft reads use the
+same text representation. Automatic comment expansion is suppressed in compact mode.
 The compact panel heading and matching accessibility labels use “Comment”.
 Its header icon reflects open/closed state and whether text exists, including
 an unfinished edit. Changing the active compact sheet does not discard edits.

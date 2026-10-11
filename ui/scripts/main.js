@@ -231,6 +231,11 @@ UI.setFocusCallback(() => {
     window.chessBoardCanvas.goToNextFocus();
 });
 
+UI.setCanvasNavigationCallback((action, options) => {
+    if (action === 'nearby') window.chessBoardCanvas.zoomNearestBoard(options);
+    else window.chessBoardCanvas.navigateBoard(action, options);
+});
+
 UI.setImportCallback((data) => {
     focusOnNextData = true;
     worker.postMessage({type: 'load', pgn: data});
@@ -265,6 +270,10 @@ UI.setSettingsChangeCallback((settings) => {
         worker.postMessage({ type: 'view' });
     } else if (settings.autoToggleComments !== undefined) {
         // Auto toggle of the HUD comments area is handled entirely within UI.js
+    } else if (settings.doNotReverseFilesWhenFlipped !== undefined) {
+        if (window.chessBoardCanvas) {
+            window.chessBoardCanvas.setDoNotReverseFilesWhenFlipped(settings.doNotReverseFilesWhenFlipped);
+        }
     } else if (settings.flipped !== undefined) {
         if (window.chessBoardCanvas) {
             window.chessBoardCanvas.setFlipped(settings.flipped);

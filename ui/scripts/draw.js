@@ -2,9 +2,17 @@
 // chess board specific implementation
 
 import { InfiniteScrollableCanvas } from 'canvas';
+import { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } from './navigation.js';
 
 import { chooseLOD } from 'piece';
 import { loadColors, applyFadeToColors, applyFadeToColorString, resolveColor } from 'color';
+
+function distanceToBounds(x, y, bounds) {
+    return Math.hypot(
+        Math.max(bounds.left - x, 0, x - bounds.right),
+        Math.max(bounds.top - y, 0, y - bounds.bottom)
+    );
+}
 
 function smoothClamp(a, b, x) {
   if (x <= a) return 0;
@@ -34,6 +42,7 @@ export default class ChessBoardCanvas
         this.focusIndex = 0;
         
         this.flipped = false;
+        this.doNotReverseFilesWhenFlipped = false;
         // Board data
         this.data = null;
         
@@ -121,6 +130,17 @@ export default class ChessBoardCanvas
         this.infCanvas.startAnimation();
     }
 
+    setDoNotReverseFilesWhenFlipped(value) {
+        this.doNotReverseFilesWhenFlipped = value;
+        this.infCanvas.startAnimation();
+    }
+
+    // The same reflection maps logical files to display columns and back.
+    _displayBoardCol(col) {
+        return this.flipped && !this.doNotReverseFilesWhenFlipped
+            ? this.boardLengthX - 1 - col : col;
+    }
+
     // Map logical timeline index to the displayed timeline index.
     _displayL(l) {
         return this.flipped ? -l : l;
@@ -191,10 +211,13 @@ export default class ChessBoardCanvas
     }
 
     // Filter board data based on visible bounds (with caching)
-    _filterBoardData(displayLMin, displayLMax, vMin, vMax) {
+    _filterBoardData(displayLMin, displayLMax, vMin, vMax, arrowMarginL = 0, arrowMarginV = 0) {
         const cache = this.filterCache;
-        const bounds = [displayLMin, displayLMax, vMin, vMax, this.flipped];
+        const bounds = [displayLMin, displayLMax, vMin, vMax, this.flipped, arrowMarginL, arrowMarginV];
         const [lMin, lMax] = this._actualLRangeFromDisplay(displayLMin, displayLMax);
+        const [arrowLMin, arrowLMax] = this._actualLRangeFromDisplay(
+            displayLMin - arrowMarginL, displayLMax + arrowMarginL
+        );
         
         // Check if cache is still valid
         if (cache.bounds.length === bounds.length && cache.bounds.every((v, i) => v === bounds[i])) {
@@ -236,8 +259,8 @@ export default class ChessBoardCanvas
                     cache.filteredArrowHighlight[color] = colorBlock.arrows.filter((pos) => {
                         let l1 = pos.from.l, v1 = pos.from.t << 1 | pos.from.c;
                         let l2 = pos.to.l, v2 = pos.to.t << 1 | pos.to.c;
-                        return !(l1 < lMin || l1 > lMax || v1 < vMin || v1 > vMax) ||
-                               !(l2 < lMin || l2 > lMax || v2 < vMin || v2 > vMax);
+                        return !(l1 < arrowLMin || l1 > arrowLMax || v1 < vMin - arrowMarginV || v1 > vMax + arrowMarginV) ||
+                               !(l2 < arrowLMin || l2 > arrowLMax || v2 < vMin - arrowMarginV || v2 > vMax + arrowMarginV);
                     });
                 }
                 
@@ -267,7 +290,7 @@ export default class ChessBoardCanvas
         const shiftY = l * this.boardSkipY;
         const row = this._displayCoordYRow(pos.y);
         return [
-            pos.x * this.squareSize + shiftX,
+            this._displayBoardCol(pos.x) * this.squareSize + shiftX,
             row * this.squareSize + shiftY
         ];
     }
@@ -278,7 +301,7 @@ export default class ChessBoardCanvas
     }
 
     // Main drawing method
-    drawBoards(ctx, lMin, lMax, vMin, vMax) {
+    drawBoards(ctx, lMin, lMax, vMin, vMax, bounds = null) {
         if (!this.data) return;
         
         // Update camera status display
@@ -287,10 +310,15 @@ export default class ChessBoardCanvas
         }
         
         // Filter data based on visible bounds (with caching)
-        this._filterBoardData(lMin, lMax, vMin, vMax);
+        const zoom = this.infCanvas.cameraCurrent.getZoomLevel();
+        const { width, height } = this.infCanvas.viewportSize;
+        const fadeDistance = 0.2 * Math.max(width, height) / zoom;
+        this._filterBoardData(lMin, lMax, vMin, vMax,
+            bounds ? Math.ceil(fadeDistance / this.boardSkipY) : 0,
+            bounds ? Math.ceil(fadeDistance / this.boardSkipX) : 0);
         
         const cache = this.filterCache;
-        const squareLength = this.infCanvas.cameraCurrent.getZoomLevel() * this.squareSize;
+        const squareLength = zoom * this.squareSize;
         
         // Layer 1: Background grid on multiverse
         ctx.fillStyle = this.colors.spGridWhite;
@@ -476,7 +504,7 @@ export default class ChessBoardCanvas
                         if ((row + col) % 2 === 0) {
                             const drawRow = this._displayBoardRow(row);
                             ctx.fillRect(
-                                col * this.squareSize + shiftX,
+                                this._displayBoardCol(col) * this.squareSize + shiftX,
                                 drawRow * this.squareSize + shiftY,
                                 this.squareSize,
                                 this.squareSize
@@ -538,13 +566,13 @@ export default class ChessBoardCanvas
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
                         fileLabels[i].text,
-                        shiftX + i * this.squareSize + fileLabels[i].x,
+                        shiftX + this._displayBoardCol(i) * this.squareSize + fileLabels[i].x,
                         shiftY + this.boardLengthY * this.squareSize - fileDescent
                     );
                 }
                 for (let i = 0; i < this.boardLengthY; i+=2) {
                     const drawRow = this._displayBoardRow(i);
-                    ctx.fillStyle = this._getLabelTextColor(i, 0);
+                    ctx.fillStyle = this._getLabelTextColor(i, this._displayBoardCol(0));
                     ctx.fillText(
                         rankLabels[i].text,
                         shiftX + rankLabels[i].x,
@@ -562,13 +590,13 @@ export default class ChessBoardCanvas
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
                         fileLabels[i].text,
-                        shiftX + i * this.squareSize + fileLabels[i].x,
+                        shiftX + this._displayBoardCol(i) * this.squareSize + fileLabels[i].x,
                         shiftY + this.boardLengthY * this.squareSize - fileDescent
                     );
                 }
                 for (let i = 1; i < this.boardLengthY; i+=2) {
                     const drawRow = this._displayBoardRow(i);
-                    ctx.fillStyle = this._getLabelTextColor(i, 0);
+                    ctx.fillStyle = this._getLabelTextColor(i, this._displayBoardCol(0));
                     ctx.fillText(
                         rankLabels[i].text,
                         shiftX + rankLabels[i].x,
@@ -608,7 +636,7 @@ export default class ChessBoardCanvas
                             const drawRow = this._displayBoardRow(row);
                             ctx.drawImage(
                                 imgs[piece],
-                                col * this.squareSize + shiftX,
+                                this._displayBoardCol(col) * this.squareSize + shiftX,
                                 drawRow * this.squareSize + shiftY,
                                 this.squareSize,
                                 this.squareSize
@@ -626,11 +654,17 @@ export default class ChessBoardCanvas
             ctx.lineWidth = 1;
             
             for (let arrow of cache.filteredArrowHighlight[color]) {
-                ctx.save();
-                
                 const [fromX, fromY] = this._getCoordinate(arrow.from);
                 const [toX, toY] = this._getCoordinate(arrow.to);
                 const r = this.squareSize / 2;
+                const distance = bounds ? Math.min(
+                    distanceToBounds(fromX + r, fromY + r, bounds),
+                    distanceToBounds(toX + r, toY + r, bounds)
+                ) : 0;
+                const opacity = 1 - smoothClamp(0, fadeDistance, distance);
+                if (opacity === 0) continue;
+                ctx.save();
+                ctx.globalAlpha = 0.8 * opacity;
                 
                 this._drawArrow(ctx, fromX + r, fromY + r, toX + r, toY + r);
                 
@@ -692,7 +726,7 @@ export default class ChessBoardCanvas
         const vMax = Math.ceil(bounds.right / this.boardSkipX);
         
         // Call the drawing method (can be overridden)
-        this.drawBoards(ctx, lMin, lMax, vMin, vMax);
+        this.drawBoards(ctx, lMin, lMax, vMin, vMax, bounds);
         
         /*
         // Debug: origin indicator
@@ -719,7 +753,8 @@ export default class ChessBoardCanvas
         const v = Math.floor(worldX / this.boardSkipX);
         const c = (v & 1) !== 0;
         const t = v >> 1;
-        const x = Math.floor((worldX - v * this.boardSkipX) / this.squareSize);
+        const col = Math.floor((worldX - v * this.boardSkipX) / this.squareSize);
+        const x = this._displayBoardCol(col);
         const row = Math.floor((worldY - displayL * this.boardSkipY) / this.squareSize);
         const y = this.flipped ? row : (this.boardLengthY - 1 - row);
         
@@ -765,22 +800,94 @@ export default class ChessBoardCanvas
         }
     }
 
-    goToNextFocus() {
-        this.focusIndex = (this.focusIndex + 1) % this.focusPoints.length;
-        if (this.focusPoints[this.focusIndex] !== undefined) {
-            const focus = this.focusPoints[this.focusIndex];
-            
-            const canvas = this.infCanvas.viewportSize;
-            const actualScale = document.body.classList.contains('compact-layout')
-                ? Math.min(canvas.width / (this.boardLengthX * this.squareSize + 40),
-                           canvas.height / (this.boardLengthY * this.squareSize + 40))
-                : canvas.width / 120 / 3;
-            const targetScale = Math.log2(actualScale);
-            const targetX = this.boardSkipX * (focus.t << 1 | focus.c) + this.boardLengthX * this.squareSize / 2;
-            const targetY = this.boardSkipY * this._displayL(focus.l) + this.boardLengthY * this.squareSize / 2;
-            
-            this.infCanvas.moveTo(targetX, targetY, targetScale);
+    _focusScale(wide = false) {
+        const canvas = this.infCanvas.viewportSize;
+        const actualScale = document.body.classList.contains('compact-layout')
+            ? Math.min(canvas.width / (this.boardLengthX * this.squareSize + 40),
+                       canvas.height / (this.boardLengthY * this.squareSize + 40))
+            : canvas.width / 120 / 3;
+        if (wide) {
+            // Fit a full neighborhood, including empty cells, in the visible canvas.
+            const boardWidth = this.boardLengthX * this.squareSize;
+            const boardHeight = this.boardLengthY * this.squareSize;
+            return Math.log2(Math.min(
+                (canvas.width - 48) / (2 * this.boardSkipX + boardWidth),
+                (canvas.height - 48) / (2 * this.boardSkipY + boardHeight),
+                actualScale * 0.4
+            ));
         }
+        return Math.log2(actualScale);
+    }
+
+    _navigationBoards() {
+        return (this.data?.boards || [])
+            .filter(board => board.fen != null)
+            .map(board => ({ x: 2 * board.t + Number(board.c), y: this._displayL(board.l) }));
+    }
+
+    _cameraGridPosition(camera) {
+        return {
+            x: (-camera.x - this.boardLengthX * this.squareSize / 2) / this.boardSkipX,
+            y: (-camera.y - this.boardLengthY * this.squareSize / 2) / this.boardSkipY
+        };
+    }
+
+    _moveToBoard(board, scale = null) {
+        this.infCanvas.moveTo(
+            board.x * this.boardSkipX + this.boardLengthX * this.squareSize / 2,
+            board.y * this.boardSkipY + this.boardLengthY * this.squareSize / 2,
+            scale
+        );
+    }
+
+    zoomNearestBoard({ wide = false } = {}) {
+        const boards = this._navigationBoards();
+        const spacing = { x: this.boardSkipX, y: this.boardSkipY };
+        const size = { x: this.boardLengthX * this.squareSize, y: this.boardLengthY * this.squareSize };
+        const normalScale = this._focusScale();
+        const current = this.infCanvas.cameraCurrent, target = this.infCanvas.cameraTarget;
+        const moving = ['x', 'y', 'scale'].some(axis => current[axis] !== target[axis]);
+        const focused = focusViewBoard(boards, moving ? target : current, spacing, size, normalScale);
+        const board = focused || nearestBoard(boards,
+            this._cameraGridPosition(this.infCanvas.cameraCurrent), spacing);
+        if (!board) return;
+        this._moveToBoard(board, this._focusScale(wide || Boolean(focused)));
+    }
+
+    navigateBoard(direction, options = {}) {
+        const directions = {
+            up: { x: 0, y: -1 }, left: { x: -1, y: 0 },
+            down: { x: 0, y: 1 }, right: { x: 1, y: 0 }
+        };
+        const vector = options.direction || directions[direction];
+        if (!vector || (!vector.x && !vector.y)) return;
+        let steps = 1;
+        if (options.held) {
+            const key = `${options.session}:${vector.x}:${vector.y}`;
+            const result = heldNavigationSteps({
+                direction: vector, spacing: { x: this.boardSkipX, y: this.boardSkipY },
+                zoom: this.infCanvas.cameraCurrent.getZoomLevel(),
+                referenceZoom: 2 ** this._focusScale(), rate: options.rate, elapsed: options.elapsed,
+                remainder: key === this.heldNavigationKey ? this.heldNavigationRemainder : 0
+            });
+            this.heldNavigationKey = key;
+            this.heldNavigationRemainder = result.remainder;
+            steps = result.steps;
+        } else {
+            this.heldNavigationKey = null;
+            this.heldNavigationRemainder = 0;
+        }
+        if (!steps) return;
+        const target = directionalTarget(this._navigationBoards(),
+            this._cameraGridPosition(this.infCanvas.cameraTarget), vector, steps);
+        this._moveToBoard(target);
+    }
+
+    goToNextFocus() {
+        if (!this.focusPoints.length) return;
+        this.focusIndex = (this.focusIndex + 1) % this.focusPoints.length;
+        const focus = this.focusPoints[this.focusIndex];
+        this._moveToBoard({ x: 2 * focus.t + Number(focus.c), y: this._displayL(focus.l) }, this._focusScale());
     }
 
     addFocusPoint(l, t, c) {

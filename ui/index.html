@@ -167,7 +167,7 @@
         <div id="mobileNavigation"></div>
     </footer>
 </div>
-<canvas id="canvas"></canvas>
+<canvas id="canvas" tabindex="0" aria-label="Chess board canvas"></canvas>
 
 <!-- Shared desktop layout; each panel expands independently from the top. -->
 <div class="top-panels">
@@ -204,13 +204,13 @@
             <div class="hud-light" id="light"></div>
         </div>
 
-        <div class="hud-content">
+        <div class="hud-content" id="hudContent">
             <div class="hud-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Comment" aria-multiline="true">
                 Loading WebAssembly module. This may take a while.
             </div>
         </div>
 
-        <div class="hud-toggle" id="toggle"></div>
+        <button class="hud-toggle" id="toggle" type="button" aria-label="Expand comment" aria-expanded="false" aria-controls="hudContent"></button>
     </div>
 
     <div class="hud-comment-actions" id="hudCommentActions">
@@ -236,13 +236,13 @@
         <button type="button" class="hint-btn" id="hintBtn">+ Hint</button>
     </div>
 
-    <div class="panel-toggle" id="panelToggle"></div>
+    <button class="panel-toggle" id="panelToggle" type="button" aria-label="Expand continuations" aria-expanded="false" aria-controls="selectContainer"></button>
 </div>
 
 </div><!-- .top-panels -->
 
 <div class="buttons-panel" id="buttonsPanel">
-    <button class="btn-icon" id="btnFocus" title="Focus">
+    <button class="btn-icon" id="btnFocus" title="Focus (F)">
         <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-focus"></use></svg>
     </button>
     <button class="btn-icon" id="btnFlip" title="Flip">
@@ -372,6 +372,10 @@
             </div>
             <div class="popup-fieldset" role="group" aria-labelledby="settingsInterfaceLabel">
                 <div class="popup-fieldset-title" id="settingsInterfaceLabel">Interface</div>
+                <label class="popup-control">
+                    <input type="checkbox" id="doNotReverseFilesWhenFlipped">
+                    <span>Do not reverse files when flipped</span>
+                </label>
                 <label class="popup-control popup-control-select">
                     <span>Color scheme</span>
                     <select id="colorSchemeSelect">
@@ -405,91 +409,100 @@
         </div>
 
         <div class="popup-content info-tab-content" id="tab-user-interface">
-            <p>Welcome to 5D Chess Engine! This guide will help you go through its features.</p>
-            <p>To close this window, use Close on phones or click anywhere outside the window on larger screens. If you want to see it again, click the <svg style="width: 12px; height: 12px; flex-shrink: 0;" fill="currentColor"><use href="#icon-info"></use></svg> button on the bottom.</p>
-
-            <h4><b>Viewport</b></h4>
-            <p>The main area displays the chess boards. You can interact with the boards using mouse or touch:</p>
-            <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                <li style="display: flex; align-items: center; gap: 8px;">
-                    <span><b>Zoom</b> - Use mouse wheel or pinch gesture to zoom in and out</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span><b>Pan</b> - Click and drag (or touch and drag) to move the view around</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px;">
-                    <span><b>Select Piece</b> - Click or tap on a piece to select it. If you are unsure which piece can be selected, you can turn on "show movable pieces" in the settings.</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px;">
-                    <span><b>Move Piece</b> - After selecting a piece, click or tap on a valid destination square to move it.</span>
-                </li>
-            </ul>
-
-            <h4>Phones</h4>
-            <p>On phones, navigation stays at the bottom. Choose opens continuations, the comment icon in the header opens comments, and the three-dot icon at the right of the header opens the action menu. These open one panel at a time; The floating cross button closes the panel and returns the space to the boards; tapping its highlighted header icon or Choose again also closes it. Panels sit below the boards in portrait and beside them on short landscape screens. The tag button at the top opens game details, and Focus stays at the lower-right of the board area. Import, export, settings, and help use full-screen dialogs with a compact title and green Close text button. Export uses Options, Copy, and Download; Options opens all export settings; changes update the preview once when Options closes. Download uses a filename based on the game headers.</p>
-
-            <h4><b>Control Panel</b></h4>
-            <p>The navigation controls (top right on larger screens, bottom on phones) enable tree-shaped travsersal of game states by these navigation buttons:</p>
-            <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                <li><b>PREV</b> - Go to previous action (Shortcut: Arrow ↑)</li>
-                <li><b>NEXT</b> - Go to next action (Shortcut: Arrow ↓)</li>
-                <li><b>UNDO</b> - Undo last move (Shortcut: Arrow ←)</li>
-                <li><b>REDO</b> - Redo move (Shortcut: Arrow →)</li>
-                <li><b>SUBMIT</b> - Submit move (Shortcut: Enter)</li>
-            </ul>
-            <p>To use the <b>NEXT</b> button, select the desired action first: expand the control panel on larger screens, or use Choose on phones. Actions are added to the list as you submit the moves. If there are still more legal actions not on the list, pressing <b>Hint</b> button (Shortcut: H) adds a computed legal action to the list immediately.</p>
-            
-            <h4><b>Action Buttons</b></h4>
-            <p>Action buttons on the bottom:</p>
-            <ul style="margin: 8px; list-style: none; padding-left: 0;">
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-focus"></use></svg>
-                    <span><b>Focus</b> - Center view on current board state (Shortcut: Space)</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-flip"></use></svg>
-                    <span><b>Flip</b> - Switch between White's and Black's perspectives</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-screenshot"></use></svg>
-                    <span><b>Screenshot</b> - Capture and download board image</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-import"></use></svg>
-                    <span><b>Import</b> - Import game from Branched 5DPGN</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-export"></use></svg>
-                    <span><b>Export</b> - Export current game to Branched 5DPGN</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-info"></use></svg>
-                    <span><b>Info</b> - View this window</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-edit"></use></svg>
-                    <span><b>Edit</b> - This feature is under development</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="currentColor"><use href="#icon-settings"></use></svg>
-                    <span><b>Settings</b> - Configure application preferences</span>
-                </li>
-            </ul>
-
-            <h4><b>HUD</b></h4>
-            <p>The HUD (Heads-Up Display) on the top shows the status of the game. When expanded, it shows comments recorded during the game.</p>
-            <p>To edit the comments, expand the HUD and click the comment area. After editing, two buttons will show up. Click "Update Comment" to save changes or "Discard Changes" to cancel the edit. If you would rather delete the comment, please clear all text and click "Delete Comment".</p>
-            <p>The light indicator in the right shows board state:</p>
-            <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                <li style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                    <div class="hud-light off"></div>
-                    <span><b>Disabled</b> - Normal board state, no phantom checks</span>
-                </li>
-                <li style="display: flex; align-items: center; gap: 12px;">
-                    <div class="hud-light blink"></div>
-                    <span><b>Glowing Red</b> - Phantom checks detected. Click the light to toggle phantom board visibility</span>
-                </li>
-            </ul>
+            <div class="interface-guide-options" role="group" aria-labelledby="interfaceGuideLabel">
+                <b id="interfaceGuideLabel">Show user guide for</b>
+                <label class="popup-control interface-guide-choice">
+                    <input type="radio" name="interfaceGuide" value="desktop" checked>
+                    <span>Desktop</span>
+                </label>
+                <label class="popup-control interface-guide-choice">
+                    <input type="radio" name="interfaceGuide" value="mobile">
+                    <span>Mobile</span>
+                </label>
+            </div>
+            <div id="interfaceGuideDesktop">
+                <p>Welcome to 5D Chess Engine! This guide introduces the controls for exploring and editing games.</p>
+                <p>Click outside this window to close it. Click <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> at the bottom to open it again.</p>
+                <h4>Viewport</h4>
+                <p>The main area displays the chessboards.</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><b>Zoom</b> — Scroll the mouse wheel to zoom in or out.</li>
+                    <li><b>Pan</b> — Click and drag to move the view.</li>
+                    <li><b>Select a piece</b> — Click a piece. Enable <b>Show movable pieces</b> in Settings to highlight pieces you can move.</li>
+                    <li><b>Move a piece</b> — Select a piece, then click a valid destination square.</li>
+                </ul>
+                <h4>Canvas keyboard navigation</h4>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><b>F</b> cycles through the game’s focus boards.</li>
+                    <li><b>Space</b> centers the nearest board. Press again to see surrounding boards, and again to return. <b>Shift+Space</b> shows surrounding boards directly.</li>
+                    <li><b>W / A / S / D</b> moves the view up, left, down, or right. Combine keys to move diagonally; hold to move faster.</li>
+                </ul>
+                <h4>Control Panel</h4>
+                <p>Use the controls at the top right to navigate the game:</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><b>PREV</b> — Go to the previous action. Shortcut: <b>↑</b></li>
+                    <li><b>NEXT</b> — Follow the selected continuation. Shortcut: <b>↓</b></li>
+                    <li><b>UNDO</b> — Undo a move. Shortcut: <b>←</b></li>
+                    <li><b>REDO</b> — Redo a move. Shortcut: <b>→</b></li>
+                    <li><b>SUBMIT</b> — Submit your moves to complete the turn. Shortcut: <b>Enter</b></li>
+                </ul>
+                <p>Expand the control panel to choose a continuation before using <b>NEXT</b>. Submitted turns are added to the list. Click <b>Hint</b> to add a suggested legal action, or press <b>H</b>.</p>
+                <h4>Action Buttons</h4>
+                <p>The buttons at the bottom provide these actions:</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-focus"></use></svg> <b>Focus</b> — Cycle through the game’s focus boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
+                </ul>
+                <h4>HUD</h4>
+                <p>The header at the top shows the game’s status. Expand it to read or edit comments.</p>
+                <p>Click the comment area to edit it, then choose <b>Update Comment</b> to save or <b>Discard Changes</b> to cancel. To delete a comment, clear its text and click <b>Delete Comment</b>.</p>
+                <p>A glowing red indicator means phantom checks are present. Click it to show or hide phantom boards.</p>
+            </div>
+            <div id="interfaceGuideMobile" hidden>
+                <p>Welcome to 5D Chess Engine! This guide introduces the controls for exploring and editing games.</p>
+                <p>Tap <b>Close</b> to close this window. To open it again, tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg> three-dot menu in the header and choose <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b>.</p>
+                <h4>Viewport</h4>
+                <p>The main area displays the chessboards.</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><b>Zoom</b> — Pinch to zoom in or out.</li>
+                    <li><b>Pan</b> — Drag to move the view.</li>
+                    <li><b>Select a piece</b> — Tap a piece. Enable <b>Show movable pieces</b> in Settings to highlight pieces you can move.</li>
+                    <li><b>Move a piece</b> — Select a piece, then tap a valid destination square.</li>
+                </ul>
+                <h4>Control Panel</h4>
+                <p>Use the controls at the bottom to navigate the game:</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg> <b>Previous</b> — Go to the previous action.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0; transform: scaleX(-1);" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg> <b>Next</b> — Follow the selected continuation.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-undo"></use></svg> <b>Undo</b> — Undo a move.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-redo"></use></svg> <b>Redo</b> — Redo a move.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-submit"></use></svg> <b>Submit</b> — Submit your moves to complete the turn.</li>
+                </ul>
+                <p>Tap <b>Choose</b> to select a continuation before using <b>Next</b>. Submitted turns are added to the list. Tap <b>Hint</b> in the continuations panel to add a suggested legal action.</p>
+                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-close-line"></use></svg> to close the panel.</p>
+                <h4>Action Buttons</h4>
+                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-focus"></use></svg> <b>Focus</b> at the lower-right of the board area to cycle through the game’s focus boards.</p>
+                <p>Open the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg> three-dot menu in the header for these actions:</p>
+                <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format. Use <b>Options</b> to adjust the export, then <b>Copy</b> or <b>Download</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
+                </ul>
+                <h4>HUD</h4>
+                <p>The header at the top shows the game’s status. Tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-price-tag-3-line"></use></svg> tag icon to view game details, or the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg> comment icon to read or edit comments.</p>
+                <p>Tap the comment area to edit it, then choose <b>Update Comment</b> to save or <b>Discard Changes</b> to cancel. To delete a comment, clear its text and tap <b>Delete Comment</b>.</p>
+                <p>A glowing red indicator means phantom checks are present. Tap it to show or hide phantom boards.</p>
+            </div>
         </div>
 
         <div class="popup-content info-tab-content" id="tab-game-rules" style="display: none;">

@@ -20,6 +20,7 @@
     --ui-primary-pressed: color-mix(in srgb, var(--ui-primary) 80%, var(--ui-text));
     --ui-on-primary-soft: var(--ui-primary);
     --ui-primary-soft: color-mix(in srgb, var(--ui-primary) 12%, var(--ui-panel));
+    --ui-panel-editing: color-mix(in srgb, var(--ui-primary) 10%, var(--ui-panel));
     --ui-panel-floating: color-mix(in srgb, var(--ui-panel) 88%, transparent);
     --ui-panel-dialog: color-mix(in srgb, var(--ui-panel) 95%, transparent);
     --ui-hover: color-mix(in srgb, var(--ui-text) 6%, transparent);

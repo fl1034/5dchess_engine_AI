@@ -5,7 +5,7 @@ import test from 'node:test';
 
 // The browser sources are ES modules; load without changing ui/'s local Node configuration.
 const source = await readFile(new URL('../scripts/canvas.js', import.meta.url), 'utf8');
-const { InfiniteScrollableCanvas } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { InfiniteScrollableCanvas, Camera, AnimationManager } = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { Camera };').toString('base64')}`);
 
 function fixture() {
     const clicks = [];
@@ -128,4 +128,165 @@ test('display density changes preserve camera bounds and mouse/touch positions',
             else globalThis[key] = value;
         }
     }
+});
+
+test('camera animation settles at unit zoom and negative logarithmic scales', () => {
+    for (const scale of [0, -2, 2]) {
+        const current = new Camera(0, 0, scale - 1);
+        const target = new Camera(300, -200, scale);
+        for (let frame = 0; frame < 200 && !current.isCloseTo(target); frame++) {
+            current.lerpTowards(target, 16, 0.01);
+        }
+        assert(current.isCloseTo(target));
+        assert(Math.abs(current.getZoomLevel() / target.getZoomLevel() - 1) < 0.02);
+    }
+});
+
+
+test('finite camera motion retargets from the current position and lands exactly', () => {
+    const camera = new Camera(0, 0, 0);
+    const target = new Camera(300, -200, -1);
+    camera.lerpTowards(target, 100);
+    const position = camera.clone();
+    const next = new Camera(600, -400, -2);
+    camera.lerpTowards(next, 0);
+    assert.equal(camera.x, position.x);
+    camera.lerpTowards(next, camera.motion.duration);
+    for (const axis of ['x', 'y', 'scale']) {
+        assert.equal(camera[axis], next[axis]);
+        assert.equal(camera.velocity[axis], 0);
+    }
+});
+
+test('camera trajectory is independent of frame subdivision', () => {
+    const target = new Camera(100, 200, 2);
+    const a = new Camera(), b = new Camera();
+    a.lerpTowards(target, 160);
+    for (let i = 0; i < 10; i++) b.lerpTowards(target, 16);
+    assert.equal(a.x, b.x); assert.equal(a.scale, b.scale);
+});
+
+
+test('duration uses original positional and zoom gauges independent of starting zoom', () => {
+    for (const scale of [-2, 0, 3]) {
+        const camera = new Camera(0, 0, scale);
+        camera.lerpTowards(new Camera(100, 40, scale), 0);
+        assert.equal(camera.motion.duration, Math.log1p(100 / 0.1) / camera.motion.decay);
+    }
+    const camera = new Camera();
+    camera.lerpTowards(new Camera(0, 0, 2), 0);
+    assert.equal(camera.motion.duration, Math.log1p(2 * Math.LN2 / Math.log1p(0.02)) / camera.motion.decay);
+});
+
+test('corrected exponential keeps the original early response and finishes smoothly at its deadline', () => {
+    const camera = new Camera(), target = new Camera(100, -100, 1);
+    camera.lerpTowards(target, 100);
+    assert(camera.x > 55 && camera.x < 70);
+    camera.lerpTowards(target, camera.motion.duration - 100 - 0.1);
+    assert(Math.abs(camera.x - target.x) < 1e-6);
+    assert(Math.abs(camera.velocity.x) < 1e-5);
+    camera.lerpTowards(target, 0.1);
+    assert.equal(camera.x, target.x); assert.equal(camera.velocity.x, 0);
+});
+
+test('zero and tiny distances remain finite and land exactly', () => {
+    for (const distance of [0, 1e-12, 1e-8, 0.0001]) {
+        const camera = new Camera(), target = new Camera(distance, 0, 0);
+        camera.lerpTowards(target, 0);
+        assert(Number.isFinite(camera.x));
+        camera.lerpTowards(target, camera.motion.duration);
+        assert.equal(camera.x, target.x);
+        assert.equal(camera.velocity.x, 0);
+    }
+});
+
+
+test('delayed animation frames consume their full elapsed time', () => {
+    let elapsed;
+    const manager = new AnimationManager(delta => { elapsed = delta; return false; });
+    manager.timeRecord = 100;
+    manager._animate(600);
+    assert.equal(elapsed, 500);
+});
+
+test('steadily advancing drag targets never reverse, including the settling tail', () => {
+    for (const axis of ['x', 'y', 'scale']) {
+        for (const sign of [-1, 1]) {
+            const camera = new Camera();
+            const target = new Camera();
+            for (let i = 1; i <= 100; i++) {
+                const before = camera[axis];
+                target[axis] = sign * i * (axis === 'scale' ? 0.01 : 2);
+                camera.lerpTowards(target, 16);
+                assert(sign * (camera[axis] - before) >= -1e-12);
+                assert(sign * (target[axis] - camera[axis]) >= -1e-12);
+            }
+            while (camera.motion.elapsed < camera.motion.duration) {
+                const before = camera[axis];
+                camera.lerpTowards(target, 16);
+                assert(sign * (camera[axis] - before) >= -1e-12);
+            }
+            assert.equal(camera[axis], target[axis]);
+        }
+    }
+});
+
+test('reversing a destination follows the new direction immediately without overshoot', () => {
+    const camera = new Camera();
+    camera.lerpTowards(new Camera(100, 0, 0), 100);
+    const before = camera.x;
+    const target = new Camera(-100, 0, 0);
+    camera.lerpTowards(target, 16);
+    assert(camera.x < before);
+    assert(camera.x > target.x);
+    camera.lerpTowards(target, camera.motion.duration);
+    assert.equal(camera.x, target.x);
+});
+
+test('dragging takes over from the rendered camera rather than a pending opposite destination', () => {
+    const { canvas } = fixture();
+    canvas.cameraCurrent = new Camera(20, 30, 0);
+    canvas.cameraTarget = new Camera(-100, -200, 1);
+    canvas.mouseStartPos = {};
+    canvas._getMouseWorldPosition = e => ({ x: e.clientX, y: e.clientY });
+    canvas._handleMouseDown({ button: 0, clientX: 400, clientY: 300 });
+    canvas._handleMouseMove({ clientX: 420, clientY: 300 });
+    assert.equal(canvas.cameraTarget.x, 40);
+    assert.equal(canvas.cameraTarget.y, 30);
+    assert.equal(canvas.cameraTarget.scale, 0);
+    assert.equal(canvas.cameraCurrent.motion, null);
+});
+
+
+test('zoom-only doubling takes about 388ms and lands exactly at the deadline', () => {
+    for (const direction of [-1, 1]) {
+        const camera = new Camera(), target = new Camera(0, 0, direction);
+        camera.lerpTowards(target, 0);
+        assert(Math.abs(camera.motion.duration - 388) < 1);
+        camera.lerpTowards(target, camera.motion.duration);
+        assert.equal(camera.scale, target.scale);
+        assert.equal(camera.velocity.scale, 0);
+    }
+});
+
+
+test('combined position and logarithmic zoom share progress and the remaining-error derivative after retargeting', () => {
+    const camera = new Camera();
+    camera.lerpTowards(new Camera(100, -80, 0), 100);
+    const start = camera.clone(), target = new Camera(300, 150, 2);
+    camera.lerpTowards(target, 0);
+    for (let i = 0; i < 5; i++) {
+        camera.lerpTowards(target, 30);
+        const progress = ['x', 'y', 'scale'].map(axis =>
+            (camera[axis] - start[axis]) / (target[axis] - start[axis]));
+        assert(progress.every(value => Math.abs(value - progress[0]) < 1e-12));
+        const { decay: k, duration, elapsed } = camera.motion;
+        const q = k * (duration - elapsed);
+        const rate = k * Math.expm1(q) / (Math.expm1(q) - q);
+        for (const axis of ['x', 'y', 'scale']) {
+            assert(Math.abs(camera.velocity[axis] / (target[axis] - camera[axis]) - rate) < 1e-12);
+        }
+    }
+    camera.lerpTowards(target, camera.motion.duration);
+    assert.equal(camera.x, target.x); assert.equal(camera.scale, target.scale);
 });

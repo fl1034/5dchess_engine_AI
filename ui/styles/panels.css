@@ -63,9 +63,13 @@
     user-select: none;
 }
 
-.top-panels .hud-header { padding: 0 16px; gap: 16px; }
-.top-panels .hud-title { white-space: nowrap; }
-.top-panels #light { position: static; }
+.top-panels .hud-header { padding: 0 36px; }
+.top-panels .hud-title {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 .hud-title {
     font-size: 18px;
@@ -128,6 +132,7 @@
 }
 
 .hud.collapsed .hud-content {
+    visibility: hidden;
     opacity: 0;
     transform: translateY(-8px);
     pointer-events: none;
@@ -150,7 +155,17 @@
     cursor: text;
 }
 
+/* Focus belongs to the editor, not the other controls in this panel. */
+.hud:has(.hud-text:focus) {
+    background: var(--ui-panel-editing);
+}
+.hud-text:not(:focus) { caret-color: transparent; }
+.hud-text:focus {
+    caret-color: var(--ui-text);
+}
+
 .hud-comment-actions {
+    visibility: hidden;
     position: relative;
     display: flex;
     justify-content: flex-end;
@@ -161,6 +176,7 @@
 }
 
 .hud-comment-actions.visible {
+    visibility: visible;
     opacity: 1;
     pointer-events: auto;
 }
@@ -220,19 +236,22 @@
     color: var(--ui-muted);
 }
 
-/* Scrollbar */
-.hud-text::-webkit-scrollbar {
-    width: 6px;
+/* ================= Toggle ================= */
+.hud-toggle, .panel-toggle {
+    appearance: none;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    font: inherit;
 }
-.hud-text::-webkit-scrollbar-thumb {
-    background: var(--ui-scrollbar);
-    border-radius: 4px;
-}
-.hud-text::-webkit-scrollbar-track {
-    background: transparent;
+.hud-toggle:focus-visible, .panel-toggle:focus-visible {
+    outline: 2px solid var(--ui-primary);
+    outline-offset: -2px;
 }
 
-/* ================= Toggle ================= */
 .hud-toggle {
     --toggle-shadow-width: 480px;
     --toggle-shadow-height: 50px;
@@ -375,6 +394,7 @@
 }
 
 .control-panel.collapsed .select-container {
+    visibility: hidden;
     opacity: 0;
     pointer-events: none;
 }
@@ -382,17 +402,6 @@
 .control-panel.expanded .select-container {
     opacity: 1;
     transition: opacity 0.25s ease;
-}
-
-.select-container::-webkit-scrollbar {
-    width: 6px;
-}
-.select-container::-webkit-scrollbar-thumb {
-    background: var(--ui-scrollbar);
-    border-radius: 4px;
-}
-.select-container::-webkit-scrollbar-track {
-    background: transparent;
 }
 
 .select-option {
