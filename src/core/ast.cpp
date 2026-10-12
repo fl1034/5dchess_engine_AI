@@ -109,7 +109,7 @@ std::ostream &operator<<(std::ostream &os, const game &g)
 {
     os << "game{header:[";
     bool first = true;
-    for(auto [k,v]: g.headers)
+    for(const auto &[k,v]: g.headers)
     {
         if(first)
             first = false;
@@ -119,7 +119,7 @@ std::ostream &operator<<(std::ostream &os, const game &g)
     }
     os << "],boards:[";
     first = true;
-    for(auto [fen, sgn, l, t, c]: g.boards)
+    for(const auto &[fen, sgn, l, t, c]: g.boards)
     {
         if(first)
             first = false;
@@ -132,4 +132,4 @@ std::ostream &operator<<(std::ostream &os, const game &g)
     return os;
 }
 
-} // namespace
+} /* namespace pgnparser_ast */

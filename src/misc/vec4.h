@@ -33,7 +33,7 @@ public:
 private:
     vec4_t value;
     
-    constexpr vec4(vec4_t v) : value(v) {}
+    constexpr vec4(vec4_t v) noexcept : value(v) {}
     constexpr static vec4_t m_l = 1U << (L_BITS-1);
     constexpr static vec4_t m_t = 1U << (T_BITS-1);
     constexpr static vec4_t m_y = 1U << (Y_BITS-1);
@@ -45,7 +45,7 @@ private:
     constexpr static int mask_x = 0b111, mask_y = 0b111000, y_shift = X_BITS-3;
 public:
 
-    constexpr vec4(int x, int y, int t, int l)
+    constexpr vec4(int x, int y, int t, int l) noexcept
     {
         unsigned int l0 = static_cast<unsigned int>(l);
         unsigned int t0 = static_cast<unsigned int>(t);
@@ -56,58 +56,58 @@ public:
               | (static_cast<vec4_t>(y0) << X_BITS & Y_MASK)
               | (static_cast<vec4_t>(x0) & X_MASK);
     }
-    constexpr vec4(int xy, vec4 tl)
+    constexpr vec4(int xy, vec4 tl) noexcept
     {
         value = (tl.value & (L_MASK | T_MASK))
               | static_cast<vec4_t>((xy & mask_y) << y_shift)
               | static_cast<vec4_t>(xy & mask_x);
     }
-    constexpr int l() const
+    constexpr int l() const noexcept
     {
         int w = static_cast<int>(value >> (T_BITS + Y_BITS + X_BITS));
         return (w ^ m_l) - m_l;
     }
-    constexpr int t() const
+    constexpr int t() const noexcept
     {
         int w = static_cast<int>((value & T_MASK) >> (Y_BITS + X_BITS));
         return (w ^ m_t) - m_t;
     }
-    constexpr int y() const
+    constexpr int y() const noexcept
     {
         int w = static_cast<int>((value & Y_MASK) >> Y_BITS);
         return (w ^ m_y) - m_y;
     }
-    constexpr int x() const
+    constexpr int x() const noexcept
     {
         int x = static_cast<int>(value & X_MASK);
         return (x ^ m_x) - m_x;
     }
-    constexpr vec4 operator +(const vec4& v) const
+    constexpr vec4 operator +(const vec4& v) const noexcept
     {
         vec4_t a = value, b = v.value;
         vec4_t sum = ((a & mask_lower) + (b & mask_lower)) ^ ((a^b) & mask_top);
         return vec4(sum);
     }
-    constexpr vec4 operator -() const
+    constexpr vec4 operator -() const noexcept
     {
         vec4 temp = *this;
         temp.value = ~temp.value;
         return temp + vec4(1,1,1,1);
     }
-    constexpr vec4 operator -(const vec4& v) const
+    constexpr vec4 operator -(const vec4& v) const noexcept
     {
         return *this + (-v);
     }
-    constexpr vec4 operator *(const int& scalar) const
+    constexpr vec4 operator *(const int& scalar) const noexcept
     {
         return vec4(scalar*x(), scalar*y(), scalar*t(), scalar*l());
     }
     constexpr bool operator ==(const vec4&) const = default;
-    constexpr auto operator <=>(const vec4& other) const
+    constexpr auto operator <=>(const vec4& other) const noexcept
     {
         return value <=> other.value;
     }
-    constexpr int dot(vec4 other) const
+    constexpr int dot(vec4 other) const noexcept
     {
         return x()*other.x() + y()*other.y() + t()*other.t() + l()*other.l();
     }
@@ -124,15 +124,15 @@ public:
         sstm << "(" << x() << "," << y() << "," << t() << "," << l() << ")";
         return sstm.str();
     }
-    bool outbound() const
+    bool outbound() const noexcept
     {
         return (~vec4(0x7,0x7,-1,-1).value & value);
     }
-    int xy() const
+    int xy() const noexcept
     {
         return (value & mask_x) | (value >> y_shift & mask_y);
     }
-    vec4 tl() const
+    vec4 tl() const noexcept
     {
         vec4 result = *this;
         result.value &= (L_MASK | T_MASK);

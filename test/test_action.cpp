@@ -3,8 +3,20 @@
 #include "core/action.h"
 #include "core/pgnparser.h"
 #include "core/state.h"
+#include <stdexcept>
+#include <string>
+#include "core/semimove.h"
+#include "misc/utils.h"
+#include <type_traits>
+#include "state.h"
+#include "client/game.h"
+#include "core/hypercuboid.h"
+#include "core/variants.h"
+#include <iostream>
 
-int main()
+namespace action_tests
+{
+int run()
 {
     const ext_move default_promotion("(0T0)e7e8");
     assert(default_promotion.fm == full_move("(0T0)e7e8"));
@@ -62,7 +74,7 @@ int main()
                              & special_move_t::CAPTURE));
 
     state en_passant_position = standard;
-    for (const char* notation : {"(0T1)e2e4", "(0T1)a7a6",
+    for (const char *notation : {"(0T1)e2e4", "(0T1)a7a6",
                                  "(0T2)e4e5", "(0T2)d7d5"}) {
         assert(en_passant_position.apply_move(full_move(notation)));
         assert(en_passant_position.submit());
@@ -113,4 +125,349 @@ int main()
     assert(advanced.second == mate_type::NONE);
     assert(e4.pgn(standard, pgn_options::SHOW_MATE)
         == e4.pgn_advanced(standard, pgn_options::SHOW_MATE).first);
+    return 0;
+}
+} /* namespace action_tests */
+
+namespace semimove_tests
+{
+int run()
+{
+    const state s(*pgnparser(R"(
+[Board "Standard"]
+)").parse_game());
+
+    const semimove physical = physical_move{full_move("(0T1)g1f3")};
+    assert(physical.lan(s) == "(0T1)g1@Nf3");
+    assert(physical.is<physical_move>());
+    assert(physical.get_if<physical_move>() != nullptr);
+    assert(physical.get<physical_move>().m == full_move("(0T1)g1f3"));
+    assert(physical.hotspot() == vec4(6, 0, 1, 0));
+
+    const semimove pawn = physical_move{full_move("(0T1)e2e4")};
+    assert(pawn.lan(s) == "(0T1)e2@Pe4");
+
+    const semimove arriving = arriving_move{full_move("(0T1)e1(-1T1)e3")};
+    assert(arriving.lan(s) == "(0T1)e1@K>(-1T1)e3");
+    assert(arriving.hotspot() == vec4(4, 2, 1, -1));
+
+    const semimove departing = departing_move{vec4(4, 0, 1, 0)};
+    assert(departing.lan(s) == "(0T1)e1>@K");
+    assert(departing.hotspot() == vec4(4, 0, 1, 0));
+
+    const semimove null = null_move{};
+    assert(null.lan(s) == "@");
+    bool threw = false;
+    try
+    {
+        (void)null.hotspot();
+    }
+    catch(const std::logic_error &)
+    {
+        threw = true;
+    }
+    assert(threw);
+
+    const int kind = arriving.visit(overloads{
+        [](const physical_move &) { return 0; },
+        [](const arriving_move &) { return 1; },
+        [](const departing_move &) { return 2; },
+        [](const null_move &) { return 3; }
+    });
+    assert(kind == 1);
+    return 0;
+}
+} /* namespace semimove_tests */
+
+namespace apply_move_tests
+{
+static_assert(!std::is_constructible_v<ext_move, full_move>);
+static_assert(!std::is_constructible_v<ext_move, vec4, vec4>);
+static_assert(std::is_constructible_v<ext_move, full_move, const state &>);
+static_assert(std::is_constructible_v<ext_move, full_move, piece_t>);
+
+template<class S>
+concept old_apply_signature = requires(S &s, full_move mv) {
+    s.template apply_move<true>(mv, QUEEN_W);
+};
+static_assert(!old_apply_signature<state>);
+
+void assert_same(const state &a, const state &b)
+{
+    assert(a.get_boards() == b.get_boards());
+    assert(a.get_present() == b.get_present());
+}
+
+void compare_overloads(const state &before, full_move move)
+{
+    state checked = before, unchecked = before;
+    state checked_extended = before, unchecked_extended = before;
+    const ext_move prepared(move, before);
+    assert(checked.apply_move<false>(move));
+    assert(unchecked.apply_move<true>(move));
+    assert(checked_extended.apply_move<false>(prepared));
+    assert(unchecked_extended.apply_move<true>(prepared));
+    assert_same(checked, unchecked);
+    assert_same(checked, checked_extended);
+    assert_same(checked, unchecked_extended);
+}
+
+int run()
+{
+    for(bool black : {false, true})
+    for(bool brawn : {false, true})
+    for(auto rules : {promotion_options::QUEEN, promotion_options::KNIGHT,
+                      promotion_options::NONE,
+                      promotion_options::QUEEN | promotion_options::KNIGHT})
+    {
+        const std::string fen = black
+            ? (brawn ? "k7/8/8/8/8/8/w7/7K" : "k7/8/8/8/8/8/p7/7K")
+            : (brawn ? "7k/W7/8/8/8/8/8/K7" : "7k/P7/8/8/8/8/8/K7");
+        multiverse boards(timeline_layout::odd(), {{0, 1, black, fen}});
+        const state before(boards, rules);
+        const full_move promotion(black ? "(0T1)a2a1" : "(0T1)a7a8");
+        compare_overloads(before, promotion);
+        compare_overloads(before, full_move(black ? "(0T1)a8b8" : "(0T1)a1b1"));
+
+        const ext_move prepared(promotion, before);
+        assert(prepared.promote_to == default_promote_to(rules));
+        state result = before;
+        assert(result.apply_move<true>(promotion));
+        const auto [t, player] = result.get_timeline_end(0);
+        const piece_t expected_white = rules == promotion_options::NONE
+            ? (brawn ? BRAWN_W : PAWN_W) : default_promote_to(rules);
+        assert(result.get_piece(vec4(0, black ? 0 : 7, t, 0), player)
+               == (black ? to_black(expected_white) : expected_white));
+
+        if(rules != promotion_options::NONE)
+        {
+            state missing = before;
+            // Extended moves are prepared data, not a request for a default.
+            assert(!missing.apply_move<false>(ext_move(promotion, NO_PIECE)));
+            assert_same(missing, before);
+        }
+        state invalid = before;
+        assert(!invalid.apply_move<false>(ext_move(promotion, KING_W)));
+        assert_same(invalid, before);
+
+        if(can_promote_to(rules, KNIGHT_W))
+        {
+            state checked = before, unchecked = before;
+            const ext_move knight(promotion, KNIGHT_W);
+            assert(checked.apply_move<false>(knight));
+            assert(unchecked.apply_move<true>(knight));
+            assert_same(checked, unchecked);
+        }
+    }
+    return 0;
+}
+} /* namespace apply_move_tests */
+
+namespace promotions_tests
+{
+namespace
+{
+constexpr const char *position = R"(
+[Timeline "odd"]
+[Size "8x8"]
+[5bk1/5N2/7P/6K1/8/8/8/8:0:1:w]
+
+1. h7+ / Kxf7
+2. h8={}
+)";
+
+std::string promotion_game(const std::string &header, char piece)
+{
+    std::string result = position;
+    result.replace(result.find("{}"), 2, std::string(1, piece));
+    if(!header.empty())
+    {
+        result.insert(1, "[Promotions \"" + header + "\"]\n");
+    }
+    return result;
+}
+
+bool rejects(const std::string &pgn)
+{
+    try
+    {
+        (void)game::from_pgn(pgn);
+        return false;
+    }
+    catch(const std::exception &)
+    {
+        return true;
+    }
+}
+}
+
+int run()
+{
+    assert(parse_promotions("") == promotion_options::NONE);
+    assert(parse_promotions(" , \t") == promotion_options::NONE);
+    assert(format_promotions(promotion_options::NONE).empty());
+    assert(parse_promotions("Q") == promotion_options::QUEEN);
+    assert(parse_promotions("R B N,  Q")
+        == (promotion_options::QUEEN | promotion_options::ROOK
+            | promotion_options::BISHOP | promotion_options::KNIGHT));
+    assert(format_promotions(parse_promotions("D U C N B R S Q")) == "*");
+    assert(format_promotions(parse_promotions("R B N,  Q")) == "QRBN");
+    assert(default_promote_to(parse_promotions("D U C N B R S")) == PRINCESS_W);
+
+    for(const std::string invalid : {"q", "P", "W", "K", "Y", "*Q"})
+    {
+        bool threw = false;
+        try
+        {
+            (void)parse_promotions(invalid);
+        }
+        catch(const std::runtime_error &)
+        {
+            threw = true;
+        }
+        assert(threw);
+    }
+
+    game knight = game::from_pgn(promotion_game("N", 'N'));
+    assert(knight.get_promotion_options() == promotion_options::KNIGHT);
+    const std::string knight_output = knight.show_pgn();
+    assert(knight_output.contains("[Promotions \"N\"]"));
+    assert(knight_output.contains("h8=N"));
+    knight.metadata["promotions"] = "Q";
+    assert(knight.show_pgn().contains("[Promotions \"N\"]"));
+
+    assert(rejects(promotion_game("", 'N')));
+    assert(rejects(promotion_game("S", 'Q')));
+    assert(!rejects(promotion_game("S", 'S')));
+    assert(!rejects(promotion_game("R B N,  Q", 'N')));
+    assert(!rejects(promotion_game("*", 'D')));
+
+    std::string bare_knight = promotion_game("QN", 'N');
+    bare_knight.erase(bare_knight.find("=N"), 1);
+    game bare_knight_game = game::from_pgn(bare_knight);
+    assert(bare_knight_game.show_pgn().contains("h8=N"));
+
+    std::string long_bishop = promotion_game("QB", 'B');
+    long_bishop.replace(long_bishop.find("h8=B"), 4, "h7h8B");
+    game long_bishop_game = game::from_pgn(long_bishop);
+    assert(long_bishop_game.show_pgn().contains("h8=B"));
+
+    std::string trailing_piece = bare_knight;
+    trailing_piece.insert(trailing_piece.find("h8N") + 3, "N");
+    assert(rejects(trailing_piece));
+
+    std::string implicit_princess = promotion_game("S", 'S');
+    implicit_princess.erase(implicit_princess.find("=S"), 2);
+    game princess = game::from_pgn(implicit_princess);
+    assert(princess.show_pgn().contains("h8=S"));
+
+    game default_game = game::from_pgn(promotion_game("", 'Q'));
+    assert(default_game.get_promotion_options() == promotion_options::QUEEN);
+    assert(!default_game.metadata.contains("promotions"));
+    assert(!default_game.show_pgn().contains("[Promotions"));
+
+    game explicit_default_game = game::from_pgn(promotion_game("Q", 'Q'));
+    assert(explicit_default_game.metadata.contains("promotions"));
+    assert(explicit_default_game.show_pgn().contains("[Promotions \"Q\"]"));
+
+    const std::string before_promotion = R"(
+[Promotions "Q"]
+[Timeline "odd"]
+[Size "8x8"]
+[5bk1/5N2/7P/6K1/8/8/8/8:0:1:w]
+
+1. h7+ / Kxf7
+)";
+    const auto parsed = pgnparser(before_promotion).parse_game();
+    assert(parsed.has_value());
+    const state promotion_state(*parsed);
+    const auto [fm, pt, candidates] = promotion_state.parse_move("h8=Q");
+    assert(fm.has_value());
+    const action implicit_queen = action::from_vector({ext_move(*fm, promotion_state)}, promotion_state);
+    const action explicit_queen = action::from_vector(
+        {ext_move(*fm, QUEEN_W)}, promotion_state);
+    assert(implicit_queen == explicit_queen);
+    assert(implicit_queen.get_moves()[0].promote_to == QUEEN_W);
+    assert(!promotion_state.can_apply(*fm, KNIGHT_W));
+    assert(!promotion_state.can_apply(*fm, KNIGHT_B));
+
+    const std::string no_promotion_before = R"(
+[Promotions ""]
+[Timeline "odd"]
+[Size "8x8"]
+[5bk1/5N2/7P/6K1/8/8/8/8:0:1:w]
+
+1. h7+ / Kxf7
+)";
+    const auto no_promotion_parsed = pgnparser(no_promotion_before).parse_game();
+    assert(no_promotion_parsed.has_value());
+    const state no_promotion_state(*no_promotion_parsed);
+    assert(no_promotion_state.get_promotion_options() == promotion_options::NONE);
+    const auto [no_fm, no_pt, no_candidates] = no_promotion_state.parse_move("h8");
+    assert(no_fm.has_value());
+    assert(!no_pt.has_value());
+    const auto unchanged_pawn = no_promotion_state.can_apply(*no_fm);
+    assert(unchanged_pawn.has_value());
+    const auto [pawn_t, pawn_c] = unchanged_pawn->get_timeline_end(no_fm->to.l());
+    assert(unchanged_pawn->get_piece(
+        vec4(no_fm->to.x(), no_fm->to.y(), pawn_t, no_fm->to.l()), pawn_c)
+        == PAWN_W);
+    assert(!no_promotion_state.can_apply(*no_fm, QUEEN_W));
+
+    const action no_promotion_action = action::from_vector(
+        {ext_move(*no_fm, no_promotion_state)}, no_promotion_state);
+    assert(no_promotion_action.get_moves()[0].promote_to == NO_PIECE);
+    const std::string no_promotion_pgn = no_promotion_action.pgn(no_promotion_state);
+    assert(no_promotion_pgn.contains("h7h8"));
+    assert(!no_promotion_pgn.contains('='));
+    assert(no_promotion_action.lan(no_promotion_state).find('\0') == std::string::npos);
+
+    auto [hc_info, search_space] = HC_info::build_HC(no_promotion_state);
+    bool generated_no_promotion = false;
+    for(const moveseq &moves : hc_info.search(std::move(search_space)))
+    {
+        if(std::find(moves.begin(), moves.end(), *no_fm) != moves.end())
+        {
+            generated_no_promotion = true;
+            break;
+        }
+    }
+    assert(generated_no_promotion);
+
+    std::string no_promotion_game = no_promotion_before + "2. h8\n";
+    game no_promotion = game::from_pgn(no_promotion_game);
+    const std::string no_promotion_output = no_promotion.show_pgn();
+    assert(no_promotion_output.contains("[Promotions \"\"]"));
+    assert(no_promotion_output.contains("h7h8"));
+    assert(!no_promotion_output.contains("h8="));
+
+    assert(rejects(no_promotion_before + "2. h8=Q\n"));
+    assert(rejects(no_promotion_before + "2. h8Q\n"));
+
+    state unsafe_state = promotion_state;
+    assert(unsafe_state.apply_move<true>(ext_move(*fm, KNIGHT_W)));
+    const auto [end_t, end_c] = unsafe_state.get_timeline_end(fm->to.l());
+    assert(unsafe_state.get_piece(
+        vec4(fm->to.x(), fm->to.y(), end_t, fm->to.l()), end_c) == KNIGHT_W);
+
+    assert(sizeof(promotion_options) == 1);
+    return 0;
+}
+} /* namespace promotions_tests */
+
+int main()
+{
+    std::cerr << "Running action tests\n";
+    if(const int result = action_tests::run(); result != 0)
+        return result;
+    std::cerr << "Running semimove tests\n";
+    if(const int result = semimove_tests::run(); result != 0)
+        return result;
+    std::cerr << "Running apply_move tests\n";
+    if(const int result = apply_move_tests::run(); result != 0)
+        return result;
+    std::cerr << "Running promotions tests\n";
+    if(const int result = promotions_tests::run(); result != 0)
+        return result;
+    return 0;
 }

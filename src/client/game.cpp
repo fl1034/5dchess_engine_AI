@@ -39,9 +39,8 @@ game game::from_pgn(std::string input)
         throw std::runtime_error("Bad input, parse failed");
     pgnparser_ast::gametree &gt_ast = ag->gt;
     variant_setup_t variant_setup = derive_variant_setup(*ag);
-    std::unique_ptr<multiverse> m = create_multiverse_from_variant_setup(variant_setup);
     game g(gnode<comments_t>::create_root(
-        state(*m, variant_setup.promotions), ag->comments));
+        state(create_multiverse_from_variant_setup(variant_setup), variant_setup.promotions), ag->comments));
     g.metadata = ag->headers;
     g.metadata["timeline"] = variant_setup.is_even_timelines ? "even" : "odd";
     g.metadata["size"] = std::to_string(variant_setup.size_x) + "x" + std::to_string(variant_setup.size_y);
@@ -51,8 +50,8 @@ game game::from_pgn(std::string input)
     }
     gnode<comments_t> *cn = nullptr;
     // parse moves
-    std::function<void(gnode<comments_t>*, const pgnparser_ast::gametree&)> dfs;
-    dfs = [&dfs, &cn](gnode<comments_t>* node, const pgnparser_ast::gametree& gt_ast) -> void {
+    std::function<void(gnode<comments_t> *, const pgnparser_ast::gametree&)> dfs;
+    dfs = [&dfs, &cn](gnode<comments_t> *node, const pgnparser_ast::gametree& gt_ast) -> void {
         if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome))
         {
             const auto& variations = std::get<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome);
@@ -109,8 +108,8 @@ game game::from_pgn(std::string input)
                     throw std::runtime_error(oss.str());
                 }
                 action act = action::from_vector(moves, node->get_state());
-                std::unique_ptr<gnode<comments_t>> child_node = gnode<comments_t>::create_child(node, s, act, act_ast.comments);
-                gnode<comments_t>* child_node_ptr = node->add_child(std::move(child_node));
+                std::unique_ptr<gnode<comments_t>> child_node = gnode<comments_t>::create_child(node, std::move(s), std::move(act), act_ast.comments);
+                gnode<comments_t> *child_node_ptr = node->add_child(std::move(child_node));
                 cn = child_node_ptr;
                 dfs(child_node_ptr, *child_gt);
             }
@@ -426,7 +425,7 @@ bool game::add_child_action(action act)
     {
         return false;
     }
-    auto child = gnode<comments_t>::create_child(current_node, std::move(newstate), act, comments_t{});
+    auto child = gnode<comments_t>::create_child(current_node, std::move(newstate), std::move(act), comments_t{});
     current_node->add_child(std::move(child));
     nonterminal = true;
     return true;
@@ -477,7 +476,7 @@ std::vector<std::tuple<action, std::string>> game::get_child_actions(pgn_options
 std::vector<std::tuple<action, std::string>> game::get_historical_actions() const
 {
     std::vector<std::tuple<action, std::string>> result;
-    gnode<comments_t>* node = current_node;
+    gnode<comments_t> *node = current_node;
     
     // Walk from current node back to root, collecting actions
     while(node->get_parent() != nullptr)
@@ -499,9 +498,13 @@ bool game::visit_child(action act, comments_t comments, std::optional<state> new
     discard_preview();
     // check if the child already exists
     auto &children = current_node->get_children();
+    const auto moves = act.get_moves_view();
     for(auto &child : children)
     {
-        if(child->get_action().get_moves() == act.get_moves())
+        const auto child_moves = child->get_action().get_moves_view();
+        if(std::equal(
+            child_moves.begin(), child_moves.end(),
+            moves.begin(), moves.end()))
         {
             current_node = child.get();
             fresh();
@@ -509,7 +512,7 @@ bool game::visit_child(action act, comments_t comments, std::optional<state> new
         }
     }
     // create a new child
-    auto new_child = gnode<comments_t>::create_child(current_node, newstate, act, comments);
+    auto new_child = gnode<comments_t>::create_child(current_node, std::move(newstate), std::move(act), std::move(comments));
     current_node = current_node->add_child(std::move(new_child));
     fresh();
     return false;

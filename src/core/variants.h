@@ -8,8 +8,7 @@
 #include <vector>
 #include "pgnparser.h"
 #include "promotion_header.h"
-
-class multiverse;
+#include "multiverse.h"
 
 struct variant_setup_t
 {
@@ -23,5 +22,5 @@ struct variant_setup_t
 extern const std::map<std::string, variant_setup_t> default_variants;
 
 variant_setup_t derive_variant_setup(const pgnparser_ast::game &g);
-std::unique_ptr<multiverse> create_multiverse_from_variant_setup(const variant_setup_t &variant_setup);
+multiverse create_multiverse_from_variant_setup(const variant_setup_t &variant_setup);
 #endif // VARIANTS_H

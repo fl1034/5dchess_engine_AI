@@ -5,6 +5,7 @@
 #include <memory>
 #include <deque>
 #include <optional>
+#include <span>
 #include <string>
 #include <tuple>
 #include <variant>
@@ -29,9 +30,6 @@ struct fine_cell
     search_space subspace;
 };
 
-template<typename T = std::monostate>
-struct nodal_pocession;
-
 /*
  There are a few types of fine_nodes:
  + nodal: Represents the initial game state or a game state where an action is
@@ -52,7 +50,7 @@ struct nodal_pocession;
     7. If further expansion is needed, you can call `ignite` to make the ceiling node a nodal node. Further expansion can be performed by starting over from step 2. PS: You can use `is_nodal` to check if a node is ignited.
 
 Additional tools:
-    1. `get_nearby_ceiling` returns the nearest ceiling node in the ancestor chain. If the current node is ceiling, it returns itself.
+    1. The function `finetree_nearby_ceiling(node)` follows the first-child chain to a ceiling node. If the current node is ceiling, it returns itself.
     2. `is_terminal` checks if the node is terminal. It may add children to the node if it is not terminal but has no children yet. Note: if the node is ceiling but not ignited, `is_terminal` will always return false.
 
 Associated information:
@@ -65,29 +63,36 @@ template<typename T>
     requires std::default_initializable<T>
 class fine_node
 {
+    struct nodal_pocession;
+
     fine_node<T> *parent;
     // only for nodal nodes
-    std::unique_ptr<nodal_pocession<T>> pocessed_context;
+    std::unique_ptr<nodal_pocession> pocessed_context;
     // non-owning pointer to the pocessed_context of its ancestor
-    nodal_pocession<T> *context;
+    nodal_pocession *context;
     index_t n, i; // only meaningful for temporary nodes
-    std::vector<fine_cell<T>*> cells;
+    std::vector<fine_cell<T> *> cells;
     std::size_t next_cell_index;
-    std::vector<fine_node<T>*> children;
+    std::vector<fine_node<T> *> children;
     T info;
 
+    /* Return the newer context. */
+    nodal_pocession *get_context() & noexcept;
+
     // -- internal tree-building helpers -- //
+    void ignite_impl(const state &s);
     fine_cell<T> *add_cell(fine_cell<T> &&cell);
+    fine_cell<T> *add_unexplored_cell(fine_cell<T> *parent, HC space);
     fine_node<T> *add_child(index_t n, index_t i);
     template<HCOrdering Order>
-    fine_node<T> *expand(Order order);
+    fine_node<T> *expand(const Order &order);
     template<HCOrdering Order>
-    std::optional<std::tuple<point, fine_cell<T>*, HC*>> explore(Order order);
-    void remove_problem(const slice&, fine_cell<T>* origin_cell);
-    void remove_from_cell(const slice&, fine_cell<T>*, bool force_back_removal);
-    void remove_from_node(const slice&, fine_node<T>*, fine_cell<T>* critical_cell, bool force_critical_removal);
-    fine_node<T> *isolate(point, fine_cell<T>*, HC*);
-    fine_node<T> *normalize(point, fine_cell<T>*, fine_node<T>*);
+    std::optional<std::tuple<point, fine_cell<T> *, HC *>> explore(const Order &order);
+    void remove_problem(const slice&, fine_cell<T> *origin_cell);
+    void remove_from_cell(const slice&, fine_cell<T> *, bool force_back_removal);
+    void remove_from_node(const slice&, fine_node<T> *, fine_cell<T> *critical_cell, bool force_critical_removal);
+    fine_node<T> *isolate(const point &, fine_cell<T> *, HC *);
+    fine_node<T> *normalize(const point &, fine_cell<T> *, fine_node<T> *);
 
 public:
     // copying/moving a fine_node needs to explicitly set the parent pointer of its children
@@ -107,37 +112,46 @@ public:
     static std::unique_ptr<fine_node<T>> make_root(state s, T info = T{});
 
     // -- queries -- //
-    bool is_nodal() const { return pocessed_context != nullptr; }
-    bool is_ceiling() const;
-    T &get_info() { return info; }
-    const T &get_info() const { return info; }
-    void set_info(const T &new_info) { info = new_info; }
-    void set_info(T &&new_info) { info = std::move(new_info); }
-    bool get_player() const;
-    fine_node<T> *get_child(index_t i) const;
-    fine_node<T> *get_parent() const { return parent; }
-    const std::vector<fine_node<T>*> get_children() const { return children; };
-    nodal_pocession<T> *get_context() const; /* returns the newer context */
+    bool is_nodal() const noexcept { return pocessed_context != nullptr; }
+    bool is_ceiling() const noexcept;
+    T &get_info() & noexcept { return info; }
+    const T &get_info() const & noexcept { return info; }
+    const T &get_info() const && = delete;
+    void set_info(const T &new_info) & { info = new_info; }
+    void set_info(T &&new_info) & { info = std::move(new_info); }
+    bool get_player() const noexcept;
+    fine_node<T> *get_child(index_t i) & noexcept;
+    const fine_node<T> *get_child(index_t i) const & noexcept;
+    const fine_node<T> *get_child(index_t i) const && = delete;
+    fine_node<T> *get_parent() & noexcept { return parent; }
+    const fine_node<T> *get_parent() const & noexcept { return parent; }
+    const fine_node<T> *get_parent() const && = delete;
+    // Borrowed pointer slots; expansion may invalidate the view.
+    std::span<fine_node<T> * const> get_children() & noexcept { return children; }
+    std::span<const fine_node<T> * const> get_children() const & noexcept { return children; }
+    std::span<const fine_node<T> * const> get_children() const && = delete;
+    const HC_info &get_hc_info() const & noexcept;
+    const HC_info &get_hc_info() const && = delete;
     std::string print_semimove() const;
-    fine_node<T> *get_nearby_ceiling();
-    bool is_terminal();
+    bool is_terminal() &;
     template<HCOrdering Order>
-    bool is_terminal(Order order); /* non-const because it may add children found during the check */
-    index_t get_n() const { return n; }
-    index_t get_i() const { return i; }
+    bool is_terminal(const Order &order) &; /* non-const because it may add children found during the check */
+    index_t get_n() const noexcept { return n; }
+    index_t get_i() const noexcept { return i; }
 
     // -- expansion -- //
     template<HCOrdering Order>
-    generator<index_t> search(Order order);
-    void ignite(); /* make a ceiling node also a nodal node */
-    moveseq to_action(); /* only avialible for ceiling nodes */
+    generator<index_t> search(Order order) &;
+    void ignite() &; /* make a ceiling node also a nodal node */
+    moveseq to_action() const; /* only avialible for ceiling nodes */
 
     // -- debug -- //
     std::string to_string() const;
 };
 
 template<typename T>
-struct nodal_pocession
+    requires std::default_initializable<T>
+struct fine_node<T>::nodal_pocession
 {
     HC_info hc_info;
     std::deque<fine_node<T>> node_pool;
@@ -147,6 +161,22 @@ struct nodal_pocession
     + false if not terminal or not yet verified
     */
 };
+
+// Follow the first-child chain to a ceiling node, preserving node constness.
+template<class Node>
+Node *finetree_nearby_ceiling(Node *node)
+{
+    while(node && !node->is_ceiling())
+    {
+        auto children = node->get_children();
+        if(children.empty())
+        {
+            return nullptr;
+        }
+        node = children.front();
+    }
+    return node;
+}
 
 #include "finetree.inl"
 

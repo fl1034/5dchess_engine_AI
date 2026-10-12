@@ -70,7 +70,7 @@ private:
                        const std::vector<std::vector<float>> &, std::mt19937 &>)
                 {
                     auto built = construct_hc_ordering<Order>(
-                        root->get_context()->hc_info,
+                        root->get_hc_info(),
                         uct_detail::random_engine(rng), stop, score_function);
                     if(!built) return result_t{};
                     cached = std::move(*built);
@@ -85,7 +85,7 @@ private:
         if(!data.random_ordering || data.ordering_owner != policy_id)
         {
             data.random_ordering.emplace(
-                root->get_context()->hc_info.universe,
+                root->get_hc_info().universe,
                 uct_detail::random_engine(rng));
             data.ordering_owner = policy_id;
         }

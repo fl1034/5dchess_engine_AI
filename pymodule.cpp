@@ -131,7 +131,7 @@ PYBIND11_MODULE(engine, m) {
         .def(py::self == py::self)
         // optional: nice repr
         .def("__repr__", [](const action &a){
-            return "<action with " + std::to_string(a.get_moves().size()) + " moves>";
+            return "<action with " + std::to_string(a.get_length()) + " moves>";
         })
     ;
     /*

@@ -2,10 +2,35 @@
 #include <tuple>
 #include <ranges>
 #include <cassert>
+#include <type_traits>
+#include <utility>
 #include "state.h"
 #include "pgnparser.h"
 #include "finetree.h"
 #include "utils.h"
+
+using test_node = fine_node<>;
+static_assert(std::is_same_v<decltype(finetree_nearby_ceiling(std::declval<test_node *>())), test_node *>);
+static_assert(std::is_same_v<decltype(std::declval<test_node &>().get_child(0)), test_node *>);
+static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_child(0)), const test_node *>);
+static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_parent()), const test_node *>);
+static_assert(std::is_same_v<decltype(finetree_nearby_ceiling(std::declval<const test_node *>())), const test_node *>);
+static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_hc_info()), const HC_info &>);
+static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_children()[0]), const test_node * const &>);
+
+template<class Node>
+concept exposes_context = requires(Node &node) { node.get_context(); };
+static_assert(!exposes_context<test_node>);
+static_assert(!exposes_context<const test_node>);
+
+template<class Node>
+concept exposes_context_type = requires { typename Node::nodal_pocession; };
+static_assert(!exposes_context_type<test_node>);
+
+template<class Node>
+concept can_ignite = requires(Node &node) { node.ignite(); };
+static_assert(can_ignite<test_node>);
+static_assert(!can_ignite<const test_node>);
 
 std::string str = R"(
 [Mode "5D"]
@@ -32,6 +57,19 @@ fine_node<> *goto_next_nodal(fine_node<> *node)
 int main()
 {
     state s(*pgnparser(str).parse_game());
+
+    // A terminal check retains a witness branch and reuses it on later checks.
+    auto checked_root = fine_node<>::make_root(s);
+    assert(checked_root->get_children().empty());
+    assert(!checked_root->is_terminal());
+    const auto child_count = checked_root->get_children().size();
+    assert(child_count > 0);
+    auto *ceiling = finetree_nearby_ceiling(checked_root.get());
+    assert(ceiling && s.can_apply(action::from_moveseq(ceiling->to_action(), s)));
+    assert(!checked_root->is_terminal(natural_HC_ordering{}));
+    assert(checked_root->get_children().size() == child_count);
+    const auto &const_root = *checked_root;
+    assert(finetree_nearby_ceiling(&const_root) == ceiling);
 
     std::cout << s.to_string() << std::endl;
     auto root = fine_node<>::make_root(s);

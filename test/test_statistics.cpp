@@ -3,7 +3,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
-#include "core/multiverse_variants.h"
+#include "core/multiverse.h"
 #include "core/pgnparser.h"
 #include "core/state.h"
 #include "core/statistics.h"
@@ -57,7 +57,7 @@ void test_material_difference_after_capture()
 
 void test_initial_odd_multiverse()
 {
-    multiverse_odd multiverse({{0, 1, false, empty_board}});
+    multiverse multiverse(timeline_layout::odd(), {{0, 1, false, empty_board}});
     const state s(multiverse);
     const auto data = count_timelines(s);
 
@@ -78,7 +78,7 @@ void test_initial_odd_multiverse()
 
 void test_white_to_move_with_inactive_timeline()
 {
-    multiverse_odd multiverse({
+    multiverse multiverse(timeline_layout::odd(), {
         {-1, 2, false, empty_board},
         { 0, 1, false, empty_board},
         { 1, 1, false, empty_board},
@@ -106,7 +106,7 @@ void test_white_to_move_with_inactive_timeline()
 
 void test_black_to_move_with_timeline_advantage()
 {
-    multiverse_even multiverse({
+    multiverse multiverse(timeline_layout::even(), {
         {-2, 2,  true, empty_board},
         {-1, 1,  true, empty_board},
         { 0, 1,  true, empty_board},

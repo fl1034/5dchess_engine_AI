@@ -8,10 +8,10 @@ state state_at_ceiling(Node &node)
     assert(node.is_ceiling());
     if(node.is_nodal())
     {
-        return node.get_context()->hc_info.s;
+        return node.get_hc_info().s;
     }
 
-    state result = node.get_context()->hc_info.s;
+    state result = node.get_hc_info().s;
     for(full_move move : node.to_action())
     {
         [[maybe_unused]] const bool applied = result.apply_move<true>(move);
@@ -181,7 +181,7 @@ basic_mcts_engine<TP, DP, BP, SP, Observer>::find_best_move(
         return std::nullopt; // No best node found
     }
     assert(best_node->is_ceiling());
-    const state &s = root->get_context()->hc_info.s;
+    const state &s = root->get_hc_info().s;
     action best_action = action::from_moveseq(best_node->to_action(), s);
     return best_action;
 }

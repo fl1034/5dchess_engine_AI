@@ -1,6 +1,8 @@
 #ifndef SELECTION_POLICY_H
 #define SELECTION_POLICY_H
 
+#include "finetree.h"
+
 struct most_visited_selection
 {
     template<class Node, class Observer>
@@ -15,7 +17,7 @@ struct most_visited_selection
                    (!best || child->get_info().visits > best->get_info().visits))
                     best = child;
             }
-            if(!best) return node->get_nearby_ceiling();
+            if(!best) return finetree_nearby_ceiling(node);
             node = best;
         }
         return node;

@@ -30,7 +30,7 @@ void debug_print(Args... args)
     std::cerr << "[DEBUG] ";
     debug_print_impl(args...);
 }
-} /* namespace */
+} /* namespace detail */
 
 /* always debug-print */
 #define adprint(...) (detail::debug_print(__VA_ARGS__))

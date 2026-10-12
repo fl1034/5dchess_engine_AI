@@ -33,43 +33,43 @@ class board
 public:
     board(std::string fen, int size_x = BOARD_LENGTH, int size_y = BOARD_LENGTH);
     // inline getter functions
-    constexpr bitboard_t umove() const { return umove_mask; }
+    constexpr bitboard_t umove() const noexcept { return umove_mask; }
 
-    constexpr bitboard_t white() const { return bbs[WHITE]; }
-    constexpr bitboard_t black() const { return bbs[BLACK]; }
-    constexpr bitboard_t wall() const { return bbs[WHITE] & bbs[BLACK]; }
+    constexpr bitboard_t white() const noexcept { return bbs[WHITE]; }
+    constexpr bitboard_t black() const noexcept { return bbs[BLACK]; }
+    constexpr bitboard_t wall() const noexcept { return bbs[WHITE] & bbs[BLACK]; }
     
-    constexpr bitboard_t royal() const { return bbs[ROYAL]; }
+    constexpr bitboard_t royal() const noexcept { return bbs[ROYAL]; }
 
-    constexpr bitboard_t lking() const { return bbs[LKING]; }
-    constexpr bitboard_t lknight() const { return bbs[LKNIGHT]; }
-    constexpr bitboard_t lpawn() const { return bbs[LPAWN]; }
-    constexpr bitboard_t lrawn() const { return bbs[LRAWN]; }
+    constexpr bitboard_t lking() const noexcept { return bbs[LKING]; }
+    constexpr bitboard_t lknight() const noexcept { return bbs[LKNIGHT]; }
+    constexpr bitboard_t lpawn() const noexcept { return bbs[LPAWN]; }
+    constexpr bitboard_t lrawn() const noexcept { return bbs[LRAWN]; }
 
-    constexpr bitboard_t lrook() const { return bbs[LROOK]; }
-    constexpr bitboard_t lbishop() const { return bbs[LBISHOP]; }
-    constexpr bitboard_t lunicorn() const { return bbs[LUNICORN]; }
-    constexpr bitboard_t ldragon() const { return bbs[LDRAGON]; }
+    constexpr bitboard_t lrook() const noexcept { return bbs[LROOK]; }
+    constexpr bitboard_t lbishop() const noexcept { return bbs[LBISHOP]; }
+    constexpr bitboard_t lunicorn() const noexcept { return bbs[LUNICORN]; }
+    constexpr bitboard_t ldragon() const noexcept { return bbs[LDRAGON]; }
 
-    constexpr bitboard_t king() const { return bbs[LKING] & bbs[ROYAL]; }
-    constexpr bitboard_t common_king() const { return bbs[LKING] & ~bbs[ROYAL]; }
-    constexpr bitboard_t knight() const { return bbs[LKNIGHT]; }
-    constexpr bitboard_t pawn() const { return bbs[LPAWN] & ~bbs[LRAWN]; }
-    constexpr bitboard_t brawn() const { return bbs[LPAWN] & bbs[LRAWN]; }
-    constexpr bitboard_t rook() const { return bbs[LROOK] & ~bbs[LBISHOP]; }
-    constexpr bitboard_t bishop() const { return bbs[LBISHOP] & ~bbs[LROOK]; }
-    constexpr bitboard_t unicorn() const { return bbs[LUNICORN] & ~bbs[LDRAGON]; }
-    constexpr bitboard_t dragon() const { return bbs[LDRAGON] & ~bbs[LUNICORN]; }
-    constexpr bitboard_t princess() const { return bbs[LROOK] & bbs[LBISHOP] & ~bbs[LUNICORN]; }
-    constexpr bitboard_t royal_queen() const { return bbs[LROOK] & bbs[LDRAGON] & bbs[ROYAL]; }
-    constexpr bitboard_t queen() const { return bbs[LROOK] & bbs[LDRAGON] & ~bbs[ROYAL]; }
+    constexpr bitboard_t king() const noexcept { return bbs[LKING] & bbs[ROYAL]; }
+    constexpr bitboard_t common_king() const noexcept { return bbs[LKING] & ~bbs[ROYAL]; }
+    constexpr bitboard_t knight() const noexcept { return bbs[LKNIGHT]; }
+    constexpr bitboard_t pawn() const noexcept { return bbs[LPAWN] & ~bbs[LRAWN]; }
+    constexpr bitboard_t brawn() const noexcept { return bbs[LPAWN] & bbs[LRAWN]; }
+    constexpr bitboard_t rook() const noexcept { return bbs[LROOK] & ~bbs[LBISHOP]; }
+    constexpr bitboard_t bishop() const noexcept { return bbs[LBISHOP] & ~bbs[LROOK]; }
+    constexpr bitboard_t unicorn() const noexcept { return bbs[LUNICORN] & ~bbs[LDRAGON]; }
+    constexpr bitboard_t dragon() const noexcept { return bbs[LDRAGON] & ~bbs[LUNICORN]; }
+    constexpr bitboard_t princess() const noexcept { return bbs[LROOK] & bbs[LBISHOP] & ~bbs[LUNICORN]; }
+    constexpr bitboard_t royal_queen() const noexcept { return bbs[LROOK] & bbs[LDRAGON] & bbs[ROYAL]; }
+    constexpr bitboard_t queen() const noexcept { return bbs[LROOK] & bbs[LDRAGON] & ~bbs[ROYAL]; }
     
     // indirect getter functions
-    constexpr bitboard_t sliding() const { return bbs[LROOK] | bbs[LBISHOP] | bbs[LUNICORN] | bbs[LDRAGON]; }
-    constexpr bitboard_t occupied() const { return bbs[WHITE] | bbs[BLACK]; }
+    constexpr bitboard_t sliding() const noexcept { return bbs[LROOK] | bbs[LBISHOP] | bbs[LUNICORN] | bbs[LDRAGON]; }
+    constexpr bitboard_t occupied() const noexcept { return bbs[WHITE] | bbs[BLACK]; }
     
     template<bool C>
-    constexpr bitboard_t friendly() const
+    constexpr bitboard_t friendly() const noexcept
     {
         // walls are considered as friendly
         // because friendly pieces are blockers
@@ -84,7 +84,7 @@ public:
     }
     
     template<bool C>
-    constexpr bitboard_t hostile() const
+    constexpr bitboard_t hostile() const noexcept
     {
         if constexpr (C)
         {
@@ -108,9 +108,9 @@ public:
     std::string get_fen() const;
 
     // all the pieces (both white and black) that attacks a given square
-    bitboard_t attacks_to(int pos) const;
+    bitboard_t attacks_to(int pos) const noexcept;
 	// pieces hositile to `color` that attacks a given square
-    bool is_under_attack(int pos, int color) const;
+    bool is_under_attack(int pos, int color) const noexcept;
 };
 
 

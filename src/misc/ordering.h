@@ -5,6 +5,7 @@
 #include <concepts>
 #include <random>
 #include <vector>
+#include <utility>
 #include "integer_set.h"
 #include "geometry.h"
 
@@ -122,7 +123,7 @@ class weighted_HC_ordering : private detail::precomputed_HC_ordering<weighted_HC
     using base = detail::precomputed_HC_ordering<weighted_HC_ordering>;
 public:
     explicit weighted_HC_ordering(const HC &hc, std::vector<std::vector<float>> weights)
-        : weighted_HC_ordering(hc, weights, base::default_rng())
+        : weighted_HC_ordering(hc, std::move(weights), base::default_rng())
     {}
 
     weighted_HC_ordering(const HC &hc, std::vector<std::vector<float>> weights, std::mt19937 &rng);

@@ -1,6 +1,5 @@
 #include <cassert>
 #include <sstream>
-#include <map>
 
 #include "finetree.h"
 
@@ -12,22 +11,7 @@ inline fine_node<T>::fine_node(
     T info_value)
 : parent{parent}, pocessed_context{nullptr}, context{nullptr}, n{index_t(-7)}, i{index_t(-7)}, cells{}, next_cell_index{0}, info{std::move(info_value)}
 {
-    auto [hc_info, ss] = HC_info::build_HC(s);
-    HC universe = hc_info.universe;
-    pocessed_context = std::make_unique<nodal_pocession<T>>(nodal_pocession<T>{
-        .hc_info = std::move(hc_info),
-        .node_pool = {},
-        .cell_pool = {
-            fine_cell<T>{
-                .parent = nullptr,
-                .node = this,
-                .space = std::move(universe),
-                .subspace = std::move(ss)
-            }
-        },
-        .verified_terminal = false
-    });
-    cells.push_back(&pocessed_context->cell_pool.back());
+    ignite_impl(s);
 }
 
 template<typename T>
@@ -47,7 +31,7 @@ inline std::unique_ptr<fine_node<T>> fine_node<T>::make_root(
     T info)
 {
     return std::unique_ptr<fine_node<T>>(
-        new fine_node(nullptr, s, std::move(info)));
+        new fine_node(nullptr, std::move(s), std::move(info)));
 }
 
 template<typename T>
@@ -68,6 +52,20 @@ inline fine_cell<T> *fine_node<T>::add_cell(fine_cell<T> &&cell)
     return new_cell;
 }
 
+template<typename T>
+    requires std::default_initializable<T>
+inline fine_cell<T> *fine_node<T>::add_unexplored_cell(fine_cell<T> *parent, HC space)
+{
+    fine_cell<T> cell{
+        .parent = parent,
+        .node = this,
+        .space = space,
+        .subspace = {}
+    };
+    cell.subspace.push_back(std::move(space));
+    return add_cell(std::move(cell));
+}
+
 // TODO: insert elements while keep the increasing order of i
 template<typename T>
     requires std::default_initializable<T>
@@ -82,7 +80,7 @@ inline fine_node<T> *fine_node<T>::add_child(index_t n, index_t i)
 
 template<typename T>
     requires std::default_initializable<T>
-inline bool fine_node<T>::is_ceiling() const
+inline bool fine_node<T>::is_ceiling() const noexcept
 {
     if(!context)
     {
@@ -93,29 +91,10 @@ inline bool fine_node<T>::is_ceiling() const
     return n + 1 == context->hc_info.dimension;
 }
 
-template<typename T>
-    requires std::default_initializable<T>
-inline fine_node<T> *fine_node<T>::get_nearby_ceiling()
-{
-    fine_node<T> *current = this;
-
-    while(!current->is_ceiling())
-    {
-        if(current->children.empty())
-        {
-            return nullptr;
-        }
-        current = current->children.front();
-    }
-
-    return current;
-}
-
-
 template <typename T>
     requires std::default_initializable<T>
 template <HCOrdering Order>
-inline bool fine_node<T>::is_terminal(Order order)
+inline bool fine_node<T>::is_terminal(const Order &order) &
 {
     if(!is_nodal())
     {
@@ -132,7 +111,7 @@ inline bool fine_node<T>::is_terminal(Order order)
         // if the node already has children, it is not terminal
         return false;
     }
-    if(auto i_opt = search(order).first())
+    if(expand(order))
     {
         // if the node has a valid search result, it is not terminal
         return false;
@@ -143,44 +122,14 @@ inline bool fine_node<T>::is_terminal(Order order)
 
 template<typename T>
     requires std::default_initializable<T>
-inline bool fine_node<T>::is_terminal()
+inline bool fine_node<T>::is_terminal() &
 {
-    if(!is_nodal())
-    {
-        // if the node is not nodal, it is not terminal because every temporary node has a valid branch as witness
-        return false;
-    }
-    else if(pocessed_context->verified_terminal)
-    {
-        // if it is already verified to be terminal, return true
-        return true;
-    }
-    if(!get_children().empty())
-    {
-        // if the node already has children, it is not terminal
-        return false;
-    }
-    const HC_info &hc_info = get_context()->hc_info;
-    search_space ss;
-    for(const fine_cell<T> *cell : cells)
-    {
-        for(const HC &hc : cell->subspace)
-        {
-            ss.push_back(hc);
-        }
-    }
-    if(hc_info.search(std::move(ss)).first())
-    {
-        // if the node has a valid search result, it is not terminal
-        return false;
-    }
-    pocessed_context->verified_terminal = true;
-    return true;
+    return is_terminal(natural_HC_ordering{});
 }
 
 template<typename T>
     requires std::default_initializable<T>
-inline fine_node<T> *fine_node<T>::get_child(index_t i) const
+inline fine_node<T> *fine_node<T>::get_child(index_t i) & noexcept
 {
     for(fine_node<T> *next_node : children)
     {
@@ -194,23 +143,37 @@ inline fine_node<T> *fine_node<T>::get_child(index_t i) const
 
 template<typename T>
     requires std::default_initializable<T>
-inline nodal_pocession<T> *fine_node<T>::get_context() const
+inline const fine_node<T> *fine_node<T>::get_child(index_t i) const & noexcept
 {
-    if(pocessed_context)
+    for(const fine_node<T> *next_node : children)
     {
-        return pocessed_context.get();
+        if(next_node->i == i)
+        {
+            return next_node;
+        }
     }
-    else
-    {
-        return context;
-    }
+    return nullptr;
 }
 
 template<typename T>
     requires std::default_initializable<T>
-inline bool fine_node<T>::get_player() const
+inline typename fine_node<T>::nodal_pocession *fine_node<T>::get_context() & noexcept
 {
-    return get_context()->hc_info.s.get_present().second;
+    return pocessed_context ? pocessed_context.get() : context;
+}
+
+template<typename T>
+    requires std::default_initializable<T>
+inline const HC_info &fine_node<T>::get_hc_info() const & noexcept
+{
+    return pocessed_context ? pocessed_context->hc_info : context->hc_info;
+}
+
+template<typename T>
+    requires std::default_initializable<T>
+inline bool fine_node<T>::get_player() const noexcept
+{
+    return get_hc_info().s.get_present().second;
 }
 
 template<typename T>
@@ -230,7 +193,7 @@ inline std::string fine_node<T>::print_semimove() const
 template<typename T>
     requires std::default_initializable<T>
 template<HCOrdering Order>
-inline generator<index_t> fine_node<T>::search(Order order)
+inline generator<index_t> fine_node<T>::search(Order order) &
 {
     fine_node<T> *next_node = expand(order);
     while(next_node)
@@ -243,14 +206,14 @@ inline generator<index_t> fine_node<T>::search(Order order)
 template<typename T>
     requires std::default_initializable<T>
 template<HCOrdering Order>
-inline fine_node<T> *fine_node<T>::expand(Order order)
+inline fine_node<T> *fine_node<T>::expand(const Order &order)
 {
     auto ans = explore(order);
     if(!ans)
     {
         return nullptr;
     }
-    auto [pt, cell, hc] = *ans;
+    const auto &[pt, cell, hc] = *ans;
     fine_node<T> *final_node = isolate(pt, cell, hc);
     fine_node<T> *next_node = normalize(pt, cell, final_node);
     return next_node;
@@ -259,7 +222,7 @@ inline fine_node<T> *fine_node<T>::expand(Order order)
 template<typename T>
     requires std::default_initializable<T>
 template<HCOrdering Order>
-inline std::optional<std::tuple<point, fine_cell<T> *, HC *>> fine_node<T>::explore(Order order)
+inline std::optional<std::tuple<point, fine_cell<T> *, HC *>> fine_node<T>::explore(const Order &order)
 {
     HC_info &hc_info = get_context()->hc_info;
     std::size_t consecutive_empty_cells = 0;
@@ -296,7 +259,7 @@ inline std::optional<std::tuple<point, fine_cell<T> *, HC *>> fine_node<T>::expl
         }
 
         return std::optional<std::tuple<point, fine_cell<T> *, HC *>>{
-            std::in_place, *pt_opt, cell, &hc};
+            std::in_place, std::move(*pt_opt), cell, &hc};
     }
     return std::nullopt;
 }
@@ -338,7 +301,7 @@ template<typename T>
     requires std::default_initializable<T>
 inline void fine_node<T>::remove_problem(const slice &s, fine_cell<T> *origin_cell)
 {
-    nodal_pocession<T> *problem_context = get_context();
+    nodal_pocession *problem_context = get_context();
     // Process only the cells owned by the current node and its ancestors.
     // Do not enter either the current node's descendants or off-path child
     // subtrees of an ancestor. The originating HC is always cut to guarantee
@@ -380,7 +343,7 @@ inline void fine_node<T>::remove_problem(const slice &s, fine_cell<T> *origin_ce
 
 template<typename T>
     requires std::default_initializable<T>
-inline fine_node<T> *fine_node<T>::isolate(point p, fine_cell<T> *target_cell, HC *target_hc)
+inline fine_node<T> *fine_node<T>::isolate(const point &p, fine_cell<T> *target_cell, HC *target_hc)
 {
     assert(target_cell->space.contains(p));
     assert(target_hc->contains(p));
@@ -392,14 +355,9 @@ inline fine_node<T> *fine_node<T>::isolate(point p, fine_cell<T> *target_cell, H
     {
         index_t next_i = p[next_n];
         fine_node<T> *next_node = current_node->add_child(next_n, next_i);
-        const auto &[with_i, without_i] = current_hc->split(next_n, next_i);
-        fine_cell<T> *next_cell = next_node->add_cell(fine_cell<T>{
-            .parent = current_cell,
-            .node = next_node,
-            .space = with_i,
-            .subspace = search_space{with_i}
-        });
-        *current_hc = without_i;
+        auto [with_i, without_i] = current_hc->split(next_n, next_i);
+        fine_cell<T> *next_cell = next_node->add_unexplored_cell(current_cell, std::move(with_i));
+        *current_hc = std::move(without_i);
         current_cell->subspace.prune_empty(); /* optional */
         // prepare for next iteration
         current_node = next_node;
@@ -412,7 +370,7 @@ inline fine_node<T> *fine_node<T>::isolate(point p, fine_cell<T> *target_cell, H
 
 template<typename T>
     requires std::default_initializable<T>
-inline fine_node<T> *fine_node<T>::normalize(point p, fine_cell<T> *target_cell, fine_node<T> *final_node)
+inline fine_node<T> *fine_node<T>::normalize(const point &p, fine_cell<T> *target_cell, fine_node<T> *final_node)
 {
     std::vector<fine_node<T>*> nodes(get_context()->hc_info.dimension+1, nullptr);
     fine_node<T> *current_node = final_node;
@@ -439,14 +397,9 @@ inline fine_node<T> *fine_node<T>::normalize(point p, fine_cell<T> *target_cell,
                 return;
             }
             assert(nodes[next_n] != nullptr);
-            const auto &[with_i, without_i] = current_hc->split(next_n, next_i);
-            fine_cell<T> *next_cell = nodes[next_n]->add_cell(fine_cell<T>{
-                .parent = current_cell,
-                .node = nodes[next_n],
-                .space = with_i,
-                .subspace = search_space{with_i}
-            });
-            *current_hc = without_i;
+            auto [with_i, without_i] = current_hc->split(next_n, next_i);
+            fine_cell<T> *next_cell = nodes[next_n]->add_unexplored_cell(current_cell, std::move(with_i));
+            *current_hc = std::move(without_i);
             current_cell = next_cell;
             current_hc = &current_cell->subspace.back();
             next_n++;
@@ -463,7 +416,7 @@ inline fine_node<T> *fine_node<T>::normalize(point p, fine_cell<T> *target_cell,
 
 template<typename T>
     requires std::default_initializable<T>
-inline void fine_node<T>::ignite()
+inline void fine_node<T>::ignite() &
 {
     state s = context->hc_info.s;
     moveseq mvs = to_action();
@@ -473,21 +426,29 @@ inline void fine_node<T>::ignite()
         assert(applied);
     }
     s.submit<true>();
+    ignite_impl(s);
+}
+
+template<typename T>
+    requires std::default_initializable<T>
+inline void fine_node<T>::ignite_impl(const state &s)
+{
     auto [hc_info, ss] = HC_info::build_HC(s);
     HC universe = hc_info.universe;
-    pocessed_context = std::make_unique<nodal_pocession<T>>(nodal_pocession<T>{
-        .hc_info = std::move(hc_info),
-        .node_pool = {},
-        .cell_pool = {
-            fine_cell<T>{
-                .parent = nullptr,
-                .node = this,
-                .space = std::move(universe),
-                .subspace = std::move(ss)
-            }
-        },
-        .verified_terminal = false
+    auto new_context = std::unique_ptr<nodal_pocession>(
+        new nodal_pocession{
+            .hc_info = std::move(hc_info),
+            .node_pool = {},
+            .cell_pool = {},
+            .verified_terminal = false
+        });
+    new_context->cell_pool.push_back(fine_cell<T>{
+        .parent = nullptr,
+        .node = this,
+        .space = std::move(universe),
+        .subspace = std::move(ss)
     });
+    pocessed_context = std::move(new_context);
     // clear the old cells which are related to the old context
     cells.clear();
     next_cell_index = 0;
@@ -496,7 +457,7 @@ inline void fine_node<T>::ignite()
 
 template<typename T>
     requires std::default_initializable<T>
-inline moveseq fine_node<T>::to_action()
+inline moveseq fine_node<T>::to_action() const
 {
     assert(is_ceiling());
     int dim = context->hc_info.dimension;
@@ -549,7 +510,7 @@ inline std::string fine_node<T>::to_string() const
         oss << indent << "  children#=" << node.children.size() << "\n";
         for(size_t child_index = 0; child_index < node.children.size(); ++child_index)
         {
-            oss << indent << "    child[" << child_index << "]\n" << std::flush;
+            oss << indent << "    child[" << child_index << "]\n";
             self(*node.children[child_index], depth + 4, self);
         }
     };

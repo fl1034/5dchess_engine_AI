@@ -90,5 +90,5 @@ struct game {
     friend std::ostream &operator<<(std::ostream &os, const game &g);
 };
 
-} //namespace
+} /* namespace pgnparser_ast */
 #endif // AST_H

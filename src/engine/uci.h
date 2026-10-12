@@ -50,9 +50,9 @@ private:
 protected:
     bool is_debug_mode = true;
     std::map<std::string, option_value_t> options;
-    static const state& get_startpos()
+    const static state& get_startpos()
     {
-        static const state value{*create_multiverse_from_variant_setup(default_variants.at("Standard - Turn Zero"))};
+        const static state value{create_multiverse_from_variant_setup(default_variants.at("Standard - Turn Zero"))};
         return value;
     }
     void write_line(const std::string &line);

@@ -25,13 +25,14 @@ class HC
     std::vector<integer_set> axes;
 public:
     HC(std::initializer_list<integer_set> init_axes);
-    explicit HC(std::vector<integer_set> &&init_axes);
-    const integer_set &operator[](size_t i) const;
-    integer_set &operator[](size_t i);
-    bool contains(const point &p) const;
-    bool intersects(const slice &s) const;
-    bool empty() const;
-    size_t volume() const;
+    explicit HC(std::vector<integer_set> &&init_axes) noexcept;
+    const integer_set &operator[](size_t i) const & noexcept;
+    integer_set &operator[](size_t i) & noexcept;
+    const integer_set &operator[](size_t i) const && = delete;
+    bool contains(const point &p) const noexcept;
+    bool intersects(const slice &s) const noexcept;
+    bool empty() const noexcept;
+    size_t volume() const noexcept;
     /* remove_slice and remove_point only work when it actually contains
     the stuff to be removed; otherwise, expect duplicate hcs */
     search_space remove_slice(const slice &s) const;
@@ -40,14 +41,14 @@ public:
     search_space remove_slice_carefully(const slice &s) const;
     search_space remove_point_carefully(const point &p) const;
     /* check if the slice has codimension less than or equal to max_codim */
-    bool is_slice_good(const slice &s, index_t max_codim = 1) const;
+    bool is_slice_good(const slice &s, index_t max_codim = 1) const noexcept;
     /* remove slice if the codimension of the slice in this hc is small */
     search_space remove_slice_if_good(const slice &s, index_t max_codim = 1) const;
     /* split the hypercuboid along the nth axis at the ith value 
     returns {part with ith value, part without ith value}
     */
     std::pair<HC, HC> split(index_t n, index_t i) const;
-    size_t dimension() const { return axes.size(); }
+    size_t dimension() const noexcept { return axes.size(); }
     std::string to_string(bool verbose=true) const;
 };
 
@@ -58,13 +59,14 @@ class slice
     // other axes are free, i.e. all included in the slice represented
 public:
     slice() = default;
-    explicit slice(std::map<index_t, integer_set> init_fixed_axes);
+    explicit slice(std::map<index_t, integer_set> init_fixed_axes) noexcept;
 
-    const std::map<index_t, integer_set> &get_fixed_axes() const;
+    const std::map<index_t, integer_set> &get_fixed_axes() const & noexcept;
+    const std::map<index_t, integer_set> &get_fixed_axes() const && = delete;
     void fix_axis(index_t n, integer_set values);
     void free_axis(index_t n);
 
-    bool contains(const point &p) const;
+    bool contains(const point &p) const noexcept;
     std::string to_string() const;
 };
 
@@ -76,19 +78,20 @@ class search_space
 public:
     search_space() = default;
     search_space(std::initializer_list<HC> init_hcs);
-    bool empty() const;
-    size_t volume() const;
-    bool contains(point p) const;
-    void concat(search_space &&other);
+    bool empty() const noexcept;
+    size_t volume() const noexcept;
+    bool contains(const point &p) const noexcept;
+    void concat(search_space &&other) noexcept;
     void prune_empty();
     std::string to_string() const;
-    size_t size() const { return hcs.size(); }
+    size_t size() const noexcept { return hcs.size(); }
 
     void push_back(HC hc);
     void push_front(HC hc);
-    HC &back();
-    const HC &back() const;
-    void pop_back();
+    HC &back() & noexcept;
+    const HC &back() const & noexcept;
+    const HC &back() const && = delete;
+    void pop_back() noexcept;
     /*
      Starting at back(), remove the slice while intersections remain locally
      dense. Replace each HC in place to preserve search order. Continue while
@@ -102,10 +105,12 @@ public:
         index_t max_codim = 1
     );
 
-    std::list<HC>::iterator begin();
-    std::list<HC>::iterator end();
-    std::list<HC>::const_iterator begin() const;
-    std::list<HC>::const_iterator end() const;
+    std::list<HC>::iterator begin() & noexcept;
+    std::list<HC>::iterator end() & noexcept;
+    std::list<HC>::const_iterator begin() const & noexcept;
+    std::list<HC>::const_iterator end() const & noexcept;
+    std::list<HC>::const_iterator begin() const && = delete;
+    std::list<HC>::const_iterator end() const && = delete;
 };
 
 #endif /* GEOMETRY_H */

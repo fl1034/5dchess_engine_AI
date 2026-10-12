@@ -10,7 +10,7 @@ class scope_exit_guard
 {
     std::function<auto () -> void> exit_action;
 public:
-    explicit scope_exit_guard(std::function<auto () -> void> action) : exit_action(std::move(action)) {}
+    explicit scope_exit_guard(std::function<auto () -> void> action) noexcept : exit_action(std::move(action)) {}
     ~scope_exit_guard()
     {
         if(exit_action)
@@ -29,7 +29,7 @@ public:
         }
         return *this;
     }
-    void dismiss()
+    void dismiss() noexcept
     {
         exit_action = nullptr;
     }

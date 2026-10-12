@@ -7,6 +7,8 @@
 #include <ostream>
 #include <optional>
 #include <vector>
+#include <utility>
+#include <span>
 #include "vec4.h"
 #include "piece.h"
 #include "turn.h"
@@ -55,7 +57,7 @@ inline constexpr bool enable_bitmask_operators<special_move_t> = true;
 struct full_move
 {
     vec4 from, to;
-    full_move(vec4 from, vec4 to) : from(from), to(to) {}
+    full_move(vec4 from, vec4 to) noexcept : from(from), to(to) {}
     full_move(std::string);
     std::string to_string() const;
     vec4 new_position(const state &s) const;
@@ -72,8 +74,8 @@ private:
     friend class action;
     friend class state;
 public:
-    bool operator<(const full_move &other) const;
-    bool operator==(const full_move &other) const;
+    bool operator<(const full_move &other) const noexcept;
+    bool operator==(const full_move &other) const noexcept;
     friend std::ostream &operator<<(std::ostream &os, const full_move &fm);
 };
 
@@ -84,16 +86,16 @@ struct ext_move
 {
     full_move fm;
     piece_t promote_to;
-    ext_move(full_move fm, piece_t promote_to) : fm(fm), promote_to(promote_to) {}
-    ext_move(vec4 from, vec4 to, piece_t promote_to) : fm{from, to}, promote_to(promote_to) {}
+    ext_move(full_move fm, piece_t promote_to) noexcept : fm(fm), promote_to(promote_to) {}
+    ext_move(vec4 from, vec4 to, piece_t promote_to) noexcept : fm{from, to}, promote_to(promote_to) {}
     // Resolve the configured promotion in the supplied position.
     ext_move(full_move fm, const state &s);
     // Parsing may leave promotion unspecified; normalize against a state
     // before passing a parsed move to unchecked application.
     ext_move(std::string);
-    vec4 get_from() const { return fm.from; }
-    vec4 get_to() const { return fm.to; }
-    piece_t get_promote() const { return promote_to; }
+    vec4 get_from() const noexcept { return fm.from; }
+    vec4 get_to() const noexcept { return fm.to; }
+    piece_t get_promote() const noexcept { return promote_to; }
     std::string to_string() const;
     std::string lan(const state &) const;
     std::string pgn(const state &, pgn_options options=pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
@@ -116,29 +118,35 @@ class action
 {
     std::vector<ext_move> mvs;
     int branching_index;
-    action(std::vector<ext_move> mvs) : mvs(mvs) {}
+    action(std::vector<ext_move> mvs) noexcept : mvs(std::move(mvs)) {}
     std::string pgn_impl(
         const state &,
         pgn_options,
         const std::vector<char> &check_symbols
     ) const;
 public:
-    action() : mvs{}, branching_index{0} {}
+    action() noexcept : mvs{}, branching_index{0} {}
     /* Sort a vector of extended moves according to the standard order
     as a side effact and return the branching index */
     static int sort(std::vector<ext_move> &mvs, const state &s);
     static action from_vector(const std::vector<ext_move> &mvs, const state &s);
     static action from_moveseq(const moveseq& mvs, const state &s);
     std::vector<ext_move> get_moves() const { return mvs; }
-    int get_length() const { return static_cast<int>(mvs.size()); }
-    int get_branching_index() const { return branching_index; }
+    // Borrowed moves: keep this action alive and do not assign or move it.
+    std::span<const ext_move> get_moves_view() const & noexcept { return mvs; }
+    std::span<const ext_move> get_moves_view() const && = delete;
+    int get_length() const noexcept { return static_cast<int>(mvs.size()); }
+    int get_branching_index() const noexcept { return branching_index; }
     std::string to_string() const;
     std::string lan(const state &) const;
     std::string pgn(const state &, pgn_options options=pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
+    /* provide additional witness information to accelarate pgn generation,
+    or acquire pgn with additional context */
     using pgn_adv_res = std::pair<std::string, std::optional<mate_type>>;
     constexpr static pgn_options DEFAULT_PGN_OPTIONS = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION;
     pgn_adv_res pgn_advanced(const state &, pgn_options options=DEFAULT_PGN_OPTIONS) const;
     pgn_adv_res pgn_advanced(const state &, pgn_options options, const action &witness) const;
+    /* comparison and printing */
     bool operator ==(const action &other) const = default;
     friend std::ostream &operator<<(std::ostream &os, const action &act);
 };

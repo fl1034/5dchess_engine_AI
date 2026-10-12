@@ -8,6 +8,7 @@
 #include <iterator>
 #include <optional>
 #include <exception>
+#include <type_traits>
 
 // for debugging exceptions in coroutine
 #include <iostream>
@@ -42,9 +43,9 @@ static inline std::string capture_stacktrace()
 
 #elif HAS_EXECINFO
     // -------- execinfo.h version (Linux/macOS) ---------
-    void* buf[64];
+    void *buf[64];
     int n = ::backtrace(buf, 64);
-    char** symbols = ::backtrace_symbols(buf, n);
+    char ** symbols = ::backtrace_symbols(buf, n);
 
     std::ostringstream oss;
     for (int i = 0; i < n; ++i)
@@ -69,7 +70,7 @@ public:
         //std::exception_ptr exception_;
         std::optional<T> current_value;
         
-        generator<T> get_return_object()
+        generator<T> get_return_object() noexcept
         {
             return generator{Handle::from_promise(*this)};
         }
@@ -81,7 +82,9 @@ public:
         {
             return {};
         }
-        std::suspend_always yield_value(T value) noexcept
+        std::suspend_always yield_value(T value)
+            noexcept(std::is_nothrow_move_constructible_v<T>
+                  && std::is_nothrow_move_assignable_v<T>)
         {
             current_value = std::move(value);
             return {};
@@ -99,7 +102,7 @@ public:
  
     using Handle = std::coroutine_handle<promise_type>;
  
-    explicit generator(const Handle coroutine) :
+    explicit generator(const Handle coroutine) noexcept :
         m_coroutine{coroutine}
     {}
  
@@ -139,28 +142,28 @@ public:
         {
             m_coroutine.resume();
         }
-        const T& operator*() const
+        const T& operator*() const noexcept
         {
             return *m_coroutine.promise().current_value;
         }
-        bool operator==(std::default_sentinel_t) const
+        bool operator==(std::default_sentinel_t) const noexcept
         {
             return !m_coroutine || m_coroutine.done();
         }
  
-        explicit iterator(const Handle coroutine) :
+        explicit iterator(const Handle coroutine) noexcept :
             m_coroutine{coroutine}
         {}
     };
  
-    iterator begin()
+    iterator begin() &
     {
         if (m_coroutine)
             m_coroutine.resume();
         return iterator{m_coroutine};
     }
  
-    std::default_sentinel_t end() { return {}; }
+    std::default_sentinel_t end() const noexcept { return {}; }
     
     std::optional<T> first()
     {

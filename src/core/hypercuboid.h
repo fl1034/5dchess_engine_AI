@@ -129,7 +129,7 @@ class HC_info
     using entry = std::variant<physical_entry, arriving_entry, departing_entry, null_entry>;
 
     static semimove to_semimove(const entry &e);
-    static const board& extract_board(const entry &e);
+    const static board& extract_board(const entry &e);
     static std::pair<int, int> extract_tl(const entry &e);
     std::vector<std::vector<entry>> axis_coords;
 
@@ -143,8 +143,8 @@ public:
 
     struct move_boards {
         full_move move;
-        const board* result;
-        const board* departure; // null for physical moves
+        const board *result;
+        const board *departure; // null for physical moves
     };
     // Borrowed boards for a full move, including an arrival's paired departure.
     // Only call for coordinates in universe. Null/departing entries return nullopt.
@@ -181,13 +181,20 @@ public:
     std::optional<slice> find_checks(const point &p, const HC &hc) const;
     moveseq to_action(const point &p) const;
     static std::pair<HC_info, search_space> build_HC(const state &s);
-    generator<moveseq> search(search_space ss) const;
+    generator<moveseq> search(search_space ss) const &;
+    generator<moveseq> search(search_space ss) const && = delete;
     template<HCOrdering Order>
-    generator<moveseq> search(search_space ss, Order order) const;
-    generator<moveseq> iterative_search(search_space ss) const;
+    generator<moveseq> search(search_space ss, Order order) const &;
     template<HCOrdering Order>
-    generator<moveseq> iterative_search(search_space ss, Order order) const;
-    generator<moveseq> stable_search(search_space ss) const;
+    generator<moveseq> search(search_space ss, Order order) const && = delete;
+    generator<moveseq> iterative_search(search_space ss) const &;
+    generator<moveseq> iterative_search(search_space ss) const && = delete;
+    template<HCOrdering Order>
+    generator<moveseq> iterative_search(search_space ss, Order order) const &;
+    template<HCOrdering Order>
+    generator<moveseq> iterative_search(search_space ss, Order order) const && = delete;
+    generator<moveseq> stable_search(search_space ss) const &;
+    generator<moveseq> stable_search(search_space ss) const && = delete;
     // /* uncomment when debugging */
     //std::vector<moveseq> search1(search_space ss) const;
 };

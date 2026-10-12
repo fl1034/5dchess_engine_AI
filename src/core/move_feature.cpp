@@ -11,8 +11,8 @@ bool check_move_boards(
     check_position& checks,
     const state& before,
     full_move move,
-    const board* result,
-    const board* departure
+    const board *result,
+    const board *departure
 )
 {
     using board_overlay = check_position::board_overlay;

@@ -35,13 +35,34 @@ I try to follow the terminology described in <https://github.com/adri326/5dchess
 
 + The game tree is represented by `gnode<T>` (defined in `src/core/gametree.h`). Nodes store actions, optional states, child variations, and caller-supplied information. The [client layer](client.md) uses this tree to manage game history and navigation.
 
-+ A `state` object (defined in `src/core/state.h`) contains a `multiverse` object and some additional information such as who is playing. The purpose for that is to distinguish between whether an action is being submitted or not.
++ A `state` object (defined in `src/core/state.h`) stores a `multiverse` directly by value and some additional information such as who is playing. The purpose for that is to distinguish between whether an action is being submitted or not.
 
-+ A `multiverse` object (defined in `src/core/multiverse_base.h`) contains a 2-dimensional list of `board` pointers. Therefore, it is possible to reduce memory consumption by reusing board objects when the new multiverse is only partially different from the old one. There are two types of multiverses (defined in `src/core/multiverse_variants.h`): with odd/even initial timelines.
++ A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of shared `board` pointers. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), constructed with `timeline_layout::odd()` or `timeline_layout::even()`. Its private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
 
 + A `board` object (defined in `src/core/board.h`) stores piece and color information in bitboards, together with an unmoved-piece mask.
 
-In the code, there are two coordinate systems: LTCXY (which is the coordinate for storing moves) and UVXY (which is the coordinate for indexing boards). In both systems, X and Y ranges from 0 to 7. The difference is: L can be positive or negative while U must be greater than or equal to zero. TC are two axes but V is just one axis. The functions `l_to_u` `tc_to_v` `u_to_l` and `v_to_tc` (defined in `src/core/multiverse_base.cpp`) convert between these coordinates.
+Construct a universe with an explicit layout, for example:
+
+```cpp
+multiverse m(timeline_layout::odd(), {{0, 1, false, "k3/4/4/K*3"}}, 4, 4);
+state copied(m);             // Copies timeline storage; existing boards stay shared.
+state moved(std::move(m));   // Transfers timeline storage without allocation.
+```
+
+`state(const multiverse &)` may throw while copying. `state(multiverse &&)`,
+state move construction, and state swap are nonthrowing. The variant factory
+`create_multiverse_from_variant_setup()` returns a multiverse by value, so a
+factory result moves directly into a state. Constructing the universe itself
+still allocates and validates input and may throw.
+
+Move generators borrow their source state or multiverse. Consume or destroy them
+before moving, swapping, modifying, or destroying that source. Recreate borrowed
+`check_position` views after changing their source. Moving a state no longer
+preserves the address of its multiverse through a heap allocation. A moved-from
+state or multiverse can be destroyed or assigned a new value; queries and move
+generation require a populated value.
+
+In the code, there are two coordinate systems: LTCXY (which is the coordinate for storing moves) and UVXY (which is the coordinate for indexing boards). In both systems, X and Y ranges from 0 to 7. The difference is: L can be positive or negative while U must be greater than or equal to zero. TC are two axes but V is just one axis. The functions `l_to_u` `tc_to_v` `u_to_l` and `v_to_tc` (defined in `src/core/multiverse.cpp`) convert between these coordinates.
 
 -----
 
@@ -50,7 +71,7 @@ Initializer of `vec4` object (defined in `src/misc/vec4.h`) follows the order `(
 Movegen
 ========
 
-For efficient move generation, this program uses bitboards (implemented in `src/core/bitboard.h`, etc.) and magic number hashing methods (implemented in `src/core/magic.h`). Note that magic numbers are only stored for rook/bishop movegen for classic chess. To adapt it for 5D Chess, I used copy masks (see `src/core/multiverse_base.cpp`).
+For efficient move generation, this program uses bitboards (implemented in `src/core/bitboard.h`, etc.) and magic number hashing methods (implemented in `src/core/magic.h`). Note that magic numbers are only stored for rook/bishop movegen for classic chess. To adapt it for 5D Chess, I used copy masks (see `src/core/multiverse.cpp`).
 
 Below was the python script used for generating code. It is no longer used though.
 ```python

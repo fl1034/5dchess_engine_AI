@@ -36,6 +36,43 @@ When `TOOLS` or `TEST` is enabled, PGN fixtures are copied from `test/pgn/` to t
 
 All options default to off. With every option disabled, CMake builds only the core C++ library. Enable both `TOOLS` and `TEST` to include tools-related tests. See [Contributing](../../CONTRIBUTING.md#testing) for test commands.
 
+Native regression test executables are grouped by functionality:
+
+| Executable | Coverage |
+|---|---|
+| `test_action` | Actions, semimoves, move application, and promotions |
+| `test_state_history` | Multiverse ownership and layout, game trees, and hashing |
+| `test_check_position` | Check views and phantom checks |
+| `test_hcutils` | Hypercuboid operations and graph matching |
+| `test_move_evaluation` | Move scoring and HC semimove features |
+| `test_mcts` | MCTS infrastructure, policies, and linear engine variants |
+| `test_misc` | Integer sets, generators, and ordering utilities |
+| `test_bitboards` | Bitboards and attack tables |
+| `test_finetree` | Fine-tree expansion and navigation |
+| `test_statistics` | Core position statistics |
+| `uci_scriptted` | Protocol options, positions, error recovery, task completion, and readiness |
+
+Each grouped executable prints the subgroup name before running it. For example,
+`ctest --test-dir build -R '^test_mcts$' --output-on-failure` runs the MCTS and
+linear engine tests. Executables from files without the `test_` prefix retain
+their individual names. Reconfigure CMake after adding, removing, or renaming
+native test source files so its source glob and CTest registrations are refreshed.
+
+### Building without RTTI
+
+The native libraries, engine, and tools support builds with RTTI disabled. For
+GCC or Clang, configure with `-DCMAKE_CXX_FLAGS=-fno-rtti`, for example:
+
+```sh
+cmake -S . -B build-no-rtti -DENGINE=ON -DTOOLS=ON -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS=-fno-rtti
+cmake --build build-no-rtti --config Release --parallel
+```
+
+For MSVC, use `-DCMAKE_CXX_FLAGS=/GR-` instead. Keep `PYMODULE` disabled for these
+builds because pybind11 requires RTTI. Option debug messages use the readable
+type names `monostate`, `bool`, `int`, `double`, and `string`.
+
 ## IDE setup
 
 Generate an Xcode project:

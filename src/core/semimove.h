@@ -58,10 +58,10 @@ class semimove
     data_t data;
 
 public:
-    semimove(physical_move move) : data(std::move(move)) {}
-    semimove(arriving_move move) : data(std::move(move)) {}
-    semimove(departing_move move) : data(std::move(move)) {}
-    semimove(null_move move) : data(std::move(move)) {}
+    semimove(physical_move move) noexcept : data(std::move(move)) {}
+    semimove(arriving_move move) noexcept : data(std::move(move)) {}
+    semimove(departing_move move) noexcept : data(std::move(move)) {}
+    semimove(null_move move) noexcept : data(std::move(move)) {}
 
     template<typename T>
     bool is() const noexcept
@@ -70,16 +70,22 @@ public:
     }
 
     template<typename T>
-    const T &get() const
+    const T &get() const &
     {
         return std::get<T>(data);
     }
 
     template<typename T>
-    const T *get_if() const noexcept
+    const T &get() const && = delete;
+
+    template<typename T>
+    const T *get_if() const & noexcept
     {
         return std::get_if<T>(&data);
     }
+
+    template<typename T>
+    const T *get_if() const && = delete;
 
     template<typename Visitor>
     decltype(auto) visit(Visitor &&visitor) const

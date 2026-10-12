@@ -33,35 +33,35 @@ typedef enum : unsigned char { //syntax of c23/c++11. Use lesser memory
     //nonstandard pieces for black
 } piece_t; //totally: 30 pieces + 2 non-pieces
 
-constexpr bool piece_umove_flag(piece_t p)
+constexpr bool piece_umove_flag(piece_t p) noexcept
 {
     return p & 0x80;
 }
 
 // remove the unmoved signature for pawn/rook/king
-constexpr piece_t piece_name(piece_t p)
+constexpr piece_t piece_name(piece_t p) noexcept
 {
     return static_cast<piece_t>(p & 0x7f);
 }
 
 // convert to white piece by capitalizing letters
-constexpr piece_t to_white(piece_t p)
+constexpr piece_t to_white(piece_t p) noexcept
 {
     return static_cast<piece_t>(p & ~0x20);
 }
 
-constexpr piece_t to_black(piece_t p)
+constexpr piece_t to_black(piece_t p) noexcept
 {
     return static_cast<piece_t>(p | 0x20);
 }
 
-constexpr piece_t switch_color(piece_t p)
+constexpr piece_t switch_color(piece_t p) noexcept
 {
     return static_cast<piece_t>(p ^ 0x20);
 }
 
 // detect if the letter is in lower case
-constexpr bool piece_color(piece_t p)
+constexpr bool piece_color(piece_t p) noexcept
 {
     return p & 0x20;
 }
@@ -73,7 +73,7 @@ constexpr bool piece_color(piece_t p)
  * The coordinate system works as follows. PGN position "a1" is the position (0,0).
  * In general, "xy" is the position ('x'-'a', y-1)
  */
-constexpr static int ppos(int x, int y)
+constexpr static int ppos(int x, int y) noexcept
 {
     return x|(y<<BOARD_BITS);
 }

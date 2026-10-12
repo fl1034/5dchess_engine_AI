@@ -3,7 +3,11 @@
 #include <random>
 #include <set>
 #include "check_position.h"
+#include <algorithm>
+#include <iostream>
 
+namespace check_position_tests
+{
 namespace {
 void compare(const check_position& view, const state& expected)
 {
@@ -43,11 +47,11 @@ void compare_phantom(const state& s)
         const auto [t, c] = s.get_timeline_end(l);
         const auto end = expected.get_timeline_end(l);
         for (turn_t at = start; at <= end; at = next_turn(at)) {
-            const board* actual = view.get_board_ptr(l,at.first,at.second);
+            const board *actual = view.get_board_ptr(l,at.first,at.second);
             assert(actual);
             assert(actual->get_fen<true>() ==
                    expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
-            const board* borrowed = at <= turn_t{t,c}
+            const board *borrowed = at <= turn_t{t,c}
                 ? s.get_board_ptr(l,at.first,at.second) : s.get_board_ptr(l,t,c);
             assert(actual == borrowed);
         }
@@ -87,7 +91,7 @@ void randomized_differential()
             for (int ply = begin; ply <= end; ++ply)
                 boards.emplace_back(l,ply/2,ply%2,random_board(rng,width,height)->get_fen<true>());
         }
-        multiverse_odd original(boards,width,height);
+        multiverse original(timeline_layout::odd(), boards,width,height);
         state s(original);
         check_position view(s,-3,3);
         compare(view,s);
@@ -95,7 +99,7 @@ void randomized_differential()
 
         // Simultaneously add boards on several existing lines, and branches
         // on both sides. The independently materialized position is the oracle.
-        auto materialized = original.clone();
+        auto materialized = original;
         std::vector<std::shared_ptr<board>> additions;
         for (int l = -3; l <= 3; ++l) {
             if (l != -3 && l != 3 && rng()%2) continue;
@@ -104,10 +108,10 @@ void randomized_differential()
                 ? turn_t{static_cast<int>(rng()%8),static_cast<bool>(rng()%2)}
                 : next_turn(s.get_timeline_end(l));
             view.add_board(l,at,*b);
-            materialized->insert_board(l,at.first,at.second,b);
+            materialized.insert_board(l,at.first,at.second,b);
             additions.push_back(std::move(b));
         }
-        state expected(*materialized);
+        state expected(materialized);
         compare(view,expected);
         compare_phantom(expected);
     }
@@ -125,7 +129,7 @@ void long_rays_and_blockers()
             if (blocked && ply == 10) b.set_piece(ppos(3,3),PAWN_B);
             boards.emplace_back(0,ply/2,ply%2,b.get_fen<true>());
         }
-        multiverse_odd m(boards);
+        multiverse m(timeline_layout::odd(), boards);
         state s(m);
         check_position view(s);
         compare(view,s);
@@ -137,23 +141,23 @@ void long_rays_and_blockers()
     board attacker(empty), target(empty), bridge(empty);
     attacker.set_piece(ppos(3,3),ROOK_W);
     target.set_piece(ppos(3,3),KING_B);
-    multiverse_odd m({{0,3,false,attacker.get_fen<true>()},
+    multiverse m(timeline_layout::odd(), {{0,3,false,attacker.get_fen<true>()},
                       {1,2,true,empty}, {2,3,false,target.get_fen<true>()}});
     state s(m);
     check_position view(s);
     compare(view,s);
     assert(!view.first_check(false,false));
     view.add_board(1,{3,false},bridge);
-    auto expected = m.clone();
-    expected->append_board(1,std::make_shared<board>(bridge));
-    compare(view,state(*expected));
+    auto expected = m;
+    expected.append_board(1,std::make_shared<board>(bridge));
+    compare(view,state(expected));
     assert(view.first_check(false,false));
 }
 
 void new_boards_check_each_other()
 {
     for (bool mover : {false,true}) {
-        multiverse_odd original({{0,2,mover,"8/8/8/8/8/8/8/8"}});
+        multiverse original(timeline_layout::odd(), {{0,2,mover,"8/8/8/8/8/8/8/8"}});
         state s(original);
         check_position view(s,-1,1);
         auto attacker = std::make_shared<board>("8/8/8/8/8/8/8/8");
@@ -163,10 +167,10 @@ void new_boards_check_each_other()
         const auto at = next_turn({2,mover});
         view.add_board(0,at,*attacker);
         view.add_board(1,at,*target);
-        auto expected = original.clone();
-        expected->append_board(0,attacker);
-        expected->insert_board(1,at.first,at.second,target);
-        compare(view,state(*expected));
+        auto expected = original;
+        expected.append_board(0,attacker);
+        expected.insert_board(1,at.first,at.second,target);
+        compare(view,state(expected));
         assert(view.first_check(!mover,false));
         // A branch has no inherited history and uncreated reserved lines are absent.
         assert(!view.get_board_ptr(1,2,mover));
@@ -175,9 +179,119 @@ void new_boards_check_each_other()
 }
 }
 
-int main()
+int run()
 {
     new_boards_check_each_other();
     randomized_differential();
     long_rays_and_blockers();
+    return 0;
+}
+} /* namespace check_position_tests */
+
+namespace phantom_checks_tests
+{
+namespace {
+constexpr const char *empty = "8/8/8/8/8/8/8/8";
+
+state cross_line_position(bool mover)
+{
+    board source(empty), target(empty);
+    source.set_piece(ppos(3,3),mover ? ROOK_W : ROOK_B);
+    target.set_piece(ppos(3,3),mover ? KING_B : KING_W);
+    multiverse m(timeline_layout::odd(), {{0,1,mover,source.get_fen<true>()},
+                      {1,1,mover,target.get_fen<true>()}});
+    return state(m);
+}
+
+state physical_position(bool mover)
+{
+    board b(empty);
+    b.set_piece(ppos(3,3),mover ? KING_B : KING_W);
+    b.set_piece(ppos(3,6),mover ? ROOK_W : ROOK_B);
+    multiverse m(timeline_layout::odd(), {{0,1,mover,b.get_fen<true>()}});
+    return state(m);
+}
+
+void compare_phantom(const state& s)
+{
+    const auto [t, player] = s.get_present();
+    (void)t;
+    const state expected = s.phantom();
+    const auto view = check_position::for_phantom(s);
+    std::set<full_move> reference, actual;
+    for (auto mv : expected.find_checks(!player)) reference.insert(mv);
+    for (auto mv : view.checks(!player)) actual.insert(mv);
+    assert(reference == actual);
+    assert(s.has_phantom_check() == !reference.empty());
+    const auto [lo, hi] = s.get_lines_range();
+    for (int l = lo; l <= hi; ++l) {
+        const auto end = expected.get_timeline_end(l);
+        for (auto at = s.get_timeline_start(l); at <= end; at = next_turn(at)) {
+            const auto *b = view.get_board_ptr(l,at.first,at.second);
+            assert(b);
+            assert(b->get_fen<true>() == expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
+        }
+        const auto after = next_turn(end);
+        assert(!view.get_board_ptr(l,after.first,after.second));
+    }
+}
+
+void test_phantom_cases()
+{
+    for (bool mover : {false,true}) {
+        const state physical = physical_position(mover);
+        compare_phantom(physical);
+        assert(physical.has_phantom_check());
+        const state cross = cross_line_position(mover);
+        compare_phantom(cross);
+        const auto view = check_position::for_phantom(cross);
+        const auto hit = view.first_check(!mover,false);
+        assert(hit && hit->from.l() != hit->to.l());
+        const auto at = next_turn({1,mover});
+        assert(hit->from.t() == at.first && hit->to.t() == at.first);
+
+        // During an action the stored player must be used, even after the
+        // apparent present has changed to the opponent before submit().
+        const std::string fen = mover ? "8/8/8/8/8/8/8/r7" : "8/8/8/8/8/8/8/R7";
+        multiverse m(timeline_layout::odd(), {{0,1,mover,fen}, {1,1,mover,fen}});
+        state partial(m);
+        compare_phantom(partial);
+        assert(partial.apply_move<true>(full_move(vec4(0,0,1,0),vec4(0,1,1,0))));
+        compare_phantom(partial);
+        assert(partial.apply_move<true>(full_move(vec4(0,0,1,1),vec4(0,1,1,1))));
+        assert(partial.get_present().second != partial.apparent_present().second);
+        compare_phantom(partial);
+        const auto before_submit = check_position::for_phantom(partial);
+        // Neither endpoint matches the stored player: append nothing.
+        for (int l : {0,1}) {
+            const auto end = partial.get_timeline_end(l);
+            const auto after = next_turn(end);
+            assert(!before_submit.get_board_ptr(l,after.first,after.second));
+        }
+        assert(partial.submit());
+        compare_phantom(partial);
+
+        multiverse even(timeline_layout::even(), {{-1,1,mover,fen}, {0,1,mover,fen}});
+        compare_phantom(state(even));
+    }
+}
+
+}
+
+int run()
+{
+    test_phantom_cases();
+    return 0;
+}
+} /* namespace phantom_checks_tests */
+
+int main()
+{
+    std::cerr << "Running check_position tests\n";
+    if(const int result = check_position_tests::run(); result != 0)
+        return result;
+    std::cerr << "Running phantom_checks tests\n";
+    if(const int result = phantom_checks_tests::run(); result != 0)
+        return result;
+    return 0;
 }

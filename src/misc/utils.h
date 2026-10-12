@@ -66,7 +66,7 @@ std::ostream& operator<<(std::ostream& os, const std::pair<A,B> x)
 /*
 The list printer function. (For debugging.)
 */
-void print_range(auto const rem, auto range)
+void print_range(const auto &rem, auto &&range)
 {
     std::cout << rem << "{";
     bool first = true;
@@ -80,7 +80,7 @@ void print_range(auto const rem, auto range)
     std::cout << "}\n";
 }
 
-std::string range_to_string(const auto range, std::string prefix = "{", std::string suffix = "}", std::string separator = ", ")
+std::string range_to_string(const auto &range, std::string prefix = "{", std::string suffix = "}", std::string separator = ", ")
 {
     std::ostringstream oss;
     oss << prefix;
@@ -138,17 +138,17 @@ V find_or_default(const std::map<K, V>& m, const K& key, const V& def)
  */
 
 template <typename T>
-constexpr int signum(T x) requires std::unsigned_integral<T> {
+constexpr int signum(T x) noexcept requires std::unsigned_integral<T> {
     return T(0) < x;
 }
 
 template <typename T>
-constexpr int signum(T x) requires std::signed_integral<T> {
+constexpr int signum(T x) noexcept requires std::signed_integral<T> {
     return (T(0) < x) - (x < T(0));
 }
 
 template <typename T>
-constexpr int signum(T x) requires std::floating_point<T> {
+constexpr int signum(T x) noexcept requires std::floating_point<T> {
     return (T(0) < x) - (x < T(0));
 }
 
