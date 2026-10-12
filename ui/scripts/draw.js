@@ -7,6 +7,14 @@ import { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } 
 import { chooseLOD } from 'piece';
 import { loadColors, applyFadeToColors, applyFadeToColorString, resolveColor } from 'color';
 
+// Snap near-endpoint alpha values to avoid intermittent Safari rendering flashes.
+// Keep this separate from the easing curve and apply it after alpha scaling.
+export function safeOpacity(alpha) {
+    if (!Number.isFinite(alpha) || alpha < 0.002) return 0;
+    if (alpha > 0.998) return 1;
+    return alpha;
+}
+
 function distanceToBounds(x, y, bounds) {
     return Math.hypot(
         Math.max(bounds.left - x, 0, x - bounds.right),
@@ -371,16 +379,16 @@ export default class ChessBoardCanvas
                 worldY - (l * this.boardSkipY - this.backgroundShiftY),
                 (l+1) * this.boardSkipY - this.backgroundShiftY - worldY
             );
-            const lOpacity = smoothClamp(
+            const lOpacity = safeOpacity(smoothClamp(
                 this.fontSizeforLT / 3.0,
                 3 * this.fontSizeforLT,
                 deltaX * zoomLevel
-            );
-            const tOpacity = smoothClamp(
+            ));
+            const tOpacity = safeOpacity(smoothClamp(
                 this.fontSizeforLT / 3.0,
                 3 * this.fontSizeforLT,
                 deltaY * zoomLevel
-            );
+            ));
             return {l, t, lOpacity, tOpacity};
         })();
         
@@ -539,7 +547,7 @@ export default class ChessBoardCanvas
         }
         
         // Layer 2.1: file/rank labels
-        const labelOpacity = smoothClamp(30.0, 50.0, squareLength);
+        const labelOpacity = safeOpacity(smoothClamp(30.0, 50.0, squareLength));
         if (labelOpacity > 0) {
             ctx.save();
             ctx.font = `italic ${this.fontSizeforXY}px Playfair, serif`;
@@ -665,14 +673,14 @@ export default class ChessBoardCanvas
                 const [fromX, fromY] = this._getCoordinate(arrow.from);
                 const [toX, toY] = this._getCoordinate(arrow.to);
                 const r = this.squareSize / 2;
-                const distance = bounds ? Math.min(
-                    distanceToBounds(fromX + r, fromY + r, bounds),
-                    distanceToBounds(toX + r, toY + r, bounds)
-                ) : 0;
+                const fromDistance = bounds ? distanceToBounds(fromX + r, fromY + r, bounds) : 0;
+                const toDistance = bounds ? distanceToBounds(toX + r, toY + r, bounds) : 0;
+                const distance = Math.min(fromDistance, toDistance);
                 const opacity = 1 - smoothClamp(0, fadeDistance, distance);
-                if (opacity === 0) continue;
+                const alpha = safeOpacity(0.8 * opacity);
+                if (alpha === 0) continue;
                 ctx.save();
-                ctx.globalAlpha = 0.8 * opacity;
+                ctx.globalAlpha = alpha;
                 
                 this._drawArrow(ctx, fromX + r, fromY + r, toX + r, toY + r);
                 

@@ -25,7 +25,11 @@ alignment of pieces, squares, labels, highlights and arrows, and changing the
 file-order preference without moving boards or the camera.
 Arrow tests cover endpoint-distance fading across canvas sizes, zoom levels and board
 orientations, restoration on returning to an endpoint, skipping paths and
-gradients at zero opacity, and candidate filtering across board boundaries.
+gradients at zero or nearly transparent opacity, restoration above the `0.002`
+effective-alpha cutoff, and candidate filtering across board boundaries.
+Opacity tests cover the inclusive `0.002` and `0.998` boundaries, invalid alpha,
+applying the cutoff after arrow alpha scaling, and L/T and file/rank label fades
+skipping near-zero draws and snapping near-one opacity to full opacity.
 Piece-cache tests use a simulated canvas; actual raster pixels need browser checks. Layout and game-control
 integration should also be checked in the built WebAssembly interface at phone
 portrait, phone landscape, tablet, and desktop sizes.

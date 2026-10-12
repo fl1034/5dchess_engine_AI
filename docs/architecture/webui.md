@@ -198,6 +198,13 @@ margin, and fully transparent arrows are skipped
 before creating their paths or gradients. Panning or zooming back restores opacity
 using the same distance rule.
 
+Spatial opacity fades for arrows, L/T labels, and file/rank labels use a shared
+`safeOpacity` helper as a workaround for intermittent Safari flashes near opacity
+endpoints. It preserves alpha in the inclusive range `[0.002, 0.998]`, snaps lower
+values to zero and higher values to one, and treats non-finite values as zero.
+It is separate from the easing curve and applies to final alpha, including the
+arrow's `0.8` opacity factor. Zero-opacity arrows and labels skip drawing entirely.
+
 Flip reverses timeline order and both ranks and files inside each board, giving
 Black's perspective. Under Settings → Interface, **Do not reverse files when
 flipped** keeps files running left to right while retaining the flipped ranks
