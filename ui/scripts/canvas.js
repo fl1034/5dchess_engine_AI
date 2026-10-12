@@ -179,6 +179,7 @@ export class InfiniteScrollableCanvas {
         this.touchStartScale = 0;
         this.touchMoved = false;
         this.touchStartPos = { x: 0, y: 0 };
+        this.pendingTap = null;
         
         // Animation
         this.animationManager = new AnimationManager((timeDiff) => this._onAnimationFrame(timeDiff));
@@ -186,6 +187,11 @@ export class InfiniteScrollableCanvas {
         // Callbacks (to be overridden by implementation)
         this.onRender = null;
         this.onClick = null;
+        this.getDoubleTapTarget = null;
+        this.onDoubleTap = null;
+        this.onTapPreview = null;
+        this.onTapCommit = null;
+        this.onTapCancel = null;
         this.onRightClick = null;
         this.onHover = null;
         
@@ -219,10 +225,8 @@ export class InfiniteScrollableCanvas {
         this.canvas.addEventListener('touchstart', (e) => this._handleTouchStart(e));
         this.canvas.addEventListener('touchmove', (e) => this._handleTouchMove(e));
         this.canvas.addEventListener('touchend', (e) => this._handleTouchEnd(e));
-        this.canvas.addEventListener('touchcancel', () => {
-            this.touchMoved = true;
-            this.isDragging = false;
-        });
+        this.canvas.addEventListener('touchcancel', () => this._handleTouchCancel());
+        window.addEventListener('blur', () => this._handleTouchCancel());
         
         // Window resize
         window.addEventListener('resize', () => this.resize());
@@ -231,6 +235,7 @@ export class InfiniteScrollableCanvas {
     }
 
     _handleMouseDown(e) {
+        this._cancelPendingTap();
         if (e.button !== 0) return; // Only left mouse button for dragging
         
         this.isMouseDown = true;
@@ -338,8 +343,9 @@ export class InfiniteScrollableCanvas {
             this.touchStartPos.y = touch.clientY;
             this.isDragging = false;
             this.touchMoved = false;
-        } else if (e.touches.length === 2) {
+        } else if (e.touches.length >= 2) {
             // Two finger pinch - start zoom
+            this._cancelPendingTap();
             this.touchMoved = true;
             this.touchStartDistance = this._getTouchDistance(e.touches[0], e.touches[1]);
             this.touchStartScale = this.cameraTarget.scale;
@@ -355,6 +361,7 @@ export class InfiniteScrollableCanvas {
             // Check if movement exceeds drag threshold
             const distance = this._getDistance(touch.clientX, touch.clientY, this.touchStartPos.x, this.touchStartPos.y);
             if (distance > this.config.dragThreshold) {
+                this._cancelPendingTap();
                 this.isDragging = true;
             }
             
@@ -374,7 +381,7 @@ export class InfiniteScrollableCanvas {
             if (this.onHover) {
                 this.onHover(worldPos.x, worldPos.y, e);
             }
-        } else if (e.touches.length === 2) {
+        } else if (e.touches.length >= 2) {
             // Two finger pinch zoom
             const currentDistance = this._getTouchDistance(e.touches[0], e.touches[1]);
             const scaleFactor = currentDistance / this.touchStartDistance;
@@ -400,11 +407,9 @@ export class InfiniteScrollableCanvas {
             const isTap = !this.touchMoved && !this.isDragging && distance <= this.config.dragThreshold;
             
             if (isTap && e.changedTouches.length > 0) {
-                // Single tap detected
-                const worldPos = this._getTouchWorldPosition(touch);
-                if (this.onClick) {
-                    this.onClick(worldPos.x, worldPos.y, e);
-                }
+                this._handleTap(touch, e);
+            } else {
+                this._cancelPendingTap();
             }
             
             this.isDragging = false;
@@ -419,6 +424,53 @@ export class InfiniteScrollableCanvas {
             this.isDragging = false;
             this.touchMoved = true;
         }
+    }
+
+    _cancelPendingTap(commit = false) {
+        if (!this.pendingTap) return;
+        const pending = this.pendingTap;
+        clearTimeout(pending.timer);
+        this.pendingTap = null;
+        if (pending.previewed) {
+            if (commit) this.onTapCommit?.(pending.preview);
+            else this.onTapCancel?.(pending.preview);
+        } else if (commit) {
+            this.onClick?.(pending.world.x, pending.world.y, pending.event);
+        }
+    }
+
+    _handleTouchCancel() {
+        this._cancelPendingTap();
+        this.touchMoved = true;
+        this.isDragging = false;
+    }
+
+    _handleTap(touch, event) {
+        const world = this._getTouchWorldPosition(touch);
+        const target = this.getDoubleTapTarget?.(world.x, world.y);
+        const previous = this.pendingTap;
+        const now = performance.now();
+        if (previous && target != null && target === previous.target
+            && now - previous.time <= 300
+            && this._getDistance(touch.clientX, touch.clientY, previous.x, previous.y) <= 24) {
+            this._cancelPendingTap();
+            this.onDoubleTap?.(world.x, world.y, event);
+            return;
+        }
+        if (previous) {
+            this._cancelPendingTap(true);
+        }
+        if (target == null || !this.onDoubleTap) {
+            this.onClick?.(world.x, world.y, event);
+            return;
+        }
+        const pending = {
+            target, world, event, time: now, x: touch.clientX, y: touch.clientY
+        };
+        this.pendingTap = pending;
+        pending.previewed = Boolean(this.onTapPreview);
+        if (pending.previewed) pending.preview = this.onTapPreview(world.x, world.y, event);
+        pending.timer = setTimeout(() => this._cancelPendingTap(true), 300);
     }
 
     _onAnimationFrame(timeDiff) {

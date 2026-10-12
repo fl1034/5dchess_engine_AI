@@ -20,6 +20,7 @@ class game
     using cache_t = std::pair<state,std::optional<ext_move>>;
     std::vector<cache_t> cached;
     std::vector<cache_t>::iterator now;
+    std::optional<state> preview;
     
     game(std::unique_ptr<gnode<comments_t>> gt);
     mutable std::optional<bool> nonterminal;
@@ -48,6 +49,8 @@ public:
     bool undo();
     bool redo();
     bool apply_move(ext_move m);
+    bool preview_move(ext_move m);
+    void discard_preview();
     bool submit();
     bool currently_check() const;
     std::vector<std::pair<vec4,vec4>> get_current_checks() const;

@@ -26,6 +26,25 @@ function board(width, height, flipped, preserveFiles) {
     });
 }
 
+test('local selection highlights merge with worker highlights and invalidate the viewport cache', () => {
+    const canvas = board(8, 8, false, false);
+    const original = { l: 0, t: 0, c: false, x: 1, y: 1 };
+    const preview = { ...original, x: 2 };
+    canvas.data = { boards: [], highlights: [{ color: 'purple', coordinates: [original] }] };
+    canvas.filterCache = { bounds: [] };
+    canvas._resolveColor = value => value;
+    let redraws = 0;
+    canvas.infCanvas.startAnimation = () => redraws++;
+    canvas.setSelectionHighlights([{ color: 'purple', coordinates: [preview] }]);
+    canvas._filterBoardData(0, 0, 0, 0);
+    assert.deepEqual(canvas.filterCache.filteredCoordinateHighlight.purple, [original, preview]);
+    canvas.setSelectionHighlights([]);
+    canvas._filterBoardData(0, 0, 0, 0);
+    assert.deepEqual(canvas.filterCache.filteredCoordinateHighlight.purple, [original]);
+    assert.equal(redraws, 2);
+    assert.deepEqual(canvas.data.highlights[0].coordinates, [original]);
+});
+
 test('square coordinates and hit detection agree in both flip modes and board sizes', () => {
     for (const [width, height] of [[8, 8], [7, 5], [1, 1]]) {
         for (const flipped of [false, true]) {
