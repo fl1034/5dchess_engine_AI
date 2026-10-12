@@ -1,6 +1,6 @@
 # Web UI tests
 
-The dependency-free Node tests cover phone taps, drags, pinch release, and canvas
+The dependency-free Node tests cover phone taps, immediate selection and position previews, double-tap recognition and rollback, drags, pinch release, and canvas
 resizing when panels reserve screen space, and display-density changes without
 shifting camera bounds or pointer coordinates, plus export filename metadata
 precedence, date validation, sanitization, and byte limits. Piece-cache tests
@@ -25,7 +25,11 @@ alignment of pieces, squares, labels, highlights and arrows, and changing the
 file-order preference without moving boards or the camera.
 Arrow tests cover endpoint-distance fading across canvas sizes, zoom levels and board
 orientations, restoration on returning to an endpoint, skipping paths and
-gradients at zero opacity, and candidate filtering across board boundaries.
+gradients at zero or nearly transparent opacity, restoration above the `0.002`
+effective-alpha cutoff, and candidate filtering across board boundaries.
+Opacity tests cover the inclusive `0.002` and `0.998` boundaries, invalid alpha,
+applying the cutoff after arrow alpha scaling, and L/T and file/rank label fades
+skipping near-zero draws and snapping near-one opacity to full opacity.
 Piece-cache tests use a simulated canvas; actual raster pixels need browser checks. Layout and game-control
 integration should also be checked in the built WebAssembly interface at phone
 portrait, phone landscape, tablet, and desktop sizes.
@@ -96,3 +100,27 @@ acceleration. Repeat at distant zoom: the same hold should traverse more grid
 steps while diagonal and cardinal movement have the same screen-speed budget.
 Tests cover diagonal rays, sparse batched movement, chord order, release behavior,
 opposite keys, and zoom/diagonal speed normalization.
+
+For touch focusing, double tap a board to center it at normal Focus zoom; double
+tap it again to show surrounding boards, and again to return. Repeat during the
+focus animation and with flipped boards. Double tapping another board must focus
+that board. Legal destinations must appear as soon as the worker responds. A
+destination tap must display the calculated position, including new boards,
+before the 300 ms window closes, without a temporary square highlight. Double tapping must
+restore the previous selection and destinations without applying a move, even
+when a preview response arrives late. Preview boards must disappear immediately
+on cancellation and must not reappear from late replies. Normal application at
+300 ms must keep the preview boards steady; rapid taps
+on different boards or far-apart squares commit the earlier tap immediately.
+Empty space must not focus a board. Dragging, pinching, cancellation, window blur,
+and mouse interaction must roll back pending previews. Import, history navigation,
+and changed positions must clear selection. Automated tests cover these selection
+transitions, delayed and stale replies, gesture integration, merging local highlights,
+and the main-thread/worker message protocol.
+
+Check physical moves, captures, promotions, and moves branching into other times
+or timelines. With an existing redo continuation, cancel a preview and verify
+Redo still restores that continuation. Assess whether a board briefly appearing
+and disappearing on a double tap feels distracting; appearance animation is not
+implemented yet. Native preview tests cover replacement, invalid moves, unchanged
+history and PGN, promotion, branching, and ordinary mutation semantics.

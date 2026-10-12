@@ -3,6 +3,7 @@
 import { UI } from 'ui';
 import ChessBoardCanvasBase from 'draw';
 import { compactViewport, initMobileLayout } from './mobile.js';
+import { createSelection } from './selection.js';
 
 initMobileLayout();
 
@@ -10,19 +11,21 @@ initMobileLayout();
 let worker = new Worker(window.worker_path, { type: 'module' });
 
 // State management for move selection
-let clicking = false;
-let clickedPos = null;
-let generatedMoves = [];
 let presentC;
 let nextOptions = [];
 let showPhantom = true;
 let focusOnNextData = true;
+let committedData = null;
 
 class ChessBoardCanvas extends ChessBoardCanvasBase {
     onClickSquare(l, t, c, x, y) {
-        handle_click({l: l, t: t, c: c, x: x, y: y});
+        selection.click({ l, t, c, x, y });
     }
     
+    onPreviewSquare(pos) { return selection.preview(pos); }
+    onCommitSquare(token) { selection.commit(token); }
+    onCancelSquare(token) { selection.cancel(token); }
+
     onRightClickSquare() {
         deselect();
     }
@@ -38,37 +41,47 @@ compactViewport.addEventListener('change', () => {
     }
 });
 
-function handle_click(pos) {
-    if (clicking) {
-        return;
+const selection = createSelection({
+    send: message => worker.postMessage(message),
+    presentColor: () => presentC,
+    onDiscardPreview: () => { if (committedData) showPosition(committedData); },
+    onChange: ({ selected, moves }) => {
+        const feedback = selected ? [selected] : [];
+        window.chessBoardCanvas.setSelectionHighlights([
+            { color: '--highlight-movable-piece', coordinates: feedback },
+            { color: '--highlight-generated-move', coordinates: moves.map(pos => ({ ...pos, c: selected.c })) }
+        ]);
     }
-    if(pos.c !== presentC) {
-        if (clickedPos !== null) {
-            deselect();
-        }
-        return; // Ignore clicks on other colors
-    }
-    if (clickedPos !== null) {
-        let from = clickedPos;
-        let to = pos;
-        clickedPos = null;
-        if (generatedMoves.some(mv => mv.l === to.l && mv.t === to.t && mv.x === to.x && mv.y === to.y)) {
-            worker.postMessage({type: 'apply_move', from: from, to: to});
-            generatedMoves = [];
-        } else {
-            deselect();
-        }
-    } else {
-        clicking = true;
-        worker.postMessage({type: 'gen_move_if_playable', pos: pos});
-        clickedPos = pos;
-    }
-}
+});
 
 function deselect() {
-    clickedPos = null;
-    generatedMoves = [];
-    worker.postMessage({type: 'view'});
+    window.chessBoardCanvas.infCanvas._cancelPendingTap();
+    selection.reset();
+}
+
+function showPosition(raw, preview = false) {
+    // Keep the real position intact for immediate cancellation of a preview.
+    const data = structuredClone(raw);
+    window.chessBoardCanvas.gestureData = preview && committedData ? {
+        boards: [...(committedData.boards || []), ...(showPhantom ? committedData.phantom || [] : [])]
+    } : undefined;
+    if(data.phantom && data.phantom.length > 0) {
+        UI.setHudLight(true);
+        if (showPhantom) {
+            addHighlight(data, '--highlight-phantom-board', 'boards', data.phantom.map((b) => ({l: b.l, t: b.t, c: !data.present.c})));
+            data.boards = data.boards.concat(data.phantom.map((board) => ({
+                ...board,
+                isPhantom: true
+            })));
+            addHighlight(data, '--highlight-check', 'arrows', data.phantomChecks.map((c) => ({
+                from: {...c.from, c: !data.present.c},
+                to: {...c.to, c: !data.present.c}
+            })));
+        }
+    } else {
+        UI.setHudLight(false);
+    }
+    window.chessBoardCanvas.setData(data);
 }
 
 function disablePhantom() {
@@ -117,39 +130,19 @@ worker.onmessage = (e) => {
     }
     else if (msg.type === 'data') {
         let data = msg.data;
-        presentC = data.present.c;
-        addHighlight(data, '--highlight-generated-move', 'coordinates', generatedMoves.map(q => ({l: q.l, t: q.t, x: q.x, y: q.y, c: presentC})));
-        if(data.phantom && data.phantom.length > 0) {
-            UI.setHudLight(true);
-            if (showPhantom) {
-                addHighlight(data, '--highlight-phantom-board', 'boards', data.phantom.map((b) => ({l: b.l, t: b.t, c: !presentC})));
-                data.boards = data.boards.concat(data.phantom.map((board) => ({
-                    ...board,
-                    isPhantom: true
-                })));
-                addHighlight(data, '--highlight-check', 'arrows', data.phantomChecks.map((c) => ({
-                    from: {...c.from, c: !presentC},
-                    to: {...c.to, c: !presentC}
-                })));
-            }
+        if (msg.previewId == null) presentC = data.present.c;
+        if (msg.positionChanged) deselect();
+        if (msg.previewId != null) {
+            if (!selection.acceptsPreview(msg.previewId)) return;
         } else {
-            UI.setHudLight(false);
+            committedData = data;
         }
-        window.chessBoardCanvas.setData(data);
-        if (focusOnNextData && compactViewport.matches) window.chessBoardCanvas.goToNextFocus();
-        focusOnNextData = false;
-        clicking = false;
+        showPosition(data, msg.previewId != null);
+        if (msg.previewId == null && focusOnNextData && compactViewport.matches) window.chessBoardCanvas.goToNextFocus();
+        if (msg.previewId == null) focusOnNextData = false;
     }
     else if (msg.type === 'moves') {
-        generatedMoves = msg.moves;
-        if (generatedMoves.length === 0){
-            clickedPos = null;
-            clicking = false;
-        }
-        else
-        {
-            worker.postMessage({type: 'view'});
-        }
+        selection.receiveMoves(msg);
     }
     else if (msg.type === 'update_buttons')
     {
@@ -224,6 +217,7 @@ UI.buttons.setCallbacks({
 });
 
 UI.setHintCallback(() => {
+    deselect();
     worker.postMessage({type: 'hint'});
 });
 
@@ -237,6 +231,7 @@ UI.setCanvasNavigationCallback((action, options) => {
 });
 
 UI.setImportCallback((data) => {
+    deselect();
     focusOnNextData = true;
     worker.postMessage({type: 'load', pgn: data});
 });

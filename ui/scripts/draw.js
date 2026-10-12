@@ -7,6 +7,14 @@ import { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } 
 import { chooseLOD } from 'piece';
 import { loadColors, applyFadeToColors, applyFadeToColorString, resolveColor } from 'color';
 
+// Snap near-endpoint alpha values to avoid intermittent Safari rendering flashes.
+// Keep this separate from the easing curve and apply it after alpha scaling.
+export function safeOpacity(alpha) {
+    if (!Number.isFinite(alpha) || alpha < 0.002) return 0;
+    if (alpha > 0.998) return 1;
+    return alpha;
+}
+
 function distanceToBounds(x, y, bounds) {
     return Math.hypot(
         Math.max(bounds.left - x, 0, x - bounds.right),
@@ -66,6 +74,14 @@ export default class ChessBoardCanvas
         // Set up callbacks
         this.infCanvas.onRender = (ctx, bounds) => this.renderBoards(ctx, bounds);
         this.infCanvas.onClick = (x, y) => this.handleBoardClick(x, y, false);
+        this.infCanvas.getDoubleTapTarget = (x, y) => {
+            const board = this._boardAtWorldPoint(x, y, this.gestureData);
+            return board ? `${board.x},${board.y}` : null;
+        };
+        this.infCanvas.onDoubleTap = (x, y) => this.zoomTappedBoard(x, y);
+        this.infCanvas.onTapPreview = (x, y) => this.onPreviewSquare(this.worldToBoard(x, y));
+        this.infCanvas.onTapCommit = token => this.onCommitSquare(token);
+        this.infCanvas.onTapCancel = token => this.onCancelSquare(token);
         this.infCanvas.onRightClick = (x, y) => this.handleBoardClick(x, y, true);
         this.infCanvas.onHover = (x, y) => this.updateStatus(x, y);
         
@@ -242,16 +258,16 @@ export default class ChessBoardCanvas
         cache.filteredBoardHighlight = {};
         
         // Filter highlights if they exist
-        if (this.data.highlights) {
-            for (let colorBlock of this.data.highlights) {
+        if (this.data.highlights || this.selectionHighlights) {
+            for (let colorBlock of [...(this.data.highlights || []), ...(this.selectionHighlights || [])]) {
                 const color = this._resolveColor(colorBlock.color) || colorBlock.color;
                 
                 // Filter coordinate highlights
                 if (colorBlock.coordinates) {
-                    cache.filteredCoordinateHighlight[color] = colorBlock.coordinates.filter((pos) => {
+                    cache.filteredCoordinateHighlight[color] = (cache.filteredCoordinateHighlight[color] || []).concat(colorBlock.coordinates.filter((pos) => {
                         let l = pos.l, v = pos.t << 1 | pos.c;
                         return !(l < lMin || l > lMax || v < vMin || v > vMax);
-                    });
+                    }));
                 }
                 
                 // Filter arrow highlights
@@ -363,16 +379,16 @@ export default class ChessBoardCanvas
                 worldY - (l * this.boardSkipY - this.backgroundShiftY),
                 (l+1) * this.boardSkipY - this.backgroundShiftY - worldY
             );
-            const lOpacity = smoothClamp(
+            const lOpacity = safeOpacity(smoothClamp(
                 this.fontSizeforLT / 3.0,
                 3 * this.fontSizeforLT,
                 deltaX * zoomLevel
-            );
-            const tOpacity = smoothClamp(
+            ));
+            const tOpacity = safeOpacity(smoothClamp(
                 this.fontSizeforLT / 3.0,
                 3 * this.fontSizeforLT,
                 deltaY * zoomLevel
-            );
+            ));
             return {l, t, lOpacity, tOpacity};
         })();
         
@@ -531,7 +547,7 @@ export default class ChessBoardCanvas
         }
         
         // Layer 2.1: file/rank labels
-        const labelOpacity = smoothClamp(30.0, 50.0, squareLength);
+        const labelOpacity = safeOpacity(smoothClamp(30.0, 50.0, squareLength));
         if (labelOpacity > 0) {
             ctx.save();
             ctx.font = `italic ${this.fontSizeforXY}px Playfair, serif`;
@@ -657,14 +673,14 @@ export default class ChessBoardCanvas
                 const [fromX, fromY] = this._getCoordinate(arrow.from);
                 const [toX, toY] = this._getCoordinate(arrow.to);
                 const r = this.squareSize / 2;
-                const distance = bounds ? Math.min(
-                    distanceToBounds(fromX + r, fromY + r, bounds),
-                    distanceToBounds(toX + r, toY + r, bounds)
-                ) : 0;
+                const fromDistance = bounds ? distanceToBounds(fromX + r, fromY + r, bounds) : 0;
+                const toDistance = bounds ? distanceToBounds(toX + r, toY + r, bounds) : 0;
+                const distance = Math.min(fromDistance, toDistance);
                 const opacity = 1 - smoothClamp(0, fadeDistance, distance);
-                if (opacity === 0) continue;
+                const alpha = safeOpacity(0.8 * opacity);
+                if (alpha === 0) continue;
                 ctx.save();
-                ctx.globalAlpha = 0.8 * opacity;
+                ctx.globalAlpha = alpha;
                 
                 this._drawArrow(ctx, fromX + r, fromY + r, toX + r, toY + r);
                 
@@ -784,6 +800,18 @@ export default class ChessBoardCanvas
         //report_click(l, t, c, x, y);
     }
 
+    onPreviewSquare(pos) { return pos; }
+    onCommitSquare(pos) {
+        if (pos) this.onClickSquare(pos.l, pos.t, pos.c, pos.x, pos.y);
+    }
+    onCancelSquare() {}
+
+    setSelectionHighlights(highlights) {
+        this.selectionHighlights = highlights;
+        this.filterCache.bounds = [null, null, null, null];
+        this.infCanvas.startAnimation();
+    }
+
     onRightClickSquare(l, t, c, x, y) {
         // Placeholder - override this method
         console.log('Right click:', { l, t, c, x, y });
@@ -819,8 +847,8 @@ export default class ChessBoardCanvas
         return Math.log2(actualScale);
     }
 
-    _navigationBoards() {
-        return (this.data?.boards || [])
+    _navigationBoards(data = this.data) {
+        return (data?.boards || [])
             .filter(board => board.fen != null)
             .map(board => ({ x: 2 * board.t + Number(board.c), y: this._displayL(board.l) }));
     }
@@ -840,14 +868,31 @@ export default class ChessBoardCanvas
         );
     }
 
-    zoomNearestBoard({ wide = false } = {}) {
-        const boards = this._navigationBoards();
+    _boardAtWorldPoint(worldX, worldY, data = this.data) {
+        const pos = this.worldToBoard(worldX, worldY);
+        if (pos.x < 0 || pos.x >= this.boardLengthX || pos.y < 0 || pos.y >= this.boardLengthY) return null;
+        return this._navigationBoards(data).find(board => board.x === 2 * pos.t + Number(pos.c)
+            && board.y === this._displayL(pos.l)) || null;
+    }
+
+    _focusedBoard(boards) {
         const spacing = { x: this.boardSkipX, y: this.boardSkipY };
         const size = { x: this.boardLengthX * this.squareSize, y: this.boardLengthY * this.squareSize };
         const normalScale = this._focusScale();
         const current = this.infCanvas.cameraCurrent, target = this.infCanvas.cameraTarget;
         const moving = ['x', 'y', 'scale'].some(axis => current[axis] !== target[axis]);
-        const focused = focusViewBoard(boards, moving ? target : current, spacing, size, normalScale);
+        return focusViewBoard(boards, moving ? target : current, spacing, size, normalScale);
+    }
+
+    zoomTappedBoard(worldX, worldY) {
+        const board = this._boardAtWorldPoint(worldX, worldY);
+        if (board) this._moveToBoard(board, this._focusScale(Boolean(this._focusedBoard([board]))));
+    }
+
+    zoomNearestBoard({ wide = false } = {}) {
+        const boards = this._navigationBoards();
+        const spacing = { x: this.boardSkipX, y: this.boardSkipY };
+        const focused = this._focusedBoard(boards);
         const board = focused || nearestBoard(boards,
             this._cameraGridPosition(this.infCanvas.cameraCurrent), spacing);
         if (!board) return;

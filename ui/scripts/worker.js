@@ -15,6 +15,8 @@ createModule().then((engine) => {
     self.game = null;
     let pendingHint = null;
     let nodeMoveStatus = null;
+    let previewMove = null;
+    let previewId = null;
 
     function prepareHint(preserveStatus = false) {
         pendingHint = self.game ? self.game.suggest_action() : null;
@@ -56,7 +58,7 @@ createModule().then((engine) => {
         }
     }
 
-    function viewGame() {
+    function viewGame(positionChanged = false) {
         if (self.game === null) {
             self.postMessage({ type: 'alert', message: 'No game loaded.' });
             return;
@@ -97,9 +99,11 @@ createModule().then((engine) => {
             });
         }
         // piece moves
+        const cachedMoves = self.game.get_cached_moves();
+        if (previewMove) cachedMoves.push(previewMove);
         let historyRaw = [
             ...self.game.get_historical_actions(),
-            { action: self.game.get_cached_moves() },
+            { action: cachedMoves },
         ];
         let whiteMoveCoordinates = [];
         let blackMoveCoordinates = [];
@@ -180,6 +184,8 @@ createModule().then((engine) => {
         self.postMessage({
             type: 'data',
             data: data,
+            positionChanged,
+            previewId,
         });
     }
 
@@ -278,22 +284,38 @@ createModule().then((engine) => {
 
     self.onmessage = (e) => {
         const data = e.data;
+        if (['load', 'apply_move', 'undo', 'redo', 'submit', 'prev', 'next', 'hint'].includes(data.type)) {
+            self.game?.discard_preview();
+            previewMove = previewId = null;
+        }
         if (data.type === 'load') {
             loadGame(data.pgn);
             prepareHint();
             updateSelect();
             updateButtons();
             updateHudStatus();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'view') {
             viewGame();
         } else if (data.type === 'apply_move') {
             self.game.apply_move({ from: data.from, to: data.to });
             updateButtons();
+            viewGame(true);
+        } else if (data.type === 'preview_move') {
+            previewMove = { from: data.from, to: data.to };
+            previewId = data.requestId;
+            if (!self.game.preview_move(previewMove)) previewMove = null;
             viewGame();
+        } else if (data.type === 'discard_preview') {
+            if (previewId === data.requestId) {
+                self.game.discard_preview();
+                previewMove = previewId = null;
+                updateButtons();
+                viewGame();
+            }
         } else if (data.type === 'gen_move_if_playable') {
             const moves = genMoveIfPlayable(data.pos);
-            self.postMessage({ type: 'moves', moves: moves });
+            self.postMessage({ type: 'moves', moves: moves, requestId: data.requestId });
         } else if (data.type === 'submit') {
             self.game.submit();
             prepareHint();
@@ -301,22 +323,22 @@ createModule().then((engine) => {
             updateMemorizedAction();
             updateButtons();
             updateHudStatus();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'undo') {
             self.game.undo();
             updateButtons();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'redo') {
             self.game.redo();
             updateButtons();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'prev') {
             self.game.visit_parent();
             prepareHint();
             updateSelect();
             updateButtons();
             updateHudStatus();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'next') {
             self.game.visit_child(data.action);
             prepareHint();
@@ -324,7 +346,7 @@ createModule().then((engine) => {
             updateMemorizedAction();
             updateButtons();
             updateHudStatus();
-            viewGame();
+            viewGame(true);
         } else if (data.type === 'hint') {
             if (pendingHint !== null && self.game.add_child_action(pendingHint)) {
                 prepareHint(true);
@@ -339,7 +361,7 @@ createModule().then((engine) => {
             );
             if (data.settings?.useShortMoveNotation !== undefined && self.game) updateSelect(true);
             // Update UI state if needed
-            updateButtons();
+            if (previewId == null) updateButtons();
         } else if (data.type === 'export') {
             let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
             if (self.settings.exportMate) {

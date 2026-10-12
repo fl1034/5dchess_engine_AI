@@ -44,10 +44,12 @@ Build the affected targets and run the relevant tests.
 
 When changing code in `src/core/`, `src/misc/`, or `tools/`, check whether the change affects tool behavior or tools-related tests. If it does, enable both `TOOLS` and `TEST` so that tools-related tests are included. For other changes, build and test the affected components.
 
+Test files in `test/` are grouped by related functionality.
+
 To build and run tests with tools enabled:
 
 ```sh
-cmake -S . -B build -DTOOLS=ON -DTEST=ON -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DTOOLS=ON -DTEST=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-fno-rtti
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
@@ -60,7 +62,7 @@ python -m unittest discover -s scripts/test -v
 
 See the [Python test guide](scripts/test/README.md) for dependencies and coverage. Skipped tests do not verify the skipped behavior. JavaScript UI tests live in `ui/test/`; see the [web UI test guide](ui/test/README.md).
 
-Add a regression test for behavior fixes only when the test is practical, maintainable and useful for future development. Do introduce tests in this repository that are platform-specific, requires new dependencies, or requires files from external or gitignored sources.
+Add a regression test for behavior fixes only when the test is practical, maintainable and useful for future development. Do not introduce tests in this repository that are platform-specific, require new dependencies, or require files from external or gitignored sources.
 
 ## Documentation
 

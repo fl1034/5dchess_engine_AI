@@ -6,7 +6,7 @@ import test from 'node:test';
 // with a recording context and a single upright piece image.
 const source = (await readFile(new URL('../scripts/draw.js', import.meta.url), 'utf8'))
     .replace(/^import .*;\n/gm, '');
-const { default: ChessBoardCanvas } = await import(`data:text/javascript;base64,${Buffer.from(
+const { default: ChessBoardCanvas, safeOpacity } = await import(`data:text/javascript;base64,${Buffer.from(
     'const chooseLOD = () => ({ P: "piece" });\n' + source
 ).toString('base64')}`);
 
@@ -25,6 +25,25 @@ function board(width, height, flipped, preserveFiles) {
         },
     });
 }
+
+test('local selection highlights merge with worker highlights and invalidate the viewport cache', () => {
+    const canvas = board(8, 8, false, false);
+    const original = { l: 0, t: 0, c: false, x: 1, y: 1 };
+    const preview = { ...original, x: 2 };
+    canvas.data = { boards: [], highlights: [{ color: 'purple', coordinates: [original] }] };
+    canvas.filterCache = { bounds: [] };
+    canvas._resolveColor = value => value;
+    let redraws = 0;
+    canvas.infCanvas.startAnimation = () => redraws++;
+    canvas.setSelectionHighlights([{ color: 'purple', coordinates: [preview] }]);
+    canvas._filterBoardData(0, 0, 0, 0);
+    assert.deepEqual(canvas.filterCache.filteredCoordinateHighlight.purple, [original, preview]);
+    canvas.setSelectionHighlights([]);
+    canvas._filterBoardData(0, 0, 0, 0);
+    assert.deepEqual(canvas.filterCache.filteredCoordinateHighlight.purple, [original]);
+    assert.equal(redraws, 2);
+    assert.deepEqual(canvas.data.highlights[0].coordinates, [original]);
+});
 
 test('square coordinates and hit detection agree in both flip modes and board sizes', () => {
     for (const [width, height] of [[8, 8], [7, 5], [1, 1]]) {
@@ -163,7 +182,7 @@ test('arrows fade by proportional endpoint distance at every canvas size, zoom a
                 render(25);
                 render(50);
                 render(75);
-                render(99);
+                render(90);
                 assert.equal(fills[0], 0.8);
                 assert(Math.abs(fills[2] - 0.4) < 1e-12);
                 assert(fills.every((alpha, i) => i === 0 || alpha < fills[i - 1]));
@@ -213,4 +232,64 @@ test('a visible endpoint keeps full opacity and corner distance fades smoothly',
     // controls fading.
     canvas.renderBoards(ctx, { left: -30, right: 510, top: 55, bottom: 100 });
     assert.equal(fills.at(-1), 0.4);
+});
+
+test('opacity snapping preserves the agreed boundaries and rejects non-finite alpha', () => {
+    for (const alpha of [0.002, 0.003, 0.5, 0.997, 0.998]) assert.equal(safeOpacity(alpha), alpha);
+    for (const alpha of [-1, 0, 0.001999, NaN, Infinity, -Infinity]) assert.equal(safeOpacity(alpha), 0);
+    for (const alpha of [0.998001, 1, 2]) assert.equal(safeOpacity(alpha), 1);
+});
+
+test('nearly transparent arrows skip paths and gradients and return smoothly above the cutoff', () => {
+    const { canvas, ctx, fills, work } = arrowCanvas(1);
+    const render = distance => canvas.renderBoards(ctx, {
+        left: -25 + distance, right: 505 - distance, top: 0, bottom: 10
+    });
+    render(97);
+    assert.equal(fills.length, 1);
+    assert(fills[0] > 0.002);
+    const before = work();
+    // The fade multiplier is still above 0.002 here, but the final alpha after
+    // multiplying by 0.8 is below it. Snap the final alpha, not the multiplier.
+    render(97.2);
+    render(99);
+    render(100);
+    assert.deepEqual(work(), before);
+    assert.equal(fills.length, 1);
+    render(97);
+    assert.equal(fills.at(-1), fills[0]);
+    assert.equal(fills.length, 2);
+});
+
+test('L/T labels skip near-zero opacity and snap near-one opacity to full', () => {
+    const { canvas, ctx } = arrowCanvas(1);
+    const labels = [];
+    ctx.fillText = text => labels.push({ text, alpha: ctx.globalAlpha });
+    const bounds = { left: 0, right: 100, top: 0, bottom: 100 };
+    canvas.infCanvas.cameraCurrent.screenToWorld = () => ({ x: -4.5, y: -4.5 });
+    canvas.renderBoards(ctx, bounds);
+    assert.equal(labels.length, 0);
+    canvas.infCanvas.cameraCurrent.screenToWorld = () => ({ x: 37.9, y: 37.9 });
+    canvas.renderBoards(ctx, bounds);
+    assert(labels.some(label => label.text.startsWith('L')));
+    assert(labels.some(label => label.text.startsWith('T')));
+    assert(labels.every(label => label.alpha === 1));
+});
+
+test('file/rank labels skip near-zero opacity and snap near-one opacity to full', () => {
+    const { canvas, ctx } = arrowCanvas(3.01);
+    canvas.data.boards = [{ l: 0, t: 0, c: false, fen: 'empty',
+        parsed: Array.from({ length: 8 }, () => Array(8).fill(0)) }];
+    canvas.infCanvas.cameraCurrent.screenToWorld = () => ({ x: -10, y: -10 });
+    const labels = [];
+    ctx.fillText = text => labels.push({ text, alpha: ctx.globalAlpha });
+    const measureText = ctx.measureText;
+    ctx.measureText = () => ({ ...measureText(), actualBoundingBoxLeft: 0, actualBoundingBoxDescent: 0 });
+    const bounds = { left: 0, right: 100, top: 0, bottom: 100 };
+    canvas.renderBoards(ctx, bounds);
+    assert.equal(labels.length, 0);
+    canvas.infCanvas.cameraCurrent.getZoomLevel = () => 4.99;
+    canvas.renderBoards(ctx, bounds);
+    assert.equal(labels.length, 16);
+    assert(labels.every(label => label.alpha === 1));
 });

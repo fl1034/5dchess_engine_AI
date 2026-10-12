@@ -316,6 +316,13 @@ EMSCRIPTEN_BINDINGS(engine) {
             return g.apply_move(m);
         }))
         .function("submit", &game::submit)
+        .function("preview_move", optional_override([](game &g, val obj) {
+            piece_t pt = obj.hasOwnProperty("promote_to") ? static_cast<piece_t>(obj["promote_to"].as<int>()) : NO_PIECE;
+            return g.preview_move(ext_move(
+                convert_js_to_vec4(obj["from"]),
+                convert_js_to_vec4(obj["to"]), pt));
+        }))
+        .function("discard_preview", &game::discard_preview)
         .function("currently_check", &game::currently_check)
         .function("get_current_checks", optional_override([](const game &self) {
             val result = val::array();

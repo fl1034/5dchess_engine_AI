@@ -125,6 +125,7 @@ game game::from_pgn(std::string input)
 
 void game::fresh()
 {
+    discard_preview();
     nonterminal.reset();
     cached.clear();
     cached.push_back(std::make_pair(current_node->get_state(), std::optional<ext_move>()));
@@ -151,7 +152,8 @@ std::vector<ext_move> game::get_cached_moves() const
 
 const state &game::get_current_state() const
 {
-    return now->first;
+    // Position queries, including playability and move generation, see the preview.
+    return preview ? *preview : now->first;
 }
 
 const state &game::get_unmoved_state() const
@@ -247,8 +249,8 @@ std::vector<vec4> game::get_movable_pieces() const
 
 bool game::is_playable(vec4 p) const
 {
-    auto [mandatory_timelines, optional_timelines, unplayable_timelines] = get_current_timeline_status();
     const state &cs = get_current_state();
+    auto [mandatory_timelines, optional_timelines, unplayable_timelines] = cs.get_timeline_status();
     if (std::find(mandatory_timelines.begin(), mandatory_timelines.end(), p.l()) != mandatory_timelines.end() ||
         std::find(optional_timelines.begin(), optional_timelines.end(), p.l()) != optional_timelines.end()) 
     {
@@ -279,11 +281,13 @@ bool game::can_redo() const
 
 bool game::can_submit() const
 {
-    return get_current_state().can_submit().has_value();
+    // Submission availability describes the real draft, even during a preview.
+    return now->first.can_submit().has_value();
 }
 
 bool game::undo()
 {
+    discard_preview();
     bool flag = can_undo();
     if(flag)
     {
@@ -294,6 +298,7 @@ bool game::undo()
 
 bool game::redo()
 {
+    discard_preview();
     bool flag = can_redo();
     if(flag)
     {
@@ -304,6 +309,8 @@ bool game::redo()
 
 bool game::apply_move(ext_move m)
 {
+    // A preview is never committed or used as the starting state of a real move.
+    discard_preview();
     const auto normalized = now->first.normalize_promotion(m);
     if(!normalized)
     {
@@ -322,8 +329,26 @@ bool game::apply_move(ext_move m)
     return false;
 }
 
+bool game::preview_move(ext_move m)
+{
+    // Replacing a preview always starts from the real draft.
+    discard_preview();
+    const auto normalized = now->first.normalize_promotion(m);
+    if(!normalized)
+        return false;
+    preview = now->first.can_apply(normalized->fm, normalized->promote_to);
+    return preview.has_value();
+}
+
+void game::discard_preview()
+{
+    preview.reset();
+}
+
 bool game::submit()
 {
+    // Submit only recorded draft moves, including when submission fails.
+    discard_preview();
     std::optional<state> ans = now->first.can_submit();
     if(ans)
     {
@@ -395,6 +420,7 @@ std::optional<action> game::suggest_action()
 
 bool game::add_child_action(action act)
 {
+    discard_preview();
     if(current_node->find_child(act))
     {
         return false;
@@ -431,6 +457,7 @@ bool game::has_parent() const
 
 void game::visit_parent()
 {
+    discard_preview();
     if(!has_parent())
         return;
     current_node = current_node->get_parent();
@@ -473,6 +500,7 @@ std::vector<std::tuple<action, std::string>> game::get_historical_actions() cons
 
 bool game::visit_child(action act, comments_t comments, std::optional<state> newstate)
 {
+    discard_preview();
     // check if the child already exists
     auto &children = current_node->get_children();
     const auto moves = act.get_moves_view();

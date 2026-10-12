@@ -12,6 +12,7 @@ remain in [Building](../usage/building.md#webassembly).
 | --- | --- |
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
+| `scripts/selection.js` | Local piece selection, temporary position requests, rollback, and deferred move application |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
 | `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and Space dispatch |
 | `scripts/navigation.js` | Nearest-board and directional searches in displayed grid coordinates |
@@ -51,6 +52,8 @@ export, and displayed notation rather than implementing chess legality.
 | User interaction / main-thread command | Worker work and response |
 | --- | --- |
 | Select a piece: `gen_move_if_playable` | Queries legal destinations and returns `moves`; the main thread highlights them |
+| Preview a touch destination: `preview_move` | Calculates a temporary successor and returns normal display data tagged with `previewId` |
+| Cancel a touch destination: `discard_preview` | Drops the matching preview and returns the real position |
 | Select a destination: `apply_move` | Applies the draft move, updates button availability, and returns rendered-position data |
 | Submit, Undo, Redo: `submit`, `undo`, `redo` | Mutates the game's turn-editing state and returns updated buttons and boards |
 | Previous/Next: `prev`, `next` | Navigates submitted history; Next includes the selected action |
@@ -67,6 +70,12 @@ phantom boards, and phantom-check arrows. The worker parses each board's FEN;
 controls: `update_buttons` carries availability, `update_select` carries action
 objects and their formatted strings, and `update_hud_status` carries status,
 headers, and comments. Errors are reported with `alert`.
+
+Legal-move requests and their `moves` replies carry a selection `requestId`.
+The main thread ignores replies for canceled or superseded selections and draws
+selection feedback locally without requesting a full `view`. Worker `data`
+responses mark position-changing commands with `positionChanged`; these clear
+pending gestures and selection, while plain display refreshes preserve them.
 
 Continuation text and actions remain paired: the DOM displays `pgn` strings,
 while `main.js` keeps the corresponding action array for Next. The worker
@@ -188,6 +197,13 @@ zoom levels and display densities. The coarse arrow filter includes that fade
 margin, and fully transparent arrows are skipped
 before creating their paths or gradients. Panning or zooming back restores opacity
 using the same distance rule.
+
+Spatial opacity fades for arrows, L/T labels, and file/rank labels use a shared
+`safeOpacity` helper as a workaround for intermittent Safari flashes near opacity
+endpoints. It preserves alpha in the inclusive range `[0.002, 0.998]`, snaps lower
+values to zero and higher values to one, and treats non-finite values as zero.
+It is separate from the easing curve and applies to final alpha, including the
+arrow's `0.8` opacity factor. Zero-opacity arrows and labels skip drawing entirely.
 
 Flip reverses timeline order and both ranks and files inside each board, giving
 Black's perspective. Under Settings → Interface, **Do not reverse files when
@@ -379,6 +395,37 @@ moving above the cross button when a portrait panel is open, and fits the focuse
 points. A newly loaded game is focused automatically on phones. Drag to pan,
 pinch to zoom, and tap to select pieces and destinations. Releasing a drag or
 pinch does not select a piece.
+
+Double tap a visible board to center it at the normal Focus zoom, which fits the
+board to the compact viewport. When that board is already at normal Focus zoom,
+double tapping it shows the same wide neighborhood as Space; double tapping
+again returns to normal Focus. Tapping another board focuses that board. The
+camera destination is checked during animation, using the same position and zoom
+tolerances as Space. Empty cells and hidden previews are not focus targets.
+
+Double taps require two taps within 300 ms, within 24 CSS pixels, and on the same
+visible board. Piece selection and legal destinations appear without waiting for
+the double-tap window. A destination tap requests `preview_move` as soon as its
+legality is known. The worker uses the normal board-display getters to render the
+temporary position, including new boards, pieces, move arrows, and checks, and
+tags the response with `previewId`. There is no temporary destination-square
+highlight or board-appearance animation.
+
+The frontend saves the real position. A recognized double tap restores it and
+the previous selection immediately, asks the worker to discard the preview, and
+focuses the originally tapped board. Gesture hit-testing uses the original boards
+while a preview is visible. Canceled or superseded preview responses are ignored,
+including later display refreshes of that preview. The camera and game controls
+remain steady during previews.
+
+At 300 ms the frontend applies the move normally, keeping the temporary position
+visible until the real result arrives. There is no native commit API. If legal
+destinations arrive after the window closes, the move is applied when available.
+Taps on different boards or farther apart commit the earlier tap immediately and
+preview the later one. Dragging, pinching, touch cancellation, window blur, and
+mouse interaction discard pending previews and restore the previous selection.
+Import, history navigation, and position-changing worker responses clear pending
+selection and moves. Undo/redo history changes only when the move is applied.
 
 Import, export, settings, and help dialogs fill the phone viewport with the same
 warm background as the navigation bars. A compact header places the title beside

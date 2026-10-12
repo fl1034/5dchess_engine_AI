@@ -6,6 +6,8 @@ import test from 'node:test';
 // The browser sources are ES modules; load without changing ui/'s local Node configuration.
 const source = await readFile(new URL('../scripts/canvas.js', import.meta.url), 'utf8');
 const { InfiniteScrollableCanvas, Camera, AnimationManager } = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { Camera };').toString('base64')}`);
+const selectionSource = await readFile(new URL('../scripts/selection.js', import.meta.url), 'utf8');
+const { createSelection } = await import(`data:text/javascript;base64,${Buffer.from(selectionSource).toString('base64')}`);
 
 function fixture() {
     const clicks = [];
@@ -28,6 +30,126 @@ test('a stationary tap selects exactly once', () => {
     const { canvas, clicks } = fixture();
     canvas._handleTouchStart(event([point(20)]));
     canvas._handleTouchEnd(event([], [point(20)]));
+    assert.deepEqual(clicks, [[20, 20]]);
+});
+
+function doubleTapFixture(t) {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const result = fixture();
+    result.doubles = [];
+    result.canvas.getDoubleTapTarget = x => x < 200 ? Math.floor(x / 100) : null;
+    result.canvas.onDoubleTap = (x, y) => result.doubles.push([x, y]);
+    result.tap = (x, y = 20) => {
+        result.canvas._handleTouchStart(event([point(x, y)]));
+        result.canvas._handleTouchEnd(event([], [point(x, y)]));
+    };
+    return result;
+}
+
+test('single board taps wait 300 ms; nearby double taps focus without any selection', t => {
+    const { tap, clicks, doubles } = doubleTapFixture(t);
+    tap(20);
+    t.mock.timers.tick(299);
+    assert.deepEqual(clicks, []);
+    t.mock.timers.tick(1);
+    assert.deepEqual(clicks, [[20, 20]]);
+    tap(20);
+    t.mock.timers.tick(100);
+    tap(24);
+    t.mock.timers.tick(300);
+    assert.deepEqual(clicks, [[20, 20]]);
+    assert.deepEqual(doubles, [[24, 20]]);
+    tap(24); tap(24);
+    assert.equal(doubles.length, 2);
+});
+
+test('taps on different boards or far-apart squares remain individual selections', t => {
+    const { tap, clicks, doubles } = doubleTapFixture(t);
+    tap(95); tap(105); // Nearby screen positions on distinct boards.
+    t.mock.timers.tick(300);
+    tap(20); tap(60); // Same board, but beyond the 24 CSS pixel radius.
+    t.mock.timers.tick(300);
+    tap(220); tap(220); // Empty space never focuses.
+    assert.deepEqual(clicks, [[95, 20], [105, 20], [20, 20], [60, 20], [220, 20], [220, 20]]);
+    assert.deepEqual(doubles, []);
+});
+
+test('tap previews are immediate; recognition cancels them and distinct taps commit in order', t => {
+    const { canvas, tap, clicks, doubles } = doubleTapFixture(t);
+    const previews = [], commits = [], cancellations = [];
+    canvas.onTapPreview = (x, y) => {
+        const token = { x, y };
+        previews.push(token);
+        return token;
+    };
+    canvas.onTapCommit = token => commits.push(token);
+    canvas.onTapCancel = token => cancellations.push(token);
+    tap(20);
+    assert.equal(previews.length, 1);
+    assert.equal(commits.length, 0);
+    tap(24);
+    assert.deepEqual(cancellations, [previews[0]]);
+    assert.deepEqual(doubles, [[24, 20]]);
+    t.mock.timers.tick(300);
+    assert.equal(commits.length, 0);
+    tap(95); tap(105);
+    assert.deepEqual(commits, [previews[1]]);
+    t.mock.timers.tick(300);
+    assert.deepEqual(commits, [previews[1], previews[2]]);
+    tap(20);
+    canvas._handleTouchCancel();
+    t.mock.timers.tick(300);
+    assert.deepEqual(cancellations, [previews[0], previews[3]]);
+    assert.deepEqual(clicks, []);
+});
+
+test('real gesture flow requests a new position immediately and discards it on a destination double tap', t => {
+    const { canvas, tap, doubles } = doubleTapFixture(t);
+    const messages = [];
+    let visual;
+    const selection = createSelection({ send: message => messages.push(message),
+        onChange: value => { visual = value; }, presentColor: () => false });
+    canvas.onTapPreview = (x, y) => selection.preview({ l: 0, t: 0, c: false, x, y });
+    canvas.onTapCommit = token => selection.commit(token);
+    canvas.onTapCancel = token => selection.cancel(token);
+    tap(20);
+    selection.receiveMoves({ requestId: messages[0].requestId, moves: [{ l: 0, t: 0, x: 60, y: 20 }] });
+    tap(60);
+    assert.equal(messages[1].type, 'preview_move');
+    assert.equal(visual.selected, undefined);
+    assert.equal(visual.tap, undefined); // No temporary destination-square highlight.
+    tap(60);
+    t.mock.timers.tick(300);
+    assert.equal(messages[2].type, 'discard_preview');
+    assert.equal(doubles.length, 1);
+    assert.equal(visual.selected.x, 20);
+    assert.equal(visual.moves.length, 1);
+    assert(!messages.some(message => message.type === 'apply_move'));
+    tap(60);
+    assert.equal(messages[3].type, 'preview_move');
+    t.mock.timers.tick(299);
+    assert.equal(messages.length, 4);
+    t.mock.timers.tick(1);
+    assert.equal(messages[4].type, 'apply_move');
+});
+
+test('drag, fast swipe, pinch and cancellation discard pending selection and double taps', t => {
+    const { canvas, tap, clicks, doubles } = doubleTapFixture(t);
+    for (const cancel of [
+        () => canvas._handleTouchMove(event([point(40)])),
+        () => canvas._handleTouchEnd(event([], [point(40)])),
+        () => canvas._handleTouchStart(event([point(20), point(60)])),
+        () => canvas._handleTouchCancel()
+    ]) {
+        tap(20);
+        canvas._handleTouchStart(event([point(20)]));
+        cancel();
+        t.mock.timers.tick(300);
+        assert.deepEqual(clicks, []);
+        assert.deepEqual(doubles, []);
+    }
+    tap(20);
+    t.mock.timers.tick(300);
     assert.deepEqual(clicks, [[20, 20]]);
 });
 

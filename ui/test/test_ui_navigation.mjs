@@ -5,6 +5,11 @@ import test from 'node:test';
 const load = async name => import(`data:text/javascript;base64,${Buffer.from(await readFile(new URL(`../scripts/${name}.js`, import.meta.url), 'utf8')).toString('base64')}`);
 const { nearestBoard, directionalTarget, focusViewBoard, heldNavigationSteps } = await load('navigation');
 const { createKeyboardShortcuts } = await load('keyboard');
+const drawSource = (await readFile(new URL('../scripts/draw.js', import.meta.url), 'utf8'))
+    .replace(/^import .*;\n/gm, '');
+const { default: ChessBoardCanvas } = await import(`data:text/javascript;base64,${Buffer.from(
+    `const nearestBoard = ${nearestBoard}; const focusViewBoard = ${focusViewBoard};\n` + drawSource
+).toString('base64')}`);
 const directions = { up: { x: 0, y: -1 }, left: { x: -1, y: 0 }, down: { x: 0, y: 1 }, right: { x: 1, y: 0 } };
 
 test('nearest board uses visual distance and handles empty data and ties deterministically', () => {
@@ -72,6 +77,55 @@ test('focus view recognition uses screen-position and relative-zoom tolerance', 
     assert.equal(match({ ...camera, scale: 2 + Math.log2(1.0005) }), boards[0]);
     assert.equal(match({ ...camera, scale: 1 }), null);
     assert.equal(focusViewBoard([], camera, spacing, size, 2), null);
+});
+
+test('touch focus targets the tapped visible board and toggles normal/wide destinations during motion', () => {
+    const previousDocument = globalThis.document;
+    globalThis.document = { body: { classList: { contains: () => true } } };
+    try {
+        for (const flipped of [false, true]) {
+            const canvas = Object.assign(Object.create(ChessBoardCanvas.prototype), {
+                boardLengthX: 8, boardLengthY: 8, squareSize: 10,
+                boardSkipX: 100, boardSkipY: 112, flipped,
+                data: { boards: [{ l: 1, t: 1, c: false, fen: 'board' }, { l: 0, t: 0, c: false, fen: 'board' },
+                    { l: 0, t: 2, c: false, fen: null }] },
+                infCanvas: {
+                    viewportSize: { width: 390, height: 600 },
+                    cameraCurrent: { x: -40, y: -40, scale: 0 },
+                    cameraTarget: { x: -40, y: -40, scale: 0 },
+                    moveTo(x, y, scale) { this.cameraTarget = { x: -x, y: -y, scale }; }
+                }
+            });
+            const tap = () => canvas.zoomTappedBoard(220, (flipped ? -112 : 112) + 20);
+            const normal = canvas._focusScale(), wide = canvas._focusScale(true);
+            tap();
+            assert.deepEqual(canvas.infCanvas.cameraTarget, { x: -240, y: flipped ? 72 : -152, scale: normal });
+            tap(); // Rendered camera is still at the original board.
+            assert.equal(canvas.infCanvas.cameraTarget.scale, wide);
+            tap();
+            assert.equal(canvas.infCanvas.cameraTarget.scale, normal);
+            canvas.infCanvas.cameraCurrent = { ...canvas.infCanvas.cameraTarget };
+            tap(); // Same toggle after settling.
+            assert.equal(canvas.infCanvas.cameraTarget.scale, wide);
+            canvas.zoomTappedBoard(20, 20); // Another board always gets normal zoom.
+            assert.deepEqual(canvas.infCanvas.cameraTarget, { x: -40, y: -40, scale: normal });
+            const before = { ...canvas.infCanvas.cameraTarget };
+            for (const x of [90, 320, 420]) canvas.zoomTappedBoard(x, 20); // Gap, absent board, hidden preview.
+            assert.deepEqual(canvas.infCanvas.cameraTarget, before);
+            const original = canvas.data;
+            canvas.data = { boards: [] }; // A temporary position can hide an original phantom destination.
+            assert.equal(canvas._boardAtWorldPoint(20, 20), null);
+            assert.deepEqual(canvas._boardAtWorldPoint(20, 20, original), { x: 0, y: canvas._displayL(0) });
+            canvas.data = original;
+            canvas.infCanvas.cameraCurrent = { ...before, scale: normal - 1 };
+            canvas.infCanvas.cameraTarget = { ...canvas.infCanvas.cameraCurrent };
+            canvas.zoomTappedBoard(20, 20);
+            assert.equal(canvas.infCanvas.cameraTarget.scale, normal); // Center alone does not widen.
+        }
+    } finally {
+        if (previousDocument === undefined) delete globalThis.document;
+        else globalThis.document = previousDocument;
+    }
 });
 
 test('editing, composition, browser modifiers, dialogs and native activation are untouched', () => {
