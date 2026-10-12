@@ -9,7 +9,7 @@
 
 namespace
 {
-std::pair<int, int> get_board_size_from_headers(const std::map<std::string, std::string>& metadata)
+std::pair<int, int> get_board_size_from_headers(const std::map<std::string, std::string> &metadata)
 {
     std::string size_str = find_or_default(metadata, std::string("size"), std::string("8x8"));
     auto pos = size_str.find('x');
@@ -26,9 +26,9 @@ std::pair<int, int> get_board_size_from_headers(const std::map<std::string, std:
             throw std::out_of_range("");
         }
         return {size_x, size_y};
-    } catch (const std::invalid_argument&) {
+    } catch (const std::invalid_argument &) {
         throw std::runtime_error("get_board_size_from_headers(): Expect number in size value: " + size_str);
-    } catch (const std::out_of_range&) {
+    } catch (const std::out_of_range &) {
         throw std::runtime_error(
             "get_board_size_from_headers(): Number out of range in size value: " +
             size_str +
@@ -113,9 +113,9 @@ const std::map<std::string, variant_setup_t> default_variants = {
     },
 };
 
-variant_setup_t derive_variant_setup(const pgnparser_ast::game& g)
+variant_setup_t derive_variant_setup(const pgnparser_ast::game &g)
 {
-    auto& metadata = g.headers;
+    auto &metadata = g.headers;
     auto [size_x, size_y] = get_board_size_from_headers(metadata);
     promotion_options promotions = promotion_options::QUEEN;
     if(auto it = metadata.find("promotions"); it != metadata.end())
@@ -145,12 +145,12 @@ variant_setup_t derive_variant_setup(const pgnparser_ast::game& g)
         else if(boards.empty())
         {
             try {
-                const variant_setup_t& variant = default_variants.at(board_str);
+                const variant_setup_t &variant = default_variants.at(board_str);
                 size_x = variant.size_x;
                 size_y = variant.size_y;
                 boards = variant.boards;
                 is_even_timelines = variant.is_even_timelines;
-            } catch (const std::out_of_range&) {
+            } catch (const std::out_of_range &) {
                 throw std::runtime_error("derive_variant_setup(): Unknown variant: " + board_str);
             }
         }
@@ -172,9 +172,9 @@ variant_setup_t derive_variant_setup(const pgnparser_ast::game& g)
     {
         throw std::runtime_error("derive_variant_setup(): Variant is unspecific: no Board header or 5DFEN given");
     }
-    for(const auto& board_info : boards)
+    for(const auto &board_info : boards)
     {
-        const auto& fen = std::get<0>(board_info);
+        const auto &fen = std::get<0>(board_info);
         if(static_cast<int>(std::count(fen.begin(), fen.end(), '/')) + 1 != size_y)
             throw parse_error("derive_variant_setup(): FEN does not contain exactly "
                               + std::to_string(size_y) + " rows: " + fen);
@@ -182,7 +182,7 @@ variant_setup_t derive_variant_setup(const pgnparser_ast::game& g)
     if(!is_even_timelines.has_value())
     {
         bool even = false;
-        for(const auto& [fen, sign, l, t, c] : boards)
+        for(const auto &[fen, sign, l, t, c] : boards)
         {
             even |= (sign == pgnparser_ast::POSITIVE && l == 0);
             even |= (sign == pgnparser_ast::NEGATIVE && l == 0);

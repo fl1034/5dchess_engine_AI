@@ -78,8 +78,8 @@ std::optional<moveseq> random_action_selection::operator()(
 {
     if(stop.stop_requested()) return std::nullopt;
     auto [info, space] = HC_info::build_HC(s);
-    auto order = rng ? random_HC_ordering(info.universe, *rng)
-                     : random_HC_ordering(info.universe);
+    auto order = rng ? random_HC_ordering(info.get_universe(), *rng)
+                     : random_HC_ordering(info.get_universe());
     return mixed_search(info, std::move(space), std::move(order), stop).first();
 }
 
@@ -120,12 +120,12 @@ std::optional<moveseq> weighted_action_selection::operator()(
     auto [info, space] = HC_info::build_HC(s);
     const float weight_temperature = get_temperature();
     move_evaluator evaluator(info, weights);
-    std::vector<std::vector<float>> coordinate_weights(info.universe.dimension());
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
+    std::vector<std::vector<float>> coordinate_weights(info.get_universe().dimension());
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
     {
         auto &axis_weights = coordinate_weights[axis];
-        axis_weights.reserve(info.universe[axis].size());
-        for(index_t coordinate : info.universe[axis])
+        axis_weights.reserve(info.get_universe()[axis].size());
+        for(index_t coordinate : info.get_universe()[axis])
         {
             if(stop.stop_requested()) return std::nullopt;
             axis_weights.push_back(std::exp(
@@ -134,8 +134,8 @@ std::optional<moveseq> weighted_action_selection::operator()(
     }
     auto order = rng
         ? weighted_HC_ordering(
-            info.universe, std::move(coordinate_weights), *rng)
+            info.get_universe(), std::move(coordinate_weights), *rng)
         : weighted_HC_ordering(
-            info.universe, std::move(coordinate_weights));
+            info.get_universe(), std::move(coordinate_weights));
     return mixed_search(info, std::move(space), std::move(order), stop).first();
 }

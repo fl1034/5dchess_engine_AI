@@ -99,7 +99,7 @@ struct ext_move
     std::string to_string() const;
     std::string lan(const state &) const;
     std::string pgn(const state &, pgn_options options=pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
-    bool operator==(const ext_move&) const = default;
+    bool operator==(const ext_move &) const = default;
 };
 
 /* move sequence (used in hypercuboid.h) */
@@ -130,7 +130,7 @@ public:
     as a side effact and return the branching index */
     static int sort(std::vector<ext_move> &mvs, const state &s);
     static action from_vector(const std::vector<ext_move> &mvs, const state &s);
-    static action from_moveseq(const moveseq& mvs, const state &s);
+    static action from_moveseq(const moveseq &mvs, const state &s);
     std::vector<ext_move> get_moves() const { return mvs; }
     // Borrowed moves: keep this action alive and do not assign or move it.
     std::span<const ext_move> get_moves_view() const & noexcept { return mvs; }

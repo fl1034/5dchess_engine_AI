@@ -293,7 +293,7 @@ action action::from_moveseq(const moveseq &mvs, const state &s)
     std::vector<ext_move> ext_mvs;
     ext_mvs.reserve(mvs.size());
     std::transform(mvs.begin(), mvs.end(), std::back_inserter(ext_mvs),
-                   [&s](const auto& fm) { return ext_move(fm, s); });
+                   [&s](const auto &fm) { return ext_move(fm, s); });
     return action::from_vector(ext_mvs, s);
 }
 
@@ -329,7 +329,7 @@ std::string action::lan(const state &initial_state) const
     return result;
 }
 
-std::ostream& operator<<(std::ostream &os, const action &act)
+std::ostream &operator<<(std::ostream &os, const action &act)
 {
     os << act.to_string();
     return os;

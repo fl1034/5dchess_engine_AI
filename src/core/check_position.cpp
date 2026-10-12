@@ -5,23 +5,23 @@
 #include <array>
 #include <cassert>
 
-check_position::check_position(const state& s)
+check_position::check_position(const state &s)
     : check_position(s, s.get_lines_range().first, s.get_lines_range().second) {}
 
-check_position::check_position(const state& s, int l_min, int l_max)
+check_position::check_position(const state &s, int l_min, int l_max)
     : base(s), first_line(l_min), lines(l_max - l_min + 1)
 {
     const auto [first, last] = s.get_lines_range();
     assert(l_min <= first && last <= l_max);
     for (int l = first; l <= last; ++l) {
-        auto& line = lines[l - l_min];
+        auto &line = lines[l - l_min];
         line.exists = line.in_base = true;
         line.start = s.get_timeline_start(l);
         line.end = s.get_timeline_end(l);
     }
 }
 
-check_position check_position::for_phantom(const state& s)
+check_position check_position::for_phantom(const state &s)
 {
     check_position result(s);
     const bool player = s.get_present().second;
@@ -35,7 +35,7 @@ check_position check_position::for_phantom(const state& s)
     return result;
 }
 
-check_position check_position::for_move_candidates(const state& s)
+check_position check_position::for_move_candidates(const state &s)
 {
     const auto [lo, hi] = s.get_lines_range();
     const int branch = s.new_line();
@@ -62,13 +62,13 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
     std::array<int,2> sources{};
     std::array<line_view,2> saved{};
     for (std::size_t i = 0; i < count; ++i) {
-        const auto& update = boards[i];
+        const auto &update = boards[i];
         const turn_t start{update.t, update.c};
         assert(update.value);
         assert(update.l >= first_line && update.l-first_line < static_cast<int>(lines.size()));
         assert(i == 0 || update.l != sources[0]);
         sources[i] = update.l;
-        auto& line = lines[update.l-first_line];
+        auto &line = lines[update.l-first_line];
         saved[i] = line;
         if (!line.exists) line.start = start;
         line.exists = true;
@@ -77,9 +77,9 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
         line.added = update.value;
     }
     struct restore {
-        check_position& view;
+        check_position &view;
         std::span<const int> sources;
-        const std::array<line_view,2>& saved;
+        const std::array<line_view,2> &saved;
         ~restore() {
             for (std::size_t i = 0; i < sources.size(); ++i)
                 view.lines[sources[i]-view.first_line] = saved[i];
@@ -91,7 +91,7 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
         } else if constexpr (Kind == check_kind::superphysical) {
             return move.from.tl() != move.to.tl();
         } else {
-            const auto& target = lines[move.to.l()-first_line];
+            const auto &target = lines[move.to.l()-first_line];
             return turn_t{move.to.t(),attacker} != target.end;
         }
     };
@@ -110,10 +110,10 @@ template bool check_position::gives_check<check_position::check_kind::superphysi
 template bool check_position::gives_check<check_position::check_kind::historical>(
     check_position::board_overlay, bool, std::optional<check_position::board_overlay>);
 
-void check_position::add_board(int l, turn_t at, const board& b)
+void check_position::add_board(int l, turn_t at, const board &b)
 {
     assert(l >= first_line && l - first_line < static_cast<int>(lines.size()));
-    auto& line = lines[l - first_line];
+    auto &line = lines[l - first_line];
     assert(!line.added);
     if (line.exists) {
         assert(at == next_turn(line.end));
@@ -130,7 +130,7 @@ const board *check_position::get_board_ptr(int l, int t, bool c) const
 {
     if (l < first_line || l - first_line >= static_cast<int>(lines.size()))
         return nullptr;
-    const auto& line = lines[l - first_line];
+    const auto &line = lines[l - first_line];
     const turn_t at{t,c};
     if (!line.exists || at < line.start || at > line.end)
         return nullptr;
@@ -147,8 +147,8 @@ piece_t check_position::get_piece(vec4 p, bool c) const
 }
 
 template<bool C, check_emitter Emit>
-bool check_position::scan_physical(vec4 p0, const board& source,
-                                   bitboard_t friendly, Emit& emit) const
+bool check_position::scan_physical(vec4 p0, const board &source,
+                                   bitboard_t friendly, Emit &emit) const
 {
     for (int dst : marked_pos(source.royal() & source.hostile<C>())) {
         for (int src : marked_pos(source.attacks_to(dst) & friendly)) {
@@ -159,8 +159,8 @@ bool check_position::scan_physical(vec4 p0, const board& source,
 }
 
 template<bool C, check_emitter Emit>
-bool check_position::scan_pure_sliders(vec4 p0, const board& source,
-                                       bitboard_t friendly, Emit& emit) const
+bool check_position::scan_pure_sliders(vec4 p0, const board &source,
+                                       bitboard_t friendly, Emit &emit) const
 {
     auto scan_direction = [&](vec4 direction, bitboard_t pieces) {
         for (vec4 q = p0+direction; pieces; q = q+direction) {
@@ -184,8 +184,8 @@ bool check_position::scan_pure_sliders(vec4 p0, const board& source,
 }
 
 template<bool C, check_emitter Emit>
-bool check_position::scan_compound_sliders(vec4 p0, const board& source,
-                                           bitboard_t friendly, Emit& emit) const
+bool check_position::scan_compound_sliders(vec4 p0, const board &source,
+                                           bitboard_t friendly, Emit &emit) const
 {
     auto scan_direction = [&](vec4 direction, bitboard_t orthogonal_pieces,
                               bitboard_t diagonal_pieces) {
@@ -239,8 +239,8 @@ bool check_position::scan_compound_sliders(vec4 p0, const board& source,
 }
 
 template<bool C, check_emitter Emit>
-bool check_position::scan_jumps(vec4 p0, const board& source,
-                                bitboard_t friendly, Emit& emit) const
+bool check_position::scan_jumps(vec4 p0, const board &source,
+                                bitboard_t friendly, Emit &emit) const
 {
     auto report = [&](vec4 p, vec4 q0, bitboard_t targets) {
         for (int dst : marked_pos(targets)) {
@@ -249,7 +249,7 @@ bool check_position::scan_jumps(vec4 p0, const board& source,
         return false;
     };
     auto jump = [&]<class Attack>(vec4 direction, bitboard_t pieces, Attack attack)
-        requires requires(Attack& function, int src) {
+        requires requires(Attack &function, int src) {
             { function(src) } -> std::same_as<bitboard_t>;
         }
     {
@@ -293,15 +293,15 @@ bool check_position::scan_jumps(vec4 p0, const board& source,
 }
 
 template<bool C, check_emitter Emit>
-bool check_position::scan(bool include_physical, Emit&& emit,
+bool check_position::scan(bool include_physical, Emit &&emit,
                            std::span<const int> sources,
                            bool include_superphysical) const
 {
     auto scan_line = [&](int i) {
-        const auto& line = lines[i];
+        const auto &line = lines[i];
         if (!line.exists || line.end.second != C) return false;
         const vec4 p0(0,0,line.end.first,first_line+i);
-        const board& source = *get_board_ptr(p0.l(),p0.t(),C);
+        const board &source = *get_board_ptr(p0.l(),p0.t(),C);
         const bitboard_t friendly = source.hostile<!C>(); // excludes walls
         if ((include_physical && scan_physical<C>(p0,source,friendly,emit))
             || (include_superphysical

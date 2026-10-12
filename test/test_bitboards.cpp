@@ -95,7 +95,7 @@ void ASSERT_EQ(auto lhs, auto rhs)
     }
 }
 
-std::string generate_random_fen(std::mt19937& gen)
+std::string generate_random_fen(std::mt19937 &gen)
 {
     // All possible chess pieces (excluding empty squares)
     const std::vector<unsigned char> pieces = {

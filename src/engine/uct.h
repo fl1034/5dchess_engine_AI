@@ -135,10 +135,10 @@ std::optional<Order> construct_hc_ordering(
         if(!score) return std::nullopt;
         auto values = score(info, stop);
         if(!values || stop.stop_requested()) return std::nullopt;
-        return Order(info.universe, *values, rng);
+        return Order(info.get_universe(), *values, rng);
     }
     else if constexpr(std::constructible_from<Order, const HC &, std::mt19937 &>)
-        return Order(info.universe, rng);
+        return Order(info.get_universe(), rng);
     else if constexpr(std::default_initializable<Order>)
         return Order{};
     else

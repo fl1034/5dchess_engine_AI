@@ -6,26 +6,26 @@
 template<HCOrdering Order>
 std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
 {
-    assert(hc.dimension() == dimension);
-    graph g(dimension);
+    assert(hc.dimension() == dimension());
+    graph g(dimension());
     std::vector<index_t> must_include;
     constexpr index_t invalid_index = std::numeric_limits<index_t>::max();
 
-    const size_t num_edges = static_cast<std::size_t>(dimension) * dimension;
+    const size_t num_edges = static_cast<std::size_t>(dimension()) * dimension();
     std::vector<index_t> edge_refs(num_edges, invalid_index);
     const auto edge_ref = [&](index_t p, index_t q) -> index_t & {
-        return edge_refs[static_cast<std::size_t>(p) * dimension + q];
+        return edge_refs[static_cast<std::size_t>(p) * dimension() + q];
     };
 
-    point result(dimension, invalid_index);
-    for(index_t n = 0; n < dimension; n++)
+    point result(dimension(), invalid_index);
+    for(index_t n = 0; n < dimension(); n++)
     {
         bool has_nonjump = false;
         integer_set ghost_arrive_indices;
         order.for_each(n, hc[n], [&](index_t i) {
             const entry &loc = axis_coords[n][i];
             std::visit(overloads {
-                [&](const physical_entry&) {
+                [&](const physical_entry &) {
                     if(!has_nonjump)
                     {
                         has_nonjump = true;
@@ -33,7 +33,7 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
                     }
                 },
                 [&](const arriving_entry &arriving) {
-                    index_t from_axis = line_to_axis.at(arriving.m.from.l());
+                    index_t from_axis = line_axes.at(arriving.m.from.l());
                     if(!hc[from_axis].contains(arriving.idx))
                     {
                         ghost_arrive_indices.insert(i);
@@ -49,8 +49,8 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
                         assert(arriving.idx != invalid_index);
                     }
                 },
-                [](const departing_entry&) {},
-                [&](const null_entry&) {
+                [](const departing_entry &) {},
+                [&](const null_entry &) {
                     if(!has_nonjump)
                     {
                         has_nonjump = true;

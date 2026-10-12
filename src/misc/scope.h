@@ -18,10 +18,10 @@ public:
             exit_action();
         }
     }
-    scope_exit_guard(const scope_exit_guard&) = delete;
-    scope_exit_guard& operator=(const scope_exit_guard&) = delete;
-    scope_exit_guard(scope_exit_guard&& other) noexcept : exit_action(std::move(other.exit_action)) {}
-    scope_exit_guard& operator=(scope_exit_guard&& other) noexcept
+    scope_exit_guard(const scope_exit_guard &) = delete;
+    scope_exit_guard &operator=(const scope_exit_guard &) = delete;
+    scope_exit_guard(scope_exit_guard &&other) noexcept : exit_action(std::move(other.exit_action)) {}
+    scope_exit_guard &operator=(scope_exit_guard &&other) noexcept
     {
         if(this != &other)
         {

@@ -8,10 +8,17 @@
 #include <optional>
 #include <random>
 #include <utility>
+#include <type_traits>
+#include <limits>
 #include <vector>
 
 namespace hcutils_tests
 {
+static_assert(std::is_nothrow_move_constructible_v<HC_info>);
+static_assert(std::is_nothrow_move_assignable_v<HC_info>);
+static_assert(std::is_copy_constructible_v<HC_info>);
+static_assert(std::is_copy_assignable_v<HC_info>);
+
 void test_hc()
 {
     HC hc {{{1,2}, {2,3}, {1,2,3}}};
@@ -183,8 +190,24 @@ void test_search_branch_order()
     for(bool stable : {false, true})
     {
         auto [info, space] = HC_info::build_HC(s);
-        auto actions = stable ? info.stable_search(std::move(space))
-                              : info.search(std::move(space));
+        assert(info.dimension() == info.get_universe().dimension());
+        const auto [mandatory, optional, unplayable] = s.get_timeline_status();
+        index_t axis = 0;
+        for(const auto &lines : {mandatory, optional})
+            for(int line : lines)
+                assert(info.line_to_axis(line) == axis++);
+        assert(axis == info.first_branch_axis());
+        const int first_line = s.new_line();
+        for(; axis < info.dimension(); ++axis)
+            assert(info.line_to_axis(first_line + signum(first_line)
+                       * (axis - info.first_branch_axis())) == axis);
+        assert(!info.line_to_axis(std::numeric_limits<int>::max()));
+        assert(info.get_state().get_boards() == s.get_boards());
+
+        // Moving a completed context before creating its generator preserves search.
+        HC_info moved(std::move(info));
+        auto actions = stable ? moved.stable_search(std::move(space))
+                              : moved.search(std::move(space));
         int count = 0;
         for(const auto &moves : actions)
         {
@@ -289,7 +312,7 @@ void validate_matching(
     const matching &result)
 {
     std::vector<bool> matched(adjacency.size(), false);
-    for(const auto [u, v] : result)
+    for(const auto &[u, v] : result)
     {
         require(u < adjacency.size());
         require(v < adjacency.size());
@@ -356,7 +379,7 @@ adjacency_matrix make_graph(
     std::initializer_list<std::pair<index_t, index_t>> edges)
 {
     adjacency_matrix adjacency(size, std::vector<bool>(size, false));
-    for(const auto [u, v] : edges)
+    for(const auto &[u, v] : edges)
     {
         adjacency[u][v] = adjacency[v][u] = true;
     }

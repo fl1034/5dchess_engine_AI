@@ -92,7 +92,7 @@ int run_perftest(int argc, const char *argv[])
                 if(!variations.empty())
                 {
                     const auto &[act, last_gt] = *(variations.end() - 1);
-                    for(const auto& mv: act.moves)
+                    for(const auto &mv: act.moves)
                     {
                         auto [fm_opt, pt_opt, candidates] = current_state.parse_move(mv);
                         if(!fm_opt.has_value())

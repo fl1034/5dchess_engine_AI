@@ -99,8 +99,8 @@ public:
     // modifications
     piece_t get_piece(int pos) const;
     void set_piece(int pos, piece_t p);
-    std::shared_ptr<board> replace_piece(int pos, piece_t p) const;
-    std::shared_ptr<board> move_piece(int from, int to) const;
+    std::shared_ptr<const board> replace_piece(int pos, piece_t p) const;
+    std::shared_ptr<const board> move_piece(int from, int to) const;
     array_board to_array_board() const;
     std::string to_string() const;
     

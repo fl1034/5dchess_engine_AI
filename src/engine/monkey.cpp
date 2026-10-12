@@ -13,8 +13,8 @@ std::optional<action> monkey_engine::find_best_move(std::optional<int> depth_lim
         rng.emplace(*move_seed);
     }
     random_HC_ordering order = rng.has_value()
-        ? random_HC_ordering(w.universe, *rng)
-        : random_HC_ordering(w.universe);
+        ? random_HC_ordering(w.get_universe(), *rng)
+        : random_HC_ordering(w.get_universe());
     if(stop_token.stop_requested())
     {
         return std::nullopt;

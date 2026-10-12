@@ -29,10 +29,10 @@ state capture_position(char victim)
         .parse_game());
 }
 
-index_t coordinate_for(const HC_info& info, const full_move& wanted)
+index_t coordinate_for(const HC_info &info, const full_move &wanted)
 {
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
-        for(index_t coordinate : info.universe[axis])
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
+        for(index_t coordinate : info.get_universe()[axis])
         {
             const auto boards = info.get_move_boards(axis, coordinate);
             if(boards && boards->move == wanted) return coordinate;
@@ -47,7 +47,7 @@ void test_weight_layout_and_profiles()
     move_evaluation_weights zero{};
     for(float value : zero.values) assert(value == 0.0f);
 
-    const auto& weights = default_move_evaluation_weights.values;
+    const auto &weights = default_move_evaluation_weights.values;
     assert(weights[move_evaluation_weights::LATENT_KING_THREAT] == -50000.0f);
     assert(weights[move_evaluation_weights::NORMAL_KING_MOVE] == -1200.0f);
     assert(weights[move_evaluation_weights::KING_BRANCH] == -8000.0f);
@@ -104,7 +104,7 @@ void test_capture_groups()
         {'c', indices::ROOK_COMMON_KING_CAPTURE},
         {'w', indices::BRAWN_CAPTURE}, {'p', indices::PAWN_CAPTURE},
     };
-    for(const auto& [victim, feature] : cases)
+    for(const auto &[victim, feature] : cases)
     {
         const state before = capture_position(victim);
         auto [info, space] = HC_info::build_HC(before);
@@ -156,8 +156,8 @@ void test_king_branch_scoring()
     (void)space;
     const full_move wanted("(0T2)b2(0T1)c3");
     bool found = false;
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
-        for(index_t coordinate : info.universe[axis])
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
+        for(index_t coordinate : info.get_universe()[axis])
         {
             const auto boards = info.get_move_boards(axis, coordinate);
             if(!boards || boards->move != wanted) continue;
@@ -183,12 +183,12 @@ void test_score_table_and_cancellation()
     (void)space;
     move_evaluator evaluator(info, capture_weights);
     const auto table = evaluator.build_score_table();
-    assert(table && table->size() == info.universe.dimension());
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
+    assert(table && table->size() == info.get_universe().dimension());
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
     {
         index_t largest = 0;
         bool nonempty = false;
-        for(index_t coordinate : info.universe[axis])
+        for(index_t coordinate : info.get_universe()[axis])
         {
             nonempty = true;
             largest = std::max(largest, coordinate);
@@ -198,7 +198,7 @@ void test_score_table_and_cancellation()
         {
             assert((*table)[axis].size() == static_cast<std::size_t>(largest) + 1);
             for(index_t coordinate = 0; coordinate <= largest; ++coordinate)
-                if(!info.universe[axis].contains(coordinate))
+                if(!info.get_universe()[axis].contains(coordinate))
                 {
                     assert((*table)[axis][coordinate] == 0.0f);
                 }
@@ -213,31 +213,6 @@ void test_score_table_and_cancellation()
     assert(!evaluator.build_score_table(stopped.get_token()));
 }
 
-void test_pruned_coordinate_gaps()
-{
-    const state before = position("3k/4/1p2/KR2");
-    auto [info, space] = HC_info::build_HC(before);
-    (void)space;
-    bool pruned = false;
-    for(index_t axis = 0; axis < info.universe.dimension() && !pruned; ++axis)
-    {
-        auto& coordinates = info.universe[axis];
-        if(coordinates.size() < 2) continue;
-        auto removed = coordinates.begin();
-        const index_t gap = *removed;
-        const index_t next = *std::next(removed);
-        coordinates.erase(gap);
-        move_evaluator evaluator(info, capture_weights);
-        const auto table = evaluator.build_score_table();
-        assert(table);
-        assert((*table)[axis].size() > gap);
-        assert((*table)[axis][gap] == 0.0f);
-        assert((*table)[axis][next] == evaluator.score(axis, next));
-        pruned = true;
-    }
-    assert(pruned);
-}
-
 void test_superphysical_scoring()
 {
     multiverse boards(timeline_layout::odd(), {
@@ -248,8 +223,8 @@ void test_superphysical_scoring()
     auto [info, space] = HC_info::build_HC(before);
     (void)space;
     bool found = false;
-    for(index_t axis = 0; axis < info.universe.dimension() && !found; ++axis)
-        for(index_t coordinate : info.universe[axis])
+    for(index_t axis = 0; axis < info.get_universe().dimension() && !found; ++axis)
+        for(index_t coordinate : info.get_universe()[axis])
         {
             const auto move = info.get_move_boards(axis, coordinate);
             if(!move || !static_cast<bool>(
@@ -266,7 +241,7 @@ void test_superphysical_scoring()
 
 void test_latent_threat_weight_dependencies()
 {
-    const auto verify = [](const std::string& board, const char *move,
+    const auto verify = [](const std::string &board, const char *move,
                            bool threatened) {
         const state before = position(board);
         auto [info, space] = HC_info::build_HC(before);
@@ -306,7 +281,6 @@ int run()
     test_check_and_combined_scoring();
     test_king_branch_scoring();
     test_score_table_and_cancellation();
-    test_pruned_coordinate_gaps();
     test_superphysical_scoring();
     test_latent_threat_weight_dependencies();
     return 0;
@@ -342,9 +316,9 @@ void compare(const state &position, coverage &seen)
     move_evaluation_weights jump_weights{};
     jump_weights.values[move_evaluation_weights::SUPERPHYSICAL] = 1.0f;
     move_evaluator jump_scoring(info, jump_weights);
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
     {
-        for(index_t coordinate : info.universe[axis])
+        for(index_t coordinate : info.get_universe()[axis])
         {
             const semimove candidate = info.get_semimove(axis, coordinate);
             const auto cached = info.get_move_boards(axis, coordinate);
@@ -392,7 +366,7 @@ void test_superphysical_and_historical_checks()
 {
     const char *source = "7k/8/8/8/8/8/8/1R2K3";
     const char *target = "8/8/8/8/8/8/8/k7";
-    const auto verify = [](const state& position, bool historical) {
+    const auto verify = [](const state &position, bool historical) {
         auto [info, space] = HC_info::build_HC(position);
         (void)space;
         semimove_feature features(info);
@@ -400,8 +374,8 @@ void test_superphysical_and_historical_checks()
         const full_move physical("(0T1)b1b8");
         bool found = false;
         bool found_physical = false;
-        for (index_t axis = 0; axis < info.universe.dimension(); ++axis)
-            for (index_t coordinate : info.universe[axis]) {
+        for (index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
+            for (index_t coordinate : info.get_universe()[axis]) {
                 const auto boards = info.get_move_boards(axis, coordinate);
                 if (!boards) continue;
                 if (boards->move == physical) {

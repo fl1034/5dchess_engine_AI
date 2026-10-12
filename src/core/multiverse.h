@@ -35,7 +35,7 @@ class multiverse
 private:
     timeline_layout layout;
     int size_x, size_y; // board size
-    std::vector<std::vector<std::shared_ptr<board>>> boards;
+    std::vector<std::vector<std::shared_ptr<const board>>> boards;
     // the following data are derivated from boards:
     int l_min, l_max, active_min, active_max;
     std::vector<int> timeline_start, timeline_end;
@@ -64,7 +64,7 @@ private:
      */
     enum class axesmode {ORTHOGONAL, DIAGONAL, BOTH};
     template<bool C, axesmode TL, axesmode XY>
-    void gen_compound_moves(vec4 p, std::map<vec4, bitboard_t>& result) const;
+    void gen_compound_moves(vec4 p, std::map<vec4, bitboard_t> &result) const;
 
     template<bool C>
     std::vector<std::pair<vec4, bitboard_t>> gen_purely_sp_rook_moves(vec4 p0) const;
@@ -75,16 +75,17 @@ private:
     template<bool C>
     std::vector<std::pair<vec4, bitboard_t>> gen_purely_sp_knight_moves(vec4 p0) const;
 
-    void insert_board_impl(int l, int t, bool c, const std::shared_ptr<board>& b_ptr);
+    void insert_board_impl(int l, int t, bool c, const std::shared_ptr<const board> &b_ptr);
     std::pair<int,int> calculate_active_range() const noexcept;
 public:
     // constructor
     multiverse(timeline_layout layout, std::vector<boards_info_t> boards,
                int size_x = BOARD_LENGTH, int size_y = BOARD_LENGTH);
 
+    // Stored boards are shared snapshots; do not modify them through retained aliases.
     // modifiers
-    void insert_board(int l, int t, bool c, const std::shared_ptr<board>& b_ptr);
-    void append_board(int l, const std::shared_ptr<board>& b_ptr);
+    void insert_board(int l, int t, bool c, const std::shared_ptr<const board> &b_ptr);
+    void append_board(int l, const std::shared_ptr<const board> &b_ptr);
 
     // getters
     std::pair<int, int> get_board_size() const noexcept;
@@ -94,7 +95,8 @@ public:
     turn_t get_timeline_start(int l) const;
     turn_t get_timeline_end(int l) const;
 
-    std::shared_ptr<board> get_board(int l, int t, bool c) const;
+    // Share ownership of a read-only board; invalid indices throw.
+    std::shared_ptr<const board> get_board(int l, int t, bool c) const;
     // Borrow an existing board without changing its shared ownership count.
     // Return nullptr when the turn is absent; valid while this multiverse lives.
     const board *get_board_ptr(int l, int t, bool c) const noexcept;

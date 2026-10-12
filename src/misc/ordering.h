@@ -22,7 +22,7 @@ The code is written as static polymorphism.
 
 template<typename T>
 concept HCOrdering =
-    requires(const T &order, index_t n, const integer_set& s)
+    requires(const T &order, index_t n, const integer_set &s)
 {
     order.for_each(n, s, [](index_t) {});
 };
@@ -43,7 +43,7 @@ class natural_HC_ordering
 {
 public:
     natural_HC_ordering() = default;
-    void for_each(index_t, const integer_set& s, auto &&f) const
+    void for_each(index_t, const integer_set &s, auto &&f) const
     {
         for(index_t i: s)
         {
@@ -66,7 +66,7 @@ struct precomputed_HC_ordering
         static thread_local std::mt19937 rng(std::random_device{}());
         return rng;
     }
-    void for_each(index_t n, const integer_set& s, auto &&f) const
+    void for_each(index_t n, const integer_set &s, auto &&f) const
     {
         for(index_t i: orderings[n])
         {

@@ -74,7 +74,7 @@ option_dispatch_result dispatch_watched_option(
     option_dispatch_result result;
     if constexpr(requires { policy.watched_options; })
     {
-        std::apply([&](const auto &... option) {
+        std::apply([&](const auto &...option) {
             if constexpr(sizeof...(option) != 0)
             {
                 auto dispatch = [&](const auto &candidate) {
@@ -99,7 +99,7 @@ template<class... Policies>
 option_dispatch_result dispatch_watched_options(
     std::string_view key,
     const engine::option_value_t &value,
-    Policies &... policies)
+    Policies &...policies)
 {
     option_dispatch_result result;
     ((result += dispatch_watched_option(policies, key, value)), ...);
@@ -280,7 +280,7 @@ concept SelectionPolicy = requires(
 template<class TP, class DP, class BP, class SP, class Observer>
     requires TreePolicy<TP, Observer>
         && DefaultPolicy<DP, Observer>
-        && BackPropagation<BP, tree_node_t<TP>, typename DP::result_type, Observer>
+        &&BackPropagation<BP, tree_node_t<TP>, typename DP::result_type, Observer>
         && SelectionPolicy<SP, tree_node_t<TP>, Observer>
 class basic_mcts_engine: public engine
 {

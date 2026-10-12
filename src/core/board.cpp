@@ -170,14 +170,14 @@ void board::set_piece(int pos, piece_t p)
     }
 }
 
-std::shared_ptr<board> board::replace_piece(int pos, piece_t p) const
+std::shared_ptr<const board> board::replace_piece(int pos, piece_t p) const
 {
     std::shared_ptr<board> b_ptr = std::make_shared<board>(*this);
     b_ptr->set_piece(pos, p);
     return b_ptr;
 }
 
-std::shared_ptr<board> board::move_piece(int from, int to) const
+std::shared_ptr<const board> board::move_piece(int from, int to) const
 {
     std::shared_ptr<board> b_ptr = std::make_shared<board>(*this);
     b_ptr->set_piece(to, get_piece(from));

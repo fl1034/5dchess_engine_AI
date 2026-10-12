@@ -10,7 +10,7 @@
 #include "hypercuboid.h"
 
 template <typename T>
-std::set<T> set_minus(const std::set<T>& a, const std::set<T>& b)
+std::set<T> set_minus(const std::set<T> &a, const std::set<T> &b)
 {
     std::set<T> result;
     std::set_difference(a.begin(), a.end(), b.begin(), b.end(),

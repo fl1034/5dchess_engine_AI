@@ -82,7 +82,7 @@ public:
         int x = static_cast<int>(value & X_MASK);
         return (x ^ m_x) - m_x;
     }
-    constexpr vec4 operator +(const vec4& v) const noexcept
+    constexpr vec4 operator +(const vec4 &v) const noexcept
     {
         vec4_t a = value, b = v.value;
         vec4_t sum = ((a & mask_lower) + (b & mask_lower)) ^ ((a^b) & mask_top);
@@ -94,16 +94,16 @@ public:
         temp.value = ~temp.value;
         return temp + vec4(1,1,1,1);
     }
-    constexpr vec4 operator -(const vec4& v) const noexcept
+    constexpr vec4 operator -(const vec4 &v) const noexcept
     {
         return *this + (-v);
     }
-    constexpr vec4 operator *(const int& scalar) const noexcept
+    constexpr vec4 operator *(const int &scalar) const noexcept
     {
         return vec4(scalar*x(), scalar*y(), scalar*t(), scalar*l());
     }
-    constexpr bool operator ==(const vec4&) const = default;
-    constexpr auto operator <=>(const vec4& other) const noexcept
+    constexpr bool operator ==(const vec4 &) const = default;
+    constexpr auto operator <=>(const vec4 &other) const noexcept
     {
         return value <=> other.value;
     }
@@ -111,7 +111,7 @@ public:
     {
         return x()*other.x() + y()*other.y() + t()*other.t() + l()*other.l();
     }
-    friend std::ostream& operator<<(std::ostream& os, const vec4& v)
+    friend std::ostream &operator<<(std::ostream &os, const vec4 &v)
     {
         os << "0x" << std::hex << std::setw(8) << std::setfill('0') << v.value << std::dec << std::setfill(' ') << std::setw(0);
         os << "(" << v.x() << "," << v.y() << "," << v.t() << "," << v.l() << ")";

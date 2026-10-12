@@ -8,7 +8,7 @@
 using namespace emscripten;
 
 // Safe wrapper that returns JavaScript object with success/error
-val create_game_from_pgn(const std::string& pgn) 
+val create_game_from_pgn(const std::string &pgn)
 {
     val result = val::object();
     try {
@@ -58,7 +58,7 @@ val create_game_from_pgn(const std::string& pgn)
 // cpp objects ~> js objects //
 ///////////////////////////////
 
-inline val convert_vector_int_to_js(const std::vector<int>& v)
+inline val convert_vector_int_to_js(const std::vector<int> &v)
 {
     val arr = val::array();
     for (size_t i = 0; i < v.size(); ++i)
@@ -68,7 +68,7 @@ inline val convert_vector_int_to_js(const std::vector<int>& v)
     return arr;
 }
 
-inline val convert_vec4_to_js(const vec4& v)
+inline val convert_vec4_to_js(const vec4 &v)
 {
     val js_vec4 = val::object();
     js_vec4.set("l", v.l());
@@ -78,7 +78,7 @@ inline val convert_vec4_to_js(const vec4& v)
     return js_vec4;
 }
 
-inline val convert_vector_vec4_to_js(const std::vector<vec4>& vec)
+inline val convert_vector_vec4_to_js(const std::vector<vec4> &vec)
 {
     val js_array = val::array();
     for (size_t i = 0; i < vec.size(); ++i)
@@ -103,10 +103,10 @@ inline val convert_action_to_js(const action &act)
     return js_act;
 }
 
-inline val convert_metadata_to_js(const std::map<std::string, std::string>& metadata)
+inline val convert_metadata_to_js(const std::map<std::string, std::string> &metadata)
 {
     val js_metadata = val::object();
-    for (const auto& [key, value] : metadata)
+    for (const auto &[key, value] : metadata)
     {
         js_metadata.set(key, value);
     }
@@ -117,7 +117,7 @@ inline val convert_metadata_to_js(const std::map<std::string, std::string>& meta
 // js objects ~> cpp objects //
 ///////////////////////////////
 
-inline vec4 convert_js_to_vec4(const val& js_vec4)
+inline vec4 convert_js_to_vec4(const val &js_vec4)
 {
     int l = js_vec4["l"].as<int>();
     int t = js_vec4["t"].as<int>();
@@ -126,7 +126,7 @@ inline vec4 convert_js_to_vec4(const val& js_vec4)
     return vec4(x, y, t, l);
 }
 
-inline action convert_js_to_action(const val& js_action, const state& s)
+inline action convert_js_to_action(const val &js_action, const state &s)
 {
     std::vector<ext_move> mvs;
     unsigned length = js_action["length"].as<unsigned>();
@@ -141,7 +141,7 @@ inline action convert_js_to_action(const val& js_action, const state& s)
     return action::from_vector(mvs, s);
 }
 
-inline std::map<std::string, std::string> convert_js_to_metadata(const val& js_metadata)
+inline std::map<std::string, std::string> convert_js_to_metadata(const val &js_metadata)
 {
     std::map<std::string, std::string> metadata;
     if (js_metadata.isNull() || js_metadata.isUndefined())
@@ -187,13 +187,13 @@ EMSCRIPTEN_BINDINGS(engine) {
     class_<game>("game")
         .smart_ptr<std::shared_ptr<game>>("game")
         .property("metadata", &game::metadata)
-        .function("get_metadata", optional_override([](const game& self) {
+        .function("get_metadata", optional_override([](const game &self) {
             return convert_metadata_to_js(self.metadata);
         }))
-        .function("set_metadata", optional_override([](game& self, val js_metadata) {
+        .function("set_metadata", optional_override([](game &self, val js_metadata) {
             self.metadata = convert_js_to_metadata(js_metadata);
         }))
-        .function("get_current_present", optional_override([](const game& self) {
+        .function("get_current_present", optional_override([](const game &self) {
             const auto [t, c] = self.get_current_present();
             val obj = val::object();
             obj.set("t", t);
@@ -262,8 +262,8 @@ EMSCRIPTEN_BINDINGS(engine) {
             result.set("checks", checks_array);
             return result;
         }))
-        .function("get_current_timeline_status", optional_override([](const game& self) {
-            const auto& [mandatory, optional, unplayable] =
+        .function("get_current_timeline_status", optional_override([](const game &self) {
+            const auto &[mandatory, optional, unplayable] =
                 self.get_current_timeline_status();
             val obj = val::object();
             obj.set("mandatory_timelines", convert_vector_int_to_js(mandatory));
@@ -271,11 +271,11 @@ EMSCRIPTEN_BINDINGS(engine) {
             obj.set("unplayable_timelines", convert_vector_int_to_js(unplayable));
             return obj;
         }))
-        .function("gen_move_if_playable", optional_override([](const game& self, val obj) {
+        .function("gen_move_if_playable", optional_override([](const game &self, val obj) {
             auto vec = self.gen_move_if_playable(convert_js_to_vec4(obj));
             return convert_vector_vec4_to_js(vec);
         }))
-        .function("get_match_status", optional_override([](const game& self) {
+        .function("get_match_status", optional_override([](const game &self) {
             match_status_t status = self.get_match_status();
             switch(status)
             {
@@ -294,11 +294,11 @@ EMSCRIPTEN_BINDINGS(engine) {
                     return std::string("Unknown Status");
             }
         }))
-        .function("get_movable_pieces", optional_override([](const game& self) {
+        .function("get_movable_pieces", optional_override([](const game &self) {
             auto vec = self.get_movable_pieces();
             return convert_vector_vec4_to_js(vec);
         }))
-        .function("is_playable", optional_override([](const game& self, val obj) {
+        .function("is_playable", optional_override([](const game &self, val obj) {
             return self.is_playable(convert_js_to_vec4(obj));
         }))
         .function("can_undo", &game::can_undo)
@@ -322,7 +322,7 @@ EMSCRIPTEN_BINDINGS(engine) {
             auto checks = self.get_current_checks();
             for (size_t i = 0; i < checks.size(); ++i) 
             {
-                const auto& [from, to] = checks[i];
+                const auto &[from, to] = checks[i];
                 val check_info = val::object();
                 check_info.set("from", convert_vec4_to_js(from));
                 check_info.set("to", convert_vec4_to_js(to));
@@ -331,7 +331,7 @@ EMSCRIPTEN_BINDINGS(engine) {
             return result;
         }))
         .function("get_board_size", optional_override([](const game &self) {
-            const auto& [x, y] = self.get_board_size();
+            const auto &[x, y] = self.get_board_size();
             val obj = val::object();
             obj.set("x", x);
             obj.set("y", y);
@@ -375,7 +375,7 @@ EMSCRIPTEN_BINDINGS(engine) {
             auto hist = self.get_historical_actions();
             for (size_t i = 0; i < hist.size(); ++i) 
             {
-                const auto& [act, pgn] = hist[i];
+                const auto &[act, pgn] = hist[i];
                 val move_info = val::object();
                 move_info.set("action", convert_action_to_js(act));
                 move_info.set("pgn", pgn);

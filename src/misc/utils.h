@@ -16,7 +16,7 @@ The append/concatenate functions.
 See: https://coliru.stacked-crooked.com/a/c81d5b84c757ce38
 */
 template<typename T, typename ...Args>
-void append_vectors(std::vector<T>& res, const Args&... args)
+void append_vectors(std::vector<T> &res, const Args &...args)
 {
     using std::begin;
     using std::end;
@@ -25,7 +25,7 @@ void append_vectors(std::vector<T>& res, const Args&... args)
 }
 
 template<typename ...Args>
-auto concat_vectors(const Args&... args)
+auto concat_vectors(const Args &...args)
 {
     using T = typename std::tuple_element<0, std::tuple<Args...>>::type::value_type;
     std::vector<T> res;
@@ -41,7 +41,7 @@ See: https://geo-ant.github.io/blog/2020/stream-insertion-for-tuples/
 namespace detail
 {
     template<typename ...Ts, size_t ...Is>
-    std::ostream & println_tuple_impl(std::ostream& os, std::tuple<Ts...> tuple, std::index_sequence<Is...>)
+    std::ostream &println_tuple_impl(std::ostream &os, std::tuple<Ts...> tuple, std::index_sequence<Is...>)
     {
         static_assert(sizeof...(Is)==sizeof...(Ts),"Indices must have same number of elements as tuple types!");
         static_assert(sizeof...(Ts)>0, "Cannot insert empty tuple into stream.");
@@ -52,13 +52,13 @@ namespace detail
 }
 
 template<typename ...Ts>
-std::ostream & operator<<(std::ostream& os, const std::tuple<Ts...> & tuple)
+std::ostream &operator<<(std::ostream &os, const std::tuple<Ts...> &tuple)
 {
     return detail::println_tuple_impl(os, tuple, std::index_sequence_for<Ts...>{});
 }
 
 template <typename A, typename B>
-std::ostream& operator<<(std::ostream& os, const std::pair<A,B> x)
+std::ostream &operator<<(std::ostream &os, const std::pair<A,B> x)
 {
     return os << "(" << x.first << "," << x.second << ")";
 }
@@ -70,7 +70,7 @@ void print_range(const auto &rem, auto &&range)
 {
     std::cout << rem << "{";
     bool first = true;
-    for(auto const& elem : range)
+    for(auto const &elem : range)
     {
         if(!first)
             std::cout << ", ";
@@ -85,7 +85,7 @@ std::string range_to_string(const auto &range, std::string prefix = "{", std::st
     std::ostringstream oss;
     oss << prefix;
     bool first = true;
-    for(auto const& elem : range)
+    for(auto const &elem : range)
     {
         if(!first)
             oss << separator;
@@ -123,7 +123,7 @@ constexpr auto generate_array(std::index_sequence<N...>, F f)
  find_or_default: Find the value corresponding to `key` in map `m`. If not found, return `def`.
 */
 template <typename K, typename V>
-V find_or_default(const std::map<K, V>& m, const K& key, const V& def)
+V find_or_default(const std::map<K, V> &m, const K &key, const V &def)
 {
     auto it = m.find(key);
     if (it != m.end())
@@ -156,7 +156,7 @@ constexpr int signum(T x) noexcept requires std::floating_point<T> {
  The optional print function
  */
 template<typename T>
-std::ostream &operator<<(std::ostream& os, std::optional<T> opt)
+std::ostream &operator<<(std::ostream &os, std::optional<T> opt)
 {
     if(opt.has_value())
     {
@@ -198,13 +198,13 @@ constexpr T operator ~(T val) noexcept {
 }
 
 template <BitmaskEnum T>
-constexpr T& operator |=(T& lhs, T rhs) noexcept {
+constexpr T &operator |=(T &lhs, T rhs) noexcept {
     lhs = lhs | rhs;
     return lhs;
 }
 
 template <BitmaskEnum T>
-constexpr T& operator &=(T& lhs, T rhs) noexcept {
+constexpr T &operator &=(T &lhs, T rhs) noexcept {
     lhs = lhs & rhs;
     return lhs;
 }

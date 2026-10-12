@@ -122,7 +122,7 @@ inline std::string gnode<T>::pgn_path(
     pgn_options show_flags
 )
 {
-    std::vector<gnode<T>*> path;
+    std::vector<gnode<T> *> path;
     for(auto *node = this; node != nullptr; node = node->get_parent())
     {
         path.push_back(node);

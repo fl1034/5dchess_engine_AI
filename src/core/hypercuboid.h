@@ -39,9 +39,10 @@
  - `search_space`: integer data that describes the range of candidate
  points to examine.
  A search space must only be used with the `HC_info` from the same call.
+ Generators borrow the context; moving, assigning, or destroying it invalidates them.
 
  To randomize the search order, construct a `random_HC_ordering` with the
- `universe` from `HC_info`, then pass it to `search()` or `iterative_search()`.
+ `get_universe()` from `HC_info`, then pass it to `search()` or `iterative_search()`.
 
  Terminology and representation:
 
@@ -104,41 +105,52 @@ class HC_info
     {
         full_move m;
         board b;
-
-        physical_entry(full_move move, const board& position)
-            : m(move), b(position) {}
     };
     struct arriving_entry
     {
         full_move m;
         board b;
         index_t idx;
-
-        arriving_entry(full_move move, const board& position, index_t departure)
-            : m(move), b(position), idx(departure) {}
     };
     struct departing_entry
     {
         vec4 from;
         board b;
-
-        departing_entry(vec4 source, const board& position)
-            : from(source), b(position) {}
     };
     struct null_entry {};
     using entry = std::variant<physical_entry, arriving_entry, departing_entry, null_entry>;
 
     static semimove to_semimove(const entry &e);
-    const static board& extract_board(const entry &e);
+    const static board &extract_board(const entry &e);
     static std::pair<int, int> extract_tl(const entry &e);
+    state s;
+    std::map<int, index_t> line_axes;
     std::vector<std::vector<entry>> axis_coords;
+    HC universe;
+    index_t new_axis;
+    std::vector<int> mandatory_lines;
+
+    HC_info(state position, std::map<int, index_t> lines,
+            std::vector<std::vector<entry>> coordinates, HC uni,
+            index_t first_branch, std::vector<int> mandatory) noexcept
+        : s(std::move(position)), line_axes(std::move(lines)),
+          axis_coords(std::move(coordinates)), universe(std::move(uni)),
+          new_axis(first_branch), mandatory_lines(std::move(mandatory)) {}
 
 public:
-    // local variables
-    const state s;
-    const std::map<int, index_t> line_to_axis; // map from timeline index to axis index
-    HC_info(state s, std::map<int, index_t> lm, std::vector<std::vector<entry>> crds, HC uni, index_t ax, index_t dim, std::vector<int> pl)
-        : axis_coords(std::move(crds)), s(std::move(s)), line_to_axis(std::move(lm)), universe(std::move(uni)), new_axis(ax), dimension(dim), mandatory_lines(std::move(pl)) {}
+    const state &get_state() const & noexcept { return s; }
+    const state &get_state() const && = delete;
+    const HC &get_universe() const & noexcept { return universe; }
+    const HC &get_universe() const && = delete;
+    index_t dimension() const noexcept { return static_cast<index_t>(axis_coords.size()); }
+    index_t first_branch_axis() const noexcept { return new_axis; }
+    // Includes prospective branching lines; absent timelines have no axis.
+    std::optional<index_t> line_to_axis(int line) const noexcept {
+        const auto it = line_axes.find(line);
+        if(it == line_axes.end()) return std::nullopt;
+        return it->second;
+    }
+
     semimove get_semimove(index_t n, index_t i) const;
 
     struct move_boards {
@@ -150,12 +162,6 @@ public:
     // Only call for coordinates in universe. Null/departing entries return nullopt.
     std::optional<move_boards> get_move_boards(index_t axis, index_t coordinate) const;
 
-    HC universe;
-    const index_t new_axis, dimension; // axes 0, 1, ..., new_axis-1 are playable lines
-    // whereas new_axis, new_axis+1, ..., dimension-1 are the possible branching lines
-    // identity: dimension = universe axis count = axis_coords.size()
-    const std::vector<int> mandatory_lines;
-    
     /*
      take_point(): takes a point in hc while making sure arrives matches 
      departures.

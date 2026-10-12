@@ -8,8 +8,8 @@ namespace
 {
 template<check_position::check_kind Kind>
 bool check_move_boards(
-    check_position& checks,
-    const state& before,
+    check_position &checks,
+    const state &before,
     full_move move,
     const board *result,
     const board *departure
@@ -42,7 +42,7 @@ bool check_move_boards(
 }
 } /* anonymous namespace */
 
-bool has_physical_check(const board& position, bool defender)
+bool has_physical_check(const board &position, bool defender)
 {
     const bitboard_t defending = defender
         ? position.black() : position.white();
@@ -51,7 +51,7 @@ bool has_physical_check(const board& position, bool defender)
     return false;
 }
 
-bool has_latent_king_threat(const board& result, int king_xy, bool player)
+bool has_latent_king_threat(const board &result, int king_xy, bool player)
 {
     const bitboard_t enemy = player ? result.white() : result.black();
     return static_cast<bool>(
@@ -60,15 +60,15 @@ bool has_latent_king_threat(const board& result, int king_xy, bool player)
         | (bishop_copy_mask(king_xy,1) & enemy & result.lunicorn()));
 }
 
-semimove_feature::semimove_feature(const HC_info& value) : info(value) {}
+semimove_feature::semimove_feature(const HC_info &value) : info(value) {}
 
 template<check_position::check_kind Kind>
 bool semimove_feature::check(index_t axis, index_t coordinate)
 {
     const auto boards = info.get_move_boards(axis, coordinate);
     if (!boards) return false;
-    if (!checks) checks.emplace(check_position::for_move_candidates(info.s));
-    return check_move_boards<Kind>(*checks, info.s, boards->move,
+    if (!checks) checks.emplace(check_position::for_move_candidates(info.get_state()));
+    return check_move_boards<Kind>(*checks, info.get_state(), boards->move,
                                    boards->result, boards->departure);
 }
 
@@ -76,7 +76,7 @@ bool semimove_feature::is_physical_check(index_t axis, index_t coordinate)
 {
     const auto boards = info.get_move_boards(axis, coordinate);
     if (!boards) return false;
-    const bool defender = !info.s.get_present().second;
+    const bool defender = !info.get_state().get_present().second;
     return has_physical_check(*boards->result, defender)
         || (boards->departure
             && has_physical_check(*boards->departure, defender));
@@ -102,8 +102,8 @@ bool semimove_feature::has_latent_king_threat(index_t axis,
                                                index_t coordinate) const
 {
     const auto boards = info.get_move_boards(axis, coordinate);
-    if (!boards || to_white(boards->move.moved_piece(info.s)) != KING_W)
+    if (!boards || to_white(boards->move.moved_piece(info.get_state())) != KING_W)
         return false;
     return ::has_latent_king_threat(*boards->result, boards->move.to.xy(),
-                                     info.s.get_present().second);
+                                     info.get_state().get_present().second);
 }

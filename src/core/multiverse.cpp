@@ -52,9 +52,9 @@ multiverse::multiverse(timeline_layout layout, std::vector<boards_info_t> bds, i
 {
     if(bds.empty())
         throw std::runtime_error("multiverse(): Empty input");
-    for(const auto& [l, t, c, fen] : bds)
+    for(const auto &[l, t, c, fen] : bds)
     {
-        insert_board_impl(l, t, c, std::make_shared<board>(fen, size_x, size_y));
+        insert_board_impl(l, t, c, std::make_shared<const board>(fen, size_x, size_y));
     }
     for(int l = l_min; l <= l_max; l++)
     {
@@ -110,13 +110,13 @@ turn_t multiverse::get_timeline_end(int l) const
     //return v_to_tc(timeline_end[l_to_u(l)]);
 }
 
-std::shared_ptr<board> multiverse::get_board(int l, int t, bool c) const
+std::shared_ptr<const board> multiverse::get_board(int l, int t, bool c) const
 {
     try
     {
         return this->boards.at(l_to_u(l)).at(tc_to_v(t,c));
     }
-    catch(const std::out_of_range& ex)
+    catch(const std::out_of_range &ex)
     {
 		std::cerr << ex.what() << std::endl;
         std::cerr << "In this multiverse object:\n" << to_string();
@@ -132,21 +132,21 @@ const board *multiverse::get_board_ptr(int l, int t, bool c) const noexcept
     const auto u = static_cast<std::size_t>(l_to_u(l));
     if (u >= boards.size() || t < 0)
         return nullptr;
-    const auto& timeline = boards[u];
+    const auto &timeline = boards[u];
     const auto v = static_cast<std::size_t>(t) * 2 + static_cast<std::size_t>(c);
     if (v >= timeline.size())
         return nullptr;
     return timeline[v].get();
 }
 
-void multiverse::append_board(int l, const std::shared_ptr<board>& b_ptr)
+void multiverse::append_board(int l, const std::shared_ptr<const board> &b_ptr)
 {
     int u = l_to_u(l);
     boards[u].push_back(b_ptr);
     timeline_end[u]++;
 }
 
-void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<board>& b_ptr)
+void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<const board> &b_ptr)
 {
     assert(vec4::L_MIN <= l && l <= vec4::L_MAX);
     assert(0 <= t && t <= vec4::T_MAX);
@@ -157,13 +157,13 @@ void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<b
     // and fill any missing row with empty vector
     if(u >= static_cast<int>(this->boards.size()))
     {
-        this->boards.resize(u+1, std::vector<std::shared_ptr<board>>());
+        this->boards.resize(u+1, std::vector<std::shared_ptr<const board>>());
         this->timeline_start.resize(u+1, std::numeric_limits<int>::max());
         this->timeline_end.resize(u+1, std::numeric_limits<int>::min());
     }
     l_min = std::min(l_min, l);
     l_max = std::max(l_max, l);
-    std::vector<std::shared_ptr<board>> &timeline = this->boards[u];
+    std::vector<std::shared_ptr<const board>> &timeline = this->boards[u];
     // do the same for v
     if(v >= static_cast<int>(timeline.size()))
     {
@@ -182,7 +182,7 @@ void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<b
     timeline_end[u]   = std::max(timeline_end[u],   v);
 }
 
-void multiverse::insert_board(int l, int t, bool c, const std::shared_ptr<board> &b_ptr)
+void multiverse::insert_board(int l, int t, bool c, const std::shared_ptr<const board> &b_ptr)
 {
     insert_board_impl(l, t, c, b_ptr);
     // recalculate active range since there is probably a new line
@@ -222,7 +222,7 @@ std::vector<std::tuple<int,int,bool,std::string>> multiverse::get_boards() const
     std::vector<std::tuple<int,int,bool,std::string>> result;
     for(int u = 0; u < static_cast<int>(boards.size()); u++)
     {
-        const auto& timeline = this->boards[u];
+        const auto &timeline = this->boards[u];
         int l = u_to_l(u);
         for(int v = 0; v < static_cast<int>(timeline.size()); v++)
         {
@@ -245,7 +245,7 @@ std::string multiverse::to_string() const
     sstm << "active range:" << get_active_range() << "\n";
     for(int u = 0; u < static_cast<int>(this->boards.size()); u++)
     {
-        const auto& timeline = this->boards[u];
+        const auto &timeline = this->boards[u];
         int l = u_to_l(u);
         for(int v = 0; v < static_cast<int>(timeline.size()); v++)
         {
@@ -462,7 +462,7 @@ movegen_t multiverse::gen_moves(vec4 p) const &
 generator<vec4> multiverse::gen_piece_move(vec4 p, bool board_color) const &
 {
     movegen_t gen = board_color ? gen_moves<true>(p) : gen_moves<false>(p);
-    for (const auto& [r, bb] : gen)
+    for (const auto &[r, bb] : gen)
     {
         for(int pos : marked_pos(bb))
         {
@@ -675,7 +675,7 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
 }
 
 template<bool C, multiverse::axesmode TL, multiverse::axesmode XY>
-void multiverse::gen_compound_moves(vec4 p, std::map<vec4, bitboard_t>& result) const
+void multiverse::gen_compound_moves(vec4 p, std::map<vec4, bitboard_t> &result) const
 {
     int pos = p.xy();
     bitboard_t occ, fri;
@@ -795,7 +795,7 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
         }
         std::map<vec4, bitboard_t> result;
         gen_compound_moves<C, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::ORTHOGONAL>(p, result);
-        for(const auto& m : result)
+        for(const auto &m : result)
         {
             co_yield m;
         }
@@ -1035,12 +1035,12 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
     {
         std::map<vec4, bitboard_t> r1, r2;
         gen_compound_moves<C, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::DIAGONAL>(p, r1);
-        for(const auto& m : r1)
+        for(const auto &m : r1)
         {
             co_yield m;
         }
         gen_compound_moves<C, multiverse::axesmode::DIAGONAL, multiverse::axesmode::ORTHOGONAL>(p, r2);
-        for(const auto& m : r2)
+        for(const auto &m : r2)
         {
             co_yield m;
         }
@@ -1049,7 +1049,7 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
     {
         std::map<vec4, bitboard_t> result;
         gen_compound_moves<C, multiverse::axesmode::DIAGONAL, multiverse::axesmode::DIAGONAL>(p, result);
-        for(const auto& m : result)
+        for(const auto &m : result)
         {
             co_yield m;
         }
@@ -1072,7 +1072,7 @@ generator<vec4> multiverse::gen_board_move_impl(vec4 p0) const &
         // note: gen_purely_sp_*_moves for *=rxook,bishop,knight are fixed for the whole board
         // but we are calling them for each piece here
         movegen_t gen = C ? gen_moves<true>(p) : gen_moves<false>(p);
-        for (const auto& [r, bb] : gen)
+        for (const auto &[r, bb] : gen)
         {
             for(int pos : marked_pos(bb))
             {
@@ -1134,12 +1134,12 @@ template std::vector<std::pair<vec4, bitboard_t>> multiverse::gen_purely_sp_knig
 template std::vector<std::pair<vec4, bitboard_t>> multiverse::gen_purely_sp_knight_moves<true>(vec4 p) const;
 
 
-template void multiverse::gen_compound_moves<false, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::ORTHOGONAL>(vec4 p, std::map<vec4, bitboard_t>& result) const;
-template void multiverse::gen_compound_moves<true, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::ORTHOGONAL>(vec4 p, std::map<vec4, bitboard_t>& result) const;
-template void multiverse::gen_compound_moves<false, multiverse::axesmode::DIAGONAL, multiverse::axesmode::DIAGONAL>(vec4 p, std::map<vec4, bitboard_t>& result) const;
-template void multiverse::gen_compound_moves<true, multiverse::axesmode::DIAGONAL, multiverse::axesmode::DIAGONAL>(vec4 p, std::map<vec4, bitboard_t>& result) const;
-template void multiverse::gen_compound_moves<false, multiverse::axesmode::BOTH, multiverse::axesmode::BOTH>(vec4 p, std::map<vec4, bitboard_t>& result) const;
-template void multiverse::gen_compound_moves<true, multiverse::axesmode::BOTH, multiverse::axesmode::BOTH>(vec4 p, std::map<vec4, bitboard_t>& result) const;
+template void multiverse::gen_compound_moves<false, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::ORTHOGONAL>(vec4 p, std::map<vec4, bitboard_t> &result) const;
+template void multiverse::gen_compound_moves<true, multiverse::axesmode::ORTHOGONAL, multiverse::axesmode::ORTHOGONAL>(vec4 p, std::map<vec4, bitboard_t> &result) const;
+template void multiverse::gen_compound_moves<false, multiverse::axesmode::DIAGONAL, multiverse::axesmode::DIAGONAL>(vec4 p, std::map<vec4, bitboard_t> &result) const;
+template void multiverse::gen_compound_moves<true, multiverse::axesmode::DIAGONAL, multiverse::axesmode::DIAGONAL>(vec4 p, std::map<vec4, bitboard_t> &result) const;
+template void multiverse::gen_compound_moves<false, multiverse::axesmode::BOTH, multiverse::axesmode::BOTH>(vec4 p, std::map<vec4, bitboard_t> &result) const;
+template void multiverse::gen_compound_moves<true, multiverse::axesmode::BOTH, multiverse::axesmode::BOTH>(vec4 p, std::map<vec4, bitboard_t> &result) const;
 
 template bitboard_t multiverse::gen_physical_moves<true>(vec4 p) const;
 template bitboard_t multiverse::gen_physical_moves<false>(vec4 p) const;

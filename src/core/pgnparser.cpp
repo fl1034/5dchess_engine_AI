@@ -19,7 +19,7 @@ bool match_opt(const std::optional<T> &simple, const std::optional<T> &full)
 using namespace pgnparser_ast;
 
 
-std::vector<std::string> views_to_strings(const std::vector<std::string_view>& views)
+std::vector<std::string> views_to_strings(const std::vector<std::string_view> &views)
 {
     std::vector<std::string> result(views.size());
     std::transform(views.begin(), views.end(), result.begin(),
@@ -934,7 +934,7 @@ std::optional<game> pgnparser::parse_game()
     return game{headers, boards, std::move(*gt_opt), views_to_strings(comments)};
 }
 
-std::tuple<std::string, pgnparser_ast::token_t, int, int, bool> pgnparser::parse_board_fen_metadata(const std::string& s)
+std::tuple<std::string, pgnparser_ast::token_t, int, int, bool> pgnparser::parse_board_fen_metadata(const std::string &s)
 {
     using namespace pgnparser_ast;
     const int len = static_cast<int>(s.size());
@@ -974,11 +974,11 @@ std::tuple<std::string, pgnparser_ast::token_t, int, int, bool> pgnparser::parse
             throw parse_error("parse_game(): Expect time in board string:" + s);
         t = stoi(std::string(s.begin() + prev, s.begin() + now));
     }
-    catch(const std::invalid_argument& e)
+    catch(const std::invalid_argument &e)
     {
         throw parse_error("parse_game(): Expect number after ':': " + s + "\n" + e.what());
     }
-    catch(const std::out_of_range& e)
+    catch(const std::out_of_range &e)
     {
         throw parse_error("parse_game(): Number out of range in board string: " + s + "\n" + e.what());
     }

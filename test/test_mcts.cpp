@@ -53,22 +53,29 @@ void test_option_dispatch()
     integer_options first, second;
     real_options real;
 
+    engine::option_value_t integer_value;
+    integer_value.emplace<int>(7);
+    engine::option_value_t real_value;
+    real_value.emplace<double>(2.5);
+    engine::option_value_t unknown_value;
+    unknown_value.emplace<int>(1);
+
     auto result = dispatch_watched_options(
-        "shared", engine::option_value_t{7},
+        "shared", integer_value,
         absent, first, empty, second);
     assert(result.matched == 2);
     assert(result.dispatched == 2);
     assert(first.value == 7 && second.value == 7);
 
     result = dispatch_watched_options(
-        "shared", engine::option_value_t{2.5}, first, real, second);
+        "shared", real_value, first, real, second);
     assert(result.matched == 3);
     assert(result.dispatched == 1);
     assert(first.value == 7 && second.value == 7);
     assert(real.value == 2.5);
 
     result = dispatch_watched_options(
-        "unknown", engine::option_value_t{1}, first, real);
+        "unknown", unknown_value, first, real);
     assert(result.matched == 0);
     assert(result.dispatched == 0);
 }
@@ -129,20 +136,20 @@ namespace mcts_policies_tests
 struct observer {};
 
 std::optional<move_score_table> build_score_table(
-    const HC_info& info, const move_evaluation_weights& weights,
+    const HC_info &info, const move_evaluation_weights &weights,
     std::stop_token stop = {})
 {
     return move_evaluator(info, weights).build_score_table(stop);
 }
 
 std::optional<move_score_table> capture_weights_table(
-    const HC_info& info, std::stop_token stop = {})
+    const HC_info &info, std::stop_token stop = {})
 {
     return move_evaluator(info, capture_weights).build_score_table(stop);
 }
 
 std::optional<move_score_table> capture_check_weights_table(
-    const HC_info& info, std::stop_token stop = {})
+    const HC_info &info, std::stop_token stop = {})
 {
     return move_evaluator(info, capture_check_weights).build_score_table(stop);
 }
@@ -327,9 +334,9 @@ void test_capture_check_progressive_widening()
         root->get_hc_info(), capture_check_weights);
     assert(scores);
     bool capture = false, check = false;
-    for(index_t axis = 0; axis < root->get_hc_info().universe.dimension(); ++axis)
+    for(index_t axis = 0; axis < root->get_hc_info().get_universe().dimension(); ++axis)
     {
-        for(index_t coordinate : root->get_hc_info().universe[axis])
+        for(index_t coordinate : root->get_hc_info().get_universe()[axis])
         {
             capture |= (*scores)[axis][coordinate] == 480.0f;
             check |= (*scores)[axis][coordinate] == 300.0f;
@@ -362,8 +369,8 @@ void test_score_table_and_generic_policies()
         info, capture_check_weights);
     assert(scores);
     bool combined = false;
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
-        for(index_t coordinate : info.universe[axis])
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
+        for(index_t coordinate : info.get_universe()[axis])
             combined |= (*scores)[axis][coordinate]
                 == 480.0f + 300.0f;
     assert(combined);
@@ -406,7 +413,7 @@ void test_score_table_and_generic_policies()
     assert(scored_table);
     std::mt19937 scored_rng(7);
     scored_widening_t::set_ordering(scored_root.get(), scored_HC_ordering(
-        scored_root->get_hc_info().universe, *scored_table, scored_rng));
+        scored_root->get_hc_info().get_universe(), *scored_table, scored_rng));
     scored_widening_t scored_policy(7);
     auto *scored_child = scored_policy.select(scored_root.get(), {}, obs);
     assert(scored_child && (*scored_table)[scored_child->get_n()][scored_child->get_i()]
@@ -445,7 +452,7 @@ void test_multiple_semimoves()
             start = start->get_parent();
         }
         saw_multiple |= semimoves > 1;
-        const state &before = start->get_hc_info().s;
+        const state &before = start->get_hc_info().get_state();
         auto action = action::from_moveseq(ceiling->to_action(), before);
         assert(before.can_apply(action));
         sum_backpropagation{}.backpropagate(ceiling, reward_t<>{0.0f, {}}, obs);

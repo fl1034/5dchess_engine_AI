@@ -129,7 +129,7 @@ public:
                         int = default_mcts_rollout_max_actions)
         : zero_capture_mcts_engine(
             {}, uct_tree_policy<scored_HC_ordering>{seed,
-                [](const HC_info& info, std::stop_token stop) {
+                [](const HC_info &info, std::stop_token stop) {
                     return move_evaluator(info, capture_weights).build_score_table(stop);
                 }},
             {}, {}, {}, std::move(io)) {}
@@ -145,7 +145,7 @@ public:
         : zero_capture_pw_mcts_engine(
             {}, progressive_widening_tree_policy<scored_HC_ordering>{
                 seed, widening_constant, widening_alpha,
-                [](const HC_info& info, std::stop_token stop) {
+                [](const HC_info &info, std::stop_token stop) {
                     return move_evaluator(info, capture_check_weights).build_score_table(stop);
                 }},
             {}, {}, {}, std::move(io)) {}

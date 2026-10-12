@@ -79,7 +79,7 @@ std::ostream &operator<<(std::ostream &os, const gametree &gt)
     if(std::holds_alternative<gametree::variations_t>(gt.variations_or_outcome))
     {
         bool first = true;
-        for(const auto& [a, v] : std::get<gametree::variations_t>(gt.variations_or_outcome))
+        for(const auto &[a, v] : std::get<gametree::variations_t>(gt.variations_or_outcome))
         {
             if(!first)
             {

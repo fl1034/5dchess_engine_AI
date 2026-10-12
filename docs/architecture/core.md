@@ -37,7 +37,7 @@ I try to follow the terminology described in <https://github.com/adri326/5dchess
 
 + A `state` object (defined in `src/core/state.h`) stores a `multiverse` directly by value and some additional information such as who is playing. The purpose for that is to distinguish between whether an action is being submitted or not.
 
-+ A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of shared `board` pointers. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), constructed with `timeline_layout::odd()` or `timeline_layout::even()`. Its private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
++ A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of `std::shared_ptr<const board>` snapshots. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), constructed with `timeline_layout::odd()` or `timeline_layout::even()`. Its private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
 
 + A `board` object (defined in `src/core/board.h`) stores piece and color information in bitboards, together with an unmoved-piece mask.
 
@@ -54,6 +54,20 @@ state move construction, and state swap are nonthrowing. The variant factory
 `create_multiverse_from_variant_setup()` returns a multiverse by value, so a
 factory result moves directly into a state. Constructing the universe itself
 still allocates and validates input and may throw.
+
+`state::get_board()` and `multiverse::get_board()` return
+`std::shared_ptr<const board>` for read-only access with shared ownership.
+`get_board_ptr()` provides borrowed read-only access instead. The owning getter
+retains its existing error behavior for invalid indices; the borrowed getter
+returns `nullptr` for an absent turn. `board::replace_piece()` and
+`board::move_piece()` also return `std::shared_ptr<const board>` for new result
+boards, leaving the source unchanged.
+
+Standalone `board` values remain editable with `set_piece()`. Construct an edited
+board separately before inserting or appending it to a multiverse. Insertion
+accepts `std::shared_ptr<const board>`; callers must not mutate a published board
+through a retained mutable alias. Constructing it with
+`std::make_shared<const board>(draft)` publishes a separate immutable copy.
 
 Move generators borrow their source state or multiverse. Consume or destroy them
 before moving, swapping, modifying, or destroying that source. Recreate borrowed

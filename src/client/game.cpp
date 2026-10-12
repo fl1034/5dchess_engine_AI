@@ -12,11 +12,11 @@
 #include "variants.h"
 
 
-std::string show_comments(std::vector<std::string> const& comments)
+std::string show_comments(std::vector<std::string> const &comments)
 {
     std::string result;
     bool first = true;
-    for (auto const& c : comments)
+    for (auto const &c : comments)
     {
         if (!first) result += ' ';
         result += '{' + c + '}';
@@ -50,16 +50,16 @@ game game::from_pgn(std::string input)
     }
     gnode<comments_t> *cn = nullptr;
     // parse moves
-    std::function<void(gnode<comments_t> *, const pgnparser_ast::gametree&)> dfs;
-    dfs = [&dfs, &cn](gnode<comments_t> *node, const pgnparser_ast::gametree& gt_ast) -> void {
+    std::function<void(gnode<comments_t> *, const pgnparser_ast::gametree &)> dfs;
+    dfs = [&dfs, &cn](gnode<comments_t> *node, const pgnparser_ast::gametree &gt_ast) -> void {
         if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome))
         {
-            const auto& variations = std::get<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome);
-            for(const auto& [act_ast, child_gt] : variations)
+            const auto &variations = std::get<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome);
+            for(const auto &[act_ast, child_gt] : variations)
             {
                 state s = node->get_state();
                 std::vector<ext_move> moves;
-                for(const auto& mv_ast: act_ast.moves)
+                for(const auto &mv_ast: act_ast.moves)
                 {
                     auto [fm_opt, pt_opt, candidates] = s.parse_move(mv_ast);
                     if(!fm_opt.has_value())
@@ -183,7 +183,7 @@ std::pair<std::vector<boards_info_t>, std::vector<full_move>> game::get_phantom_
 	//print_range("Phantom timelines: ", tls);
     std::vector<boards_info_t> all_boards = ps.get_boards();
     std::vector<boards_info_t> result;
-    for(const auto& [l, t, color, fen] : all_boards)
+    for(const auto &[l, t, color, fen] : all_boards)
     {
         if(tls.contains(vec4(0, 0, t, l)))
         {
@@ -202,7 +202,7 @@ std::vector<vec4> game::gen_move_if_playable(vec4 p) const
 {
     if(is_playable(p))
     {
-        const state& cs = get_current_state();
+        const state &cs = get_current_state();
         std::vector<vec4> result;
         for(vec4 v : cs.gen_piece_move(p))
         {
@@ -248,7 +248,7 @@ std::vector<vec4> game::get_movable_pieces() const
 bool game::is_playable(vec4 p) const
 {
     auto [mandatory_timelines, optional_timelines, unplayable_timelines] = get_current_timeline_status();
-    const state& cs = get_current_state();
+    const state &cs = get_current_state();
     if (std::find(mandatory_timelines.begin(), mandatory_timelines.end(), p.l()) != mandatory_timelines.end() ||
         std::find(optional_timelines.begin(), optional_timelines.end(), p.l()) != optional_timelines.end()) 
     {
@@ -459,7 +459,7 @@ std::vector<std::tuple<action, std::string>> game::get_historical_actions() cons
     // Walk from current node back to root, collecting actions
     while(node->get_parent() != nullptr)
     {
-        const action& act = node->get_action();
+        const action &act = node->get_action();
         // Pretty print using parent's state (state before the action was applied)
         std::string txt = act.pgn(node->get_parent()->get_state());
         result.push_back({act, txt});

@@ -21,6 +21,11 @@
 namespace multiverse_tests
 {
 static_assert(!std::is_polymorphic_v<multiverse>);
+static_assert(std::is_same_v<decltype(std::declval<const multiverse &>().get_board(0, 1, false)),
+                             std::shared_ptr<const board>>);
+static_assert(std::is_same_v<decltype(std::declval<const state &>().get_board(0, 1, false)),
+                             std::shared_ptr<const board>>);
+
 static_assert(std::is_nothrow_move_constructible_v<multiverse>);
 static_assert(std::is_nothrow_move_assignable_v<multiverse>);
 static_assert(std::is_nothrow_swappable_v<multiverse>);
@@ -309,11 +314,14 @@ void test_multiverses()
     assert(hash_multiverse(reordered) == original_hash);
 
     // Equal endpoint boards do not make different histories duplicates.
-    original.get_board(0, 1, true)->set_piece(ppos(0, 0), ROOK_W);
-    assert(hash_board(*original.get_board(0, 2, false)) ==
+    auto changed_boards = boards;
+    for(auto &[line, time, color, fen] : changed_boards)
+        if(line == 0 && time == 1 && color)
+            fen = "8/8/8/8/8/8/8/R7";
+    const multiverse changed(timeline_layout::odd(), changed_boards);
+    assert(hash_board(*changed.get_board(0, 2, false)) ==
            hash_board(*reordered.get_board(0, 2, false)));
-    assert(hash_multiverse(original) != original_hash);
-    original.get_board(0, 1, true)->set_piece(ppos(0, 0), NO_PIECE);
+    assert(hash_multiverse(changed) != original_hash);
     assert(hash_multiverse(original) == original_hash);
 
     const multiverse shifted(timeline_layout::odd(), {{0, 3, false, empty}});
@@ -328,13 +336,9 @@ void test_multiverses()
 
     // A 4x4 board and an 8x8 board with matching walls have equal contents,
     // irrespective of nominal dimensions.
-    multiverse square(timeline_layout::odd(), {{0, 1, false, empty}});
-    multiverse small(timeline_layout::odd(), {{0, 1, false, "3k/4/4/K3"}}, 4, 4);
-    for(int square_index = 0; square_index < BOARD_SIZE; ++square_index)
-    {
-        square.get_board(0, 1, false)->set_piece(
-            square_index, small.get_board(0, 1, false)->get_piece(square_index));
-    }
+    const multiverse small(timeline_layout::odd(), {{0, 1, false, "3k/4/4/K3"}}, 4, 4);
+    const multiverse square(timeline_layout::odd(),
+        {{0, 1, false, "0/0/0/0/3k/4/4/K3"}});
     assert(hash_board(*square.get_board(0, 1, false)) ==
            hash_board(*small.get_board(0, 1, false)));
     assert(hash_multiverse(square) == hash_multiverse(small));
@@ -349,8 +353,11 @@ void test_multiverses()
                              {2, 2, false, empty}});
     assert(inactive.get_active_range().second == 1);
     const auto inactive_hash = hash_multiverse(inactive);
-    inactive.get_board(2, 2, false)->set_piece(ppos(7, 7), ROOK_B);
-    assert(hash_multiverse(inactive) != inactive_hash);
+    const multiverse changed_inactive(timeline_layout::odd(), {
+        {0, 2, false, empty}, {1, 2, false, empty},
+        {2, 2, false, "7r/8/8/8/8/8/8/8"}
+    });
+    assert(hash_multiverse(changed_inactive) != inactive_hash);
 }
 
 void test_states()
@@ -374,6 +381,8 @@ void test_states()
     // Before and after submission, the multiverse is identical but the stored
     // present/player changes. Rebuilding before submission uses the apparent
     // present rather than the inherited one, which must affect the state hash.
+    const auto source = position.get_board(0, 2, false);
+    const auto source_hash = hash_board(*source);
     state temporary = position;
     assert(temporary.apply_move(full_move("(0T2)e2e4")));
     game submitted = game::from_pgn("[Variant \"Standard - Turn Zero\"]\n1. Nf3 / Nf6\n2. e4");
@@ -386,6 +395,14 @@ void test_states()
     assert(temporary.show_fen() == boards_before_submit);
     assert(hash_state(temporary) != before_submit);
     assert(hash_state(temporary) == hash_state(rebuilt));
+
+    // Moves append replacement boards while copied states keep shared history.
+    assert(temporary.get_board(0, 2, false) == source);
+    assert(hash_board(*source) == source_hash);
+    const auto edited = source->replace_piece(ppos(0, 0), QUEEN_W);
+    assert(edited != source);
+    assert(hash_board(*edited) != source_hash);
+    assert(hash_board(*position.get_board(0, 2, false)) == source_hash);
 
     // Phantom states retain their stored present. Advancing both colors
     // changes its time while retaining the same player and board contents.

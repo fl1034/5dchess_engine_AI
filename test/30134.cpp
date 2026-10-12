@@ -17,7 +17,7 @@ int main()
     int n = 0;
     state s(*pgnparser(str).parse_game());
     auto [w, ss] = HC_info::build_HC(s);
-    for (const auto& _ : w.search(ss))
+    for (const auto &_ : w.search(ss))
     {
         (void)_;
         n++;

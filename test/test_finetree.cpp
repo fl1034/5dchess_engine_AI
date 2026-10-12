@@ -16,7 +16,7 @@ static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_chil
 static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_parent()), const test_node *>);
 static_assert(std::is_same_v<decltype(finetree_nearby_ceiling(std::declval<const test_node *>())), const test_node *>);
 static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_hc_info()), const HC_info &>);
-static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_children()[0]), const test_node * const &>);
+static_assert(std::is_same_v<decltype(std::declval<const test_node &>().get_children()[0]), const test_node *const &>);
 
 template<class Node>
 concept exposes_context = requires(Node &node) { node.get_context(); };

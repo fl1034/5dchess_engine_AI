@@ -20,7 +20,7 @@ The `5dtools` executable inspects positions, counts or lists legal actions, chec
 
 ## Build on the game logic
 
-The C++ core handles board states, timelines, move generation, legal actions, check detection, and notation. The Python and JavaScript bindings expose this logic for scripts and interfaces.
+The C++ core handles board states, timelines, move generation, legal actions, check detection, parsing and prinying. The Python and JavaScript bindings expose this logic for scripts and interfaces.
 
 A game holds its current state and history. Each state contains a multiverse of timelines, whose boards can be shared between states to avoid copying unchanged data. A move changes a board or travels between boards; an action groups the moves that together complete a player's turn.
 
@@ -48,9 +48,3 @@ For implementation details, read [Core game logic](architecture/core.md) and [Cl
 Browse [experimental reports](reports/) for recorded experiments and results.
 Report images, data tables, and measurement summaries are stored in
 [`reports/res/`](reports/res/).
-
-The [Turn Zero game-length and rollout-cost report](reports/game-length-turn-zero.md)
-compares human games with independently verified terminal endpoints against
-fresh random rollouts, using the same action unit. It tests rollout length
-distributions, examines stopping probabilities, and measures the cost of bounded
-rollout evaluation from the opening.

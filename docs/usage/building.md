@@ -104,9 +104,7 @@ cd 5dchess_engine
 
 The `extern/pybind11` submodule is needed for the binding; `extern/client` provides the graphics interface used by the Python host.
 
-Use Python 3.11 or newer; Python 3.12 is tested. A virtual environment is
-optional. Use the same interpreter to install dependencies, build the binding,
-and run scripts/tests. For the [graphics interface](https://github.com/SuZero-5DChess/5dchess_client)
+For the [graphics interface](https://github.com/SuZero-5DChess/5dchess_client)
 and web API tests, install Flask and Flask-SocketIO in that interpreter:
 
 ```sh
@@ -120,17 +118,15 @@ From the repository root, configure and build using your selected Python
 cmake -S . -B build -DPYMODULE=ON -DENGINE=ON -DCMAKE_BUILD_TYPE=Release \
   -DPython_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 cmake --build build --config Release --parallel
+```
+
+Optionally, run the Python tests:
+
+```
 python -m unittest discover -s scripts/test -v
 ```
 
-You can replace `python` with an absolute interpreter path, such as
-`/opt/anaconda3/bin/python`. CMake discovers Python automatically when
-`Python_EXECUTABLE` is omitted, but its cached selection can differ from the
-shell's `python`. Passing the path explicitly keeps the binding and runtime
-aligned. Reconfigure and rebuild when changing interpreters. `ENGINE=ON` builds
-the executable used by autoplay and the real-engine smoke test.
-
-To use it, go to the base directory of this project and run `python scripts/host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
+To use the graphical interface with python backend, go to the base directory of this project and run `python scripts/host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
 
 ## WebAssembly
 

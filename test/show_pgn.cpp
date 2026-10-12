@@ -187,7 +187,7 @@ int main()
         try {
             game g2 = game::from_pgn(pgn);
         }
-        catch(const std::exception& e)
+        catch(const std::exception &e)
         {
             exception_thrown = true;
             std::cerr << "failed. " << e.what() << "\n";

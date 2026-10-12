@@ -8,7 +8,7 @@
 #include <span>
 
 template<class Emit>
-concept check_emitter = requires(Emit& callback, full_move move) {
+concept check_emitter = requires(Emit &callback, full_move move) {
     { callback(std::move(move)) } -> std::same_as<bool>;
 };
 
@@ -24,51 +24,51 @@ class check_position {
         turn_t added_start{};
         const board *added = nullptr;
     };
-    const state& base;
+    const state &base;
     int first_line;
     std::vector<line_view> lines;
 
     template<bool C, check_emitter Emit>
-    bool scan_physical(vec4 p0, const board& source,
-                       bitboard_t friendly, Emit& emit) const;
+    bool scan_physical(vec4 p0, const board &source,
+                       bitboard_t friendly, Emit &emit) const;
 
     template<bool C, check_emitter Emit>
-    bool scan_pure_sliders(vec4 p0, const board& source,
-                           bitboard_t friendly, Emit& emit) const;
+    bool scan_pure_sliders(vec4 p0, const board &source,
+                           bitboard_t friendly, Emit &emit) const;
 
     template<bool C, check_emitter Emit>
-    bool scan_compound_sliders(vec4 p0, const board& source,
-                               bitboard_t friendly, Emit& emit) const;
+    bool scan_compound_sliders(vec4 p0, const board &source,
+                               bitboard_t friendly, Emit &emit) const;
 
     template<bool C, check_emitter Emit>
-    bool scan_jumps(vec4 p0, const board& source,
-                    bitboard_t friendly, Emit& emit) const;
+    bool scan_jumps(vec4 p0, const board &source,
+                    bitboard_t friendly, Emit &emit) const;
 
     /* Scan endpoints of color C. An empty sources span selects all timelines.
        emit receives each royal capture and returns true to stop. The return
        value reports whether emit stopped the scan, not whether any capture exists. */
     template<bool C, check_emitter Emit>
-    bool scan(bool include_physical, Emit&& emit,
+    bool scan(bool include_physical, Emit &&emit,
               std::span<const int> sources = {},
               bool include_superphysical = true) const;
 
 public:
-    explicit check_position(const state& s);
+    explicit check_position(const state &s);
     check_position(const state &&) = delete;
     /* Reserve [l_min, l_max] for existing and future timelines. The range must
        contain every timeline in s. */
-    check_position(const state& s, int l_min, int l_max);
+    check_position(const state &s, int l_min, int l_max);
     check_position(const state &&, int, int) = delete;
 
     /* View s.phantom() without constructing it. For endpoints matching s's
        stored player, reuse the endpoint board on the following turn. */
-    static check_position for_phantom(const state& s);
+    static check_position for_phantom(const state &s);
     static check_position for_phantom(const state &&) = delete;
 
     /* Prepare for candidate checks. Repeat opposite-color endpoint boards on
        the moving player's turn and reserve s.new_line() for a possible branch.
        Supply each move's result boards to gives_check(). */
-    static check_position for_move_candidates(const state& s);
+    static check_position for_move_candidates(const state &s);
     static check_position for_move_candidates(const state &&) = delete;
 
     /* Borrowed result board first visible at (l,t,c). gives_check() also uses
@@ -91,7 +91,7 @@ public:
 
     /* Extend a timeline by one turn, or start a reserved empty one. The borrowed
        board stays in this view; each timeline accepts at most one added board. */
-    void add_board(int l, turn_t at, const board& b);
+    void add_board(int l, turn_t at, const board &b);
     void add_board(int, turn_t, const board &&) = delete;
 
     /* Return nullptr when the turn is absent from this view. */

@@ -4,7 +4,7 @@
 
 #include "hypercuboid.h"
 
-move_evaluator::move_evaluator(const HC_info& info,
+move_evaluator::move_evaluator(const HC_info &info,
                                move_evaluation_weights weights)
     : info(info), weights(weights), features(info),
       evaluate_captures(std::any_of(
@@ -19,15 +19,15 @@ float move_evaluator::score(index_t axis, index_t coordinate)
     if(!boards) return 0.0f;
 
     using enum move_evaluation_weights::indices;
-    const auto& w = weights.values;
-    const full_move& move = boards->move;
+    const auto &w = weights.values;
+    const full_move &move = boards->move;
     float result = 0.0f;
 
     bool king_move = false;
     if(w[LATENT_KING_THREAT] != 0.0f || w[NORMAL_KING_MOVE] != 0.0f
        || w[KING_BRANCH] != 0.0f)
     {
-        const piece_t moved = to_white(piece_name(move.moved_piece(info.s)));
+        const piece_t moved = to_white(piece_name(move.moved_piece(info.get_state())));
         king_move = moved == KING_W || moved == COMMON_KING_W;
     }
 
@@ -42,7 +42,7 @@ float move_evaluator::score(index_t axis, index_t coordinate)
 
     special_move_t move_type = special_move_t::NONE;
     if((king_move && w[KING_BRANCH] != 0.0f) || w[SUPERPHYSICAL] != 0.0f)
-        move_type = move.move_type(info.s);
+        move_type = move.move_type(info.get_state());
 
     if(king_move && w[KING_BRANCH] != 0.0f
        && static_cast<bool>(move_type & special_move_t::BRANCHING))
@@ -50,7 +50,7 @@ float move_evaluator::score(index_t axis, index_t coordinate)
 
     if(evaluate_captures)
     {
-        switch(to_white(piece_name(move.captured_piece(info.s))))
+        switch(to_white(piece_name(move.captured_piece(info.get_state()))))
         {
             case QUEEN_W:
             case ROYAL_QUEEN_W:
@@ -96,20 +96,20 @@ std::optional<move_score_table> move_evaluator::build_score_table(
     std::stop_token stop)
 {
     if(stop.stop_requested()) return std::nullopt;
-    move_score_table result(info.universe.dimension());
-    for(index_t axis = 0; axis < info.universe.dimension(); ++axis)
+    move_score_table result(info.get_universe().dimension());
+    for(index_t axis = 0; axis < info.get_universe().dimension(); ++axis)
     {
         auto &scores = result[axis];
         index_t largest_coordinate = 0;
         bool has_coordinate = false;
-        for(index_t coordinate : info.universe[axis])
+        for(index_t coordinate : info.get_universe()[axis])
         {
             largest_coordinate = std::max(largest_coordinate, coordinate);
             has_coordinate = true;
         }
         if(has_coordinate)
             scores.resize(static_cast<std::size_t>(largest_coordinate) + 1);
-        for(index_t coordinate : info.universe[axis])
+        for(index_t coordinate : info.get_universe()[axis])
         {
             if(stop.stop_requested()) return std::nullopt;
             // Pruning can leave gaps in the coordinate IDs.

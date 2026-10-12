@@ -85,7 +85,7 @@ private:
         if(!data.random_ordering || data.ordering_owner != policy_id)
         {
             data.random_ordering.emplace(
-                root->get_hc_info().universe,
+                root->get_hc_info().get_universe(),
                 uct_detail::random_engine(rng));
             data.ordering_owner = policy_id;
         }

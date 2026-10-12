@@ -25,6 +25,9 @@ class game
     mutable std::optional<bool> nonterminal;
     void fresh();
 public:
+    /* Metadata edits do not change the loaded game’s rules or position. During PGN export, headers 
+    describing game configuration are generated from the actual configuration and override conflicting 
+    metadata values. */
     std::map<std::string, std::string> metadata;
     
     static game from_pgn(std::string str);

@@ -45,7 +45,7 @@ static inline std::string capture_stacktrace()
     // -------- execinfo.h version (Linux/macOS) ---------
     void *buf[64];
     int n = ::backtrace(buf, 64);
-    char ** symbols = ::backtrace_symbols(buf, n);
+    char **symbols = ::backtrace_symbols(buf, n);
 
     std::ostringstream oss;
     for (int i = 0; i < n; ++i)
@@ -113,15 +113,15 @@ public:
             m_coroutine.destroy();
     }
  
-    generator(const generator&) = delete;
-    generator& operator=(const generator&) = delete;
+    generator(const generator &) = delete;
+    generator &operator=(const generator &) = delete;
  
-    generator(generator&& other) noexcept :
+    generator(generator &&other) noexcept :
         m_coroutine{other.m_coroutine}
     {
         other.m_coroutine = {};
     }
-    generator& operator=(generator&& other) noexcept
+    generator &operator=(generator &&other) noexcept
     {
         if (this != &other)
         {
@@ -142,7 +142,7 @@ public:
         {
             m_coroutine.resume();
         }
-        const T& operator*() const noexcept
+        const T &operator*() const noexcept
         {
             return *m_coroutine.promise().current_value;
         }

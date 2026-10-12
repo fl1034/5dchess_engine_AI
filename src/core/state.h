@@ -53,7 +53,7 @@ public:
     
     // standard copy-constructors
     state(const state &other) = default;
-    state(state&&) noexcept = default;
+    state(state &&) noexcept = default;
     state &operator=(state other) noexcept {
         swap(*this, other);
         return *this;
@@ -144,7 +144,8 @@ public:
     turn_t get_timeline_start(int l) const;
     turn_t get_timeline_end(int l) const;
     piece_t get_piece(vec4 p, bool color) const;
-    std::shared_ptr<board> get_board(int l, int t, bool c) const;
+    // Share ownership of a read-only board; invalid indices throw.
+    std::shared_ptr<const board> get_board(int l, int t, bool c) const;
     // Borrow a board, or return nullptr when the turn is absent.
     const board *get_board_ptr(int l, int t, bool c) const noexcept {
         return m.get_board_ptr(l,t,c);

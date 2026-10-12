@@ -8,8 +8,51 @@
 
 namespace py = pybind11;
 
+using metadata_t = std::map<std::string, std::string>;
+PYBIND11_MAKE_OPAQUE(metadata_t);
+
+namespace {
+int checked_coordinate(const py::int_ &value, int lower, int upper, const char *name)
+{
+    int overflow = 0;
+    const auto coordinate = PyLong_AsLongLongAndOverflow(value.ptr(), &overflow);
+    if(PyErr_Occurred())
+        throw py::error_already_set();
+    if(overflow || coordinate < lower || coordinate > upper)
+        throw py::value_error(std::string(name) + " must be between "
+            + std::to_string(lower) + " and " + std::to_string(upper) + ".");
+    return static_cast<int>(coordinate);
+}
+
+metadata_t metadata_from_dict(const py::dict &headers)
+{
+    metadata_t result;
+    for(const auto &item : headers)
+    {
+        if(!py::isinstance<py::str>(item.first) || !py::isinstance<py::str>(item.second))
+            throw py::type_error("Metadata keys and values must be strings.");
+        result.emplace(py::cast<std::string>(item.first), py::cast<std::string>(item.second));
+    }
+    return result;
+}
+} /* anonymous namespace */
+
 PYBIND11_MODULE(engine, m) {
     m.doc() = "5d chess engine"; // optional module docstring
+    py::bind_map<metadata_t>(m, "Metadata")
+        .def(py::init(&metadata_from_dict))
+        .def("get", [](const metadata_t &headers, const std::string &key, py::object fallback) {
+            auto it = headers.find(key);
+            return it == headers.end() ? fallback : py::cast(it->second);
+        }, py::arg("key"), py::arg("default") = py::none())
+        .def("update", [](metadata_t &headers, const py::dict &updates) {
+            for(const auto &[key, value] : metadata_from_dict(updates))
+                headers[key] = value;
+        }, py::arg("updates"))
+        .def("clear", &metadata_t::clear)
+        .def("copy", [](metadata_t &headers) {
+            return py::dict(py::cast(&headers, py::return_value_policy::reference));
+        });
     py::enum_<piece_t>(m, "Piece")
         .value("NO_PIECE", NO_PIECE)
         .value("WALL_PIECE", WALL_PIECE)
@@ -93,7 +136,15 @@ PYBIND11_MODULE(engine, m) {
     */
     py::class_<vec4>(m, "vec4")
         // Bind the constructor
-        .def(py::init<int, int, int, int>(), py::arg("x"), py::arg("y"), py::arg("t"), py::arg("l"))
+        .def(py::init([](const py::int_ &x, const py::int_ &y, const py::int_ &t, const py::int_ &l) {
+            constexpr int x_limit = 1 << (vec4::X_BITS - 1);
+            constexpr int y_limit = 1 << (vec4::Y_BITS - 1);
+            return vec4(
+                checked_coordinate(x, -x_limit, x_limit - 1, "x"),
+                checked_coordinate(y, -y_limit, y_limit - 1, "y"),
+                checked_coordinate(t, vec4::T_MIN, vec4::T_MAX, "t"),
+                checked_coordinate(l, vec4::L_MIN, vec4::L_MAX, "l"));
+        }), py::arg("x"), py::arg("y"), py::arg("t"), py::arg("l"))
         // Bind member functions
         .def("l", &vec4::l)
         .def("t", &vec4::t)
@@ -142,11 +193,14 @@ PYBIND11_MODULE(engine, m) {
     */
     py::class_<game>(m, "game")
         // metadata
-        .def_readwrite("metadata", &game::metadata)
+        .def_property("metadata",
+            [](game &g) -> metadata_t & { return g.metadata; },
+            [](game &g, const py::dict &metadata) { g.metadata = metadata_from_dict(metadata); },
+            py::return_value_policy::reference_internal,
+            "Live metadata mapping. Assignment replaces all headers; edits do not change the loaded position.")
         // factory
         .def_static("from_pgn", &game::from_pgn)
         // core functions
-        .def("get_current_state", &game::get_current_state)
         .def("get_current_fen", [](const game &g) {
             return g.get_current_state().show_fen();
         })

@@ -381,6 +381,46 @@ class RatioContracts(ContractCase):
 class BindingContracts(ContractCase):
     """Real public engine objects: legal/illegal moves, history, and PGN."""
 
+    def test_metadata_edits_are_live_and_assignment_preserves_views(self):
+        rules = self.bindings()
+        game = rules.game.from_pgn(STANDARD_GAME)
+        position = game.get_current_fen()
+        metadata = game.metadata
+        metadata["event"] = "Live edits"
+        self.assertEqual(game.metadata["event"], "Live edits")
+        self.assertIn('[Event "Live edits"]', game.show_pgn(rules.SHOW_NOTHING))
+        metadata.update({"white": "Alice", "black": "Bob"})
+        self.assertEqual(metadata.get("white"), "Alice")
+        self.assertIsNone(metadata.get("missing"))
+        self.assertEqual(metadata.get("missing", "fallback"), "fallback")
+        snapshot = dict(metadata)
+        snapshot["event"] = "Independent copy"
+        self.assertEqual(metadata["event"], "Live edits")
+        del metadata["event"]
+        self.assertNotIn("event", game.metadata)
+        with self.assertRaises(KeyError):
+            metadata["event"]
+        with self.assertRaises(KeyError):
+            del metadata["event"]
+        # Materialize an independent dictionary before replacing live data.
+        old_headers = dict(metadata)
+        game.metadata = {"event": "Replacement"}
+        self.assertEqual(old_headers["white"], "Alice")
+        self.assertEqual(dict(metadata), {"event": "Replacement"})
+        self.assertEqual(game.get_current_fen(), position)
+        with self.assertRaises(TypeError):
+            game.metadata = {"event": 42}
+        self.assertEqual(dict(metadata), {"event": "Replacement"})
+        self.assertEqual(dict(rules.Metadata({"event": "Standalone"})), {"event": "Standalone"})
+        # A retained mapping owns the game even after its Python name is gone.
+        del game
+        metadata["event"] = "Still alive"
+        self.assertEqual(metadata.copy(), {"event": "Still alive"})
+        self.assertEqual(list(metadata.items()), [("event", "Still alive")])
+        self.assertEqual(list(metadata.values()), ["Still alive"])
+        metadata.clear()
+        self.assertEqual(len(metadata), 0)
+
     def test_endpoint_hash_ignores_metadata_and_tracks_navigation(self):
         rules = self.bindings()
         initial = rules.game.from_pgn(STANDARD_GAME)
@@ -455,6 +495,25 @@ class BindingContracts(ContractCase):
         self.assertIsNone(stale.suggest_action())
         self.assertEqual(stale.get_match_status(), rules.match_status_t.STALEMATE)
 
+    def test_coordinate_constructor_rejects_unrepresentable_components(self):
+        rules = self.bindings()
+        for index, (name, lower, upper) in enumerate((
+                ("x", -8, 7), ("y", -8, 7),
+                ("t", -2048, 2047), ("l", -2048, 2047))):
+            for value in (lower, upper):
+                components = [0, 0, 0, 0]
+                components[index] = value
+                with self.subTest(component=name, value=value):
+                    point = rules.vec4(**dict(zip(("x", "y", "t", "l"), components)))
+                    self.assertEqual((point.x(), point.y(), point.t(), point.l()), tuple(components))
+            for value in (lower - 1, upper + 1, -2147483648, 2147483647, -(1 << 100), 1 << 100):
+                components = [0, 0, 0, 0]
+                components[index] = value
+                with self.subTest(component=name, value=value):
+                    with self.assertRaisesRegex(ValueError, name):
+                        rules.vec4(*components)
+        self.assertEqual((rules.vec4(7, 0, 0, 0) + rules.vec4(1, 0, 0, 0)).x(), -8)
+
     def test_coordinates_and_move_values(self):
         rules = self.bindings()
         point = rules.vec4(3, 1, 1, 0)
@@ -470,6 +529,7 @@ class BindingContracts(ContractCase):
     def test_game_move_undo_redo_submit_history_and_pgn_round_trip(self):
         rules = self.bindings()
         game = rules.game.from_pgn(STANDARD_GAME)
+        self.assertFalse(hasattr(game, "get_current_state"))
         initial = game.get_current_fen()
         source, target = rules.vec4(3, 1, 1, 0), rules.vec4(3, 2, 1, 0)
         self.assertEqual(game.get_board_size(), (8, 8))

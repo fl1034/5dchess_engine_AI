@@ -88,7 +88,7 @@ inline bool fine_node<T>::is_ceiling() const noexcept
         return false;
     }
     // is_ceiling needs the older context, not the newer one
-    return n + 1 == context->hc_info.dimension;
+    return n + 1 == context->hc_info.dimension();
 }
 
 template <typename T>
@@ -173,7 +173,7 @@ template<typename T>
     requires std::default_initializable<T>
 inline bool fine_node<T>::get_player() const noexcept
 {
-    return get_hc_info().s.get_present().second;
+    return get_hc_info().get_state().get_present().second;
 }
 
 template<typename T>
@@ -182,7 +182,7 @@ inline std::string fine_node<T>::print_semimove() const
 {
     if(context)
     {
-        return context->hc_info.get_semimove(n, i).to_string(context->hc_info.s);
+        return context->hc_info.get_semimove(n, i).to_string(context->hc_info.get_state());
     }
     else
     {
@@ -351,7 +351,7 @@ inline fine_node<T> *fine_node<T>::isolate(const point &p, fine_cell<T> *target_
     fine_cell<T> *current_cell = target_cell;
     index_t next_n = current_node->is_nodal() ? 0 : current_node->n + 1;
     HC *current_hc = target_hc;
-    while(next_n < get_context()->hc_info.dimension)
+    while(next_n < get_context()->hc_info.dimension())
     {
         index_t next_i = p[next_n];
         fine_node<T> *next_node = current_node->add_child(next_n, next_i);
@@ -372,7 +372,7 @@ template<typename T>
     requires std::default_initializable<T>
 inline fine_node<T> *fine_node<T>::normalize(const point &p, fine_cell<T> *target_cell, fine_node<T> *final_node)
 {
-    std::vector<fine_node<T>*> nodes(get_context()->hc_info.dimension+1, nullptr);
+    std::vector<fine_node<T> *> nodes(get_context()->hc_info.dimension()+1, nullptr);
     fine_node<T> *current_node = final_node;
     while(current_node != this)
     {
@@ -388,7 +388,7 @@ inline fine_node<T> *fine_node<T>::normalize(const point &p, fine_cell<T> *targe
         HC *current_hc = target_hc;
         index_t next_n = current_node->is_nodal() ? 0 : current_node->n + 1;
         auto context = current_node->get_context();
-        while(next_n < context->hc_info.dimension)
+        while(next_n < context->hc_info.dimension())
         {
             index_t next_i = p[next_n];
             if(!(*current_hc)[next_n].contains(p[next_n]))
@@ -418,7 +418,7 @@ template<typename T>
     requires std::default_initializable<T>
 inline void fine_node<T>::ignite() &
 {
-    state s = context->hc_info.s;
+    state s = context->hc_info.get_state();
     moveseq mvs = to_action();
     for(full_move mv : mvs)
     {
@@ -434,7 +434,7 @@ template<typename T>
 inline void fine_node<T>::ignite_impl(const state &s)
 {
     auto [hc_info, ss] = HC_info::build_HC(s);
-    HC universe = hc_info.universe;
+    HC universe = hc_info.get_universe();
     auto new_context = std::unique_ptr<nodal_pocession>(
         new nodal_pocession{
             .hc_info = std::move(hc_info),
@@ -460,7 +460,7 @@ template<typename T>
 inline moveseq fine_node<T>::to_action() const
 {
     assert(is_ceiling());
-    int dim = context->hc_info.dimension;
+    int dim = context->hc_info.dimension();
     std::vector<index_t> pt(dim);
     auto current = this;
     // Walk parent pointers to build the point vector.

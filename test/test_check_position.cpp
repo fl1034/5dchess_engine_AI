@@ -9,7 +9,7 @@
 namespace check_position_tests
 {
 namespace {
-void compare(const check_position& view, const state& expected)
+void compare(const check_position &view, const state &expected)
 {
     for (bool c : {false,true}) {
         std::set<full_move> reference;
@@ -35,7 +35,7 @@ void compare(const check_position& view, const state& expected)
     }
 }
 
-void compare_phantom(const state& s)
+void compare_phantom(const state &s)
 {
     const auto before = s.get_boards();
     const state expected = s.phantom();
@@ -63,7 +63,7 @@ void compare_phantom(const state& s)
     assert(s.get_boards() == before);
 }
 
-std::shared_ptr<board> random_board(std::mt19937& rng, int width, int height)
+std::shared_ptr<board> random_board(std::mt19937 &rng, int width, int height)
 {
     auto b = std::make_shared<board>(std::to_string(width),width,height);
     constexpr piece_t pieces[] = {KING_W, ROYAL_QUEEN_W, COMMON_KING_W,
@@ -212,7 +212,7 @@ state physical_position(bool mover)
     return state(m);
 }
 
-void compare_phantom(const state& s)
+void compare_phantom(const state &s)
 {
     const auto [t, player] = s.get_present();
     (void)t;

@@ -16,13 +16,13 @@ using move_score_table = std::vector<std::vector<float>>;
 // score zero. The HC must outlive the evaluator and remain unchanged during use.
 class move_evaluator
 {
-    const HC_info& info;
+    const HC_info &info;
     move_evaluation_weights weights;
     semimove_feature features;
     bool evaluate_captures;
 
 public:
-    move_evaluator(const HC_info& info, move_evaluation_weights weights);
+    move_evaluator(const HC_info &info, move_evaluation_weights weights);
 
     // Reuses lazily initialized check metadata across coordinates.
     float score(index_t axis, index_t coordinate);

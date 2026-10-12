@@ -48,7 +48,7 @@ state::state(const pgnparser_ast::game &g, const variant_setup_t &setup)
 
         const auto &[act, last_gt] = *(variations.end() - 1);
         //std::cout << act;
-        for(const auto& mv: act.moves)
+        for(const auto &mv: act.moves)
         {
             auto [fm_opt, pt_opt, candidates] = parse_move(mv);
             if(!fm_opt.has_value())
@@ -289,7 +289,7 @@ bool state::apply_move(ext_move mv)
     else if (std::make_pair(q.t(), player) == m.get_timeline_end(q.l()))
     {
         const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
-        const piece_t& pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
+        const piece_t &pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
         
         bitboard_t z = pmask(p.xy());
@@ -322,7 +322,7 @@ bool state::apply_move(ext_move mv)
     else
     {
         const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
-        const piece_t& pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
+        const piece_t &pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
         const board *x_ptr = m.get_board_ptr(q.l(), q.t(), player);
         auto [t, c] = next_turn({q.t(), player});
@@ -533,7 +533,7 @@ generator<full_move> state::find_checks_impl(std::vector<int> lines) const &
             // generate the aviliable moves
             auto moves = m.gen_moves<C>(p);
             // for each destination board and bit location
-            for (const auto& [q0, bb] : moves)
+            for (const auto &[q0, bb] : moves)
             {
                 const board *b1_ptr = m.get_board_ptr(q0.l(), q0.t(), C);
                 if (bb)
@@ -658,8 +658,8 @@ mate_type state::get_mate_type_impl(bool legal_action_witness) const
     for(HC &hc : ss2)
     {
         //NOTE: because most axes are the same, the following code can be optimized
-        int max_axis = std::min(w.new_axis+timeline_advantage+1, w.dimension-1);
-        for(int n = w.new_axis; n <= max_axis; n++)
+        int max_axis = std::min(w.first_branch_axis()+timeline_advantage+1, w.dimension()-1);
+        for(int n = w.first_branch_axis(); n <= max_axis; n++)
         {
             hc[n].erase_if([&w, n, old_t=present](int i){
                 semimove sm = w.get_semimove(n, i);
@@ -771,7 +771,7 @@ piece_t state::get_piece(vec4 p, bool color) const
     return m.get_piece(p, color);
 }
 
-std::shared_ptr<board> state::get_board(int l, int t, bool c) const
+std::shared_ptr<const board> state::get_board(int l, int t, bool c) const
 {
     return m.get_board(l, t, c);
 }
@@ -877,7 +877,7 @@ state::parse_pgn_res state::parse_move(const pgnparser_ast::move &move) const
         {
             char piece = to_white(piece_name(get_piece(p, player)));
             auto gen = player ? m.gen_superphysical_moves<true>(p) : m.gen_superphysical_moves<false>(p);
-            for(const auto& [p0, bb] : gen)
+            for(const auto &[p0, bb] : gen)
             {
                 for(int pos : marked_pos(bb))
                 {

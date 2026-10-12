@@ -97,7 +97,7 @@ public:
             return bb_get_pos(bits_);
         }
 
-        constexpr iterator& operator++() noexcept
+        constexpr iterator &operator++() noexcept
         {
             bits_ &= ~(bitboard_t{1} << bb_get_pos(bits_));
             return *this;

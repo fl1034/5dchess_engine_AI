@@ -101,7 +101,7 @@ public:
         return is_busy();
     }
 
-    const std::vector<option_change>& option_changes() const
+    const std::vector<option_change> &option_changes() const
     {
         return changes;
     }

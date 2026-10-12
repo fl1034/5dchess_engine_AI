@@ -147,7 +147,7 @@ int replay_log(int argc, const char *argv[])
     started = clock_type::now();
     auto [hc_info, search_space] = HC_info::build_HC(s);
     std::cout << "build_HC " << seconds_since(started)
-              << " s, dimensions=" << hc_info.dimension
+              << " s, dimensions=" << hc_info.dimension()
               << ", initial_hcs=" << search_space.size() << "\n"
               << std::flush;
 

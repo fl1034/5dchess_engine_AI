@@ -50,7 +50,7 @@ bool HC::intersects(const slice &s) const noexcept
 
 bool HC::empty() const noexcept
 {
-    for(const auto& axis : axes)
+    for(const auto &axis : axes)
     {
         if(axis.empty())
             return true;
@@ -61,7 +61,7 @@ bool HC::empty() const noexcept
 size_t HC::volume() const noexcept
 {
     size_t result = 1;
-    for(const auto& axis : axes)
+    for(const auto &axis : axes)
     {
         result *= axis.size();
     }
@@ -70,7 +70,7 @@ size_t HC::volume() const noexcept
 
 bool slice::contains(const point &p) const noexcept
 {
-    for(const auto& [n, coords] : fixed_axes)
+    for(const auto &[n, coords] : fixed_axes)
     {
         if(!coords.contains(p[n]))
             return false;
@@ -101,7 +101,7 @@ void slice::free_axis(index_t n)
 size_t search_space::volume() const noexcept
 {
     size_t result = 0;
-    for(const auto& hc : hcs)
+    for(const auto &hc : hcs)
     {
         result += hc.volume();
     }
@@ -110,7 +110,7 @@ size_t search_space::volume() const noexcept
 
 bool search_space::empty() const noexcept
 {
-    for(const auto& hc : hcs)
+    for(const auto &hc : hcs)
     {
         if(!hc.empty())
             return false;
@@ -120,7 +120,7 @@ bool search_space::empty() const noexcept
 
 bool search_space::contains(const point &loc) const noexcept
 {
-    for(const auto& hc : hcs)
+    for(const auto &hc : hcs)
     {
         if(hc.contains(loc))
             return true;
@@ -244,7 +244,7 @@ search_space HC::remove_slice(const slice &s) const
 {
     search_space result;
     HC remaining = *this;
-    for(const auto& [i, fixed_coords] : s.get_fixed_axes())
+    for(const auto &[i, fixed_coords] : s.get_fixed_axes())
     {
         HC x = remaining;
         x.axes[i].minus(fixed_coords);
@@ -278,7 +278,7 @@ search_space HC::remove_point(const point &p) const
 search_space HC::remove_slice_carefully(const slice &s) const
 {
     const auto &fixed_axes = s.get_fixed_axes();
-    for(const auto& [i, fixed_coords] : fixed_axes)
+    for(const auto &[i, fixed_coords] : fixed_axes)
     {
         if(!axes[i].intersects(fixed_coords))
         {
@@ -288,7 +288,7 @@ search_space HC::remove_slice_carefully(const slice &s) const
 
     search_space result;
     HC remaining = *this;
-    for(const auto& [i, fixed_coords] : fixed_axes)
+    for(const auto &[i, fixed_coords] : fixed_axes)
     {
         integer_set intersected_coords = fixed_coords;
         intersected_coords &= remaining.axes[i];
@@ -321,7 +321,7 @@ bool HC::is_slice_good(const slice &s, index_t max_codim) const noexcept
 {
     const auto &fixed_axes = s.get_fixed_axes();
     index_t count = 0;
-    for(const auto& [i, fixed_coords] : fixed_axes)
+    for(const auto &[i, fixed_coords] : fixed_axes)
     {
         if(!axes[i].intersects(fixed_coords))
         {
@@ -349,7 +349,7 @@ search_space HC::remove_slice_if_good(const slice &s, index_t max_codim) const
 
     search_space result;
     HC remaining = *this;
-    for(const auto& [i, fixed_coords] : s.get_fixed_axes())
+    for(const auto &[i, fixed_coords] : s.get_fixed_axes())
     {
         integer_set intersected_coords = fixed_coords;
         intersected_coords &= remaining.axes[i];
@@ -397,7 +397,7 @@ std::string slice::to_string() const
 {
     std::ostringstream oss;
     oss << "Slice with " << fixed_axes.size() << " axes fixed: \n";
-    for(const auto& [k, v] : fixed_axes)
+    for(const auto &[k, v] : fixed_axes)
     {
         oss << "On axis " << k << ", fixing ";
         oss << range_to_string(v) << "\n";
@@ -408,7 +408,7 @@ std::string slice::to_string() const
 std::string search_space::to_string() const
 {
     std::string result = "Search space: total " + std::to_string(hcs.size()) + " hypercuboids  \n";
-    for(const auto& hc : hcs)
+    for(const auto &hc : hcs)
     {   
         result += hc.to_string(false);
         result += "&\n";

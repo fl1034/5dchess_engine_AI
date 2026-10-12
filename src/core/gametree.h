@@ -45,7 +45,7 @@ public:
             new gnode<T>(new_parent, s, act, info)
         );
         node->children.reserve(children.size());
-        for (const auto& child : children) {
+        for (const auto &child : children) {
             node->children.push_back(child->clone(node.get()));
         }
         return node;

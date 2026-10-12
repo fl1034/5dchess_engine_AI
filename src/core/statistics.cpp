@@ -70,12 +70,12 @@ move_space_data count_move_space(const state &s)
 
     double log_universe_volume = 0.0;
     double log_non_new_volume = 0.0;
-    for(index_t axis = 0; axis < info.dimension; ++axis)
+    for(index_t axis = 0; axis < info.dimension(); ++axis)
     {
         const double log_axis_size = std::log(
-            static_cast<double>(info.universe[axis].size()));
+            static_cast<double>(info.get_universe()[axis].size()));
         log_universe_volume += log_axis_size;
-        if(axis < info.new_axis)
+        if(axis < info.first_branch_axis())
         {
             log_non_new_volume += log_axis_size;
         }
@@ -100,15 +100,15 @@ material_data<int> count_material_sum(const state &s)
     int royal = 0;
     const auto [mandatory_timelines, optional_timelines, unplayable_timelines] = s.get_timeline_status();
     std::vector<int> lines = {};
-    if constexpr (static_cast<bool>(S & timelines_status::MANDATORY))
+    if constexpr (static_cast<bool>(S &timelines_status::MANDATORY))
     {
         lines = mandatory_timelines;
     }
-    if constexpr (static_cast<bool>(S & timelines_status::OPTIONAL))
+    if constexpr (static_cast<bool>(S &timelines_status::OPTIONAL))
     {
         lines.insert(lines.end(), optional_timelines.begin(), optional_timelines.end());
     }
-    if constexpr (static_cast<bool>(S & timelines_status::UNPLAYABLE))
+    if constexpr (static_cast<bool>(S &timelines_status::UNPLAYABLE))
     {
         lines.insert(lines.end(), unplayable_timelines.begin(), unplayable_timelines.end());
     }
@@ -143,15 +143,15 @@ material_data<int> count_material_diff(const state &s)
     int royal = 0;
     const auto [mandatory_timelines, optional_timelines, unplayable_timelines] = s.get_timeline_status();
     std::vector<int> lines = {};
-    if constexpr (static_cast<bool>(S & timelines_status::MANDATORY))
+    if constexpr (static_cast<bool>(S &timelines_status::MANDATORY))
     {
         lines = mandatory_timelines;
     }
-    if constexpr (static_cast<bool>(S & timelines_status::OPTIONAL))
+    if constexpr (static_cast<bool>(S &timelines_status::OPTIONAL))
     {
         lines.insert(lines.end(), optional_timelines.begin(), optional_timelines.end());
     }
-    if constexpr (static_cast<bool>(S & timelines_status::UNPLAYABLE))
+    if constexpr (static_cast<bool>(S &timelines_status::UNPLAYABLE))
     {
         lines.insert(lines.end(), unplayable_timelines.begin(), unplayable_timelines.end());
     }
