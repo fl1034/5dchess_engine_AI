@@ -1,5 +1,10 @@
 # Web UI tests
 
+Startup tests cover ordered worker-message delivery when the engine becomes
+ready before or after the UI, including replay without duplicate messages.
+Loading-screen tests cover either asset group finishing first, both completing
+together, and removal after the starting position is displayed.
+
 The dependency-free Node tests cover phone taps, immediate selection and position previews, double-tap recognition and rollback, drags, pinch release, and canvas
 resizing when panels reserve screen space, and display-density changes without
 shifting camera bounds or pointer coordinates, plus export filename metadata
@@ -124,3 +129,34 @@ Redo still restores that continuation. Assess whether a board briefly appearing
 and disappearing on a double tap feels distracting; appearance animation is not
 implemented yet. Native preview tests cover replacement, invalid moves, unchanged
 history and PGN, promotion, branching, and ordinary mutation semantics.
+
+Branch-deletion tests cover exact promotion identity, target validation, cancel,
+restore-all, stale confirmations, safe Next navigation, Submit preservation,
+export gating, direct confirmation, and successful/failed imports. In the built
+UI, verify that hovering reveals Delete/Restore, leaving a selected row hides it,
+and keyboard focus reveals it. Pending rows must keep their height. Collapse
+and reopen the panel, cancel a navigation/export confirmation, and restore all.
+Confirm deletion and check exported PGN excludes the branch and descendants.
+Check the expanded panel plus pending controls at 1100 × 600 and after switching
+to compact layout and back.
+
+For continuation icons, check desktop Previous/Next/Undo/Redo use the bundled
+Lucide stroke icons and compact navigation retains its existing icons. Hover
+Delete/Restore over both long and short move text: only overlapping text should
+fade, with no bright patch in empty space. Leaving the row restores all text
+without changing wrapping or height; keyboard focus should reveal the same
+action and text mask.
+
+For Hint, press H repeatedly with a continuation selected and verify selection
+and keyboard focus survive, while the list scrolls to the newest suggestion.
+Repeat by clicking Hint and in compact mode. The first hint from an empty list
+should be selected; explicit deselection after staging branch deletion must
+remain deselected. Ordinary refreshes must not scroll the list to the bottom.
+
+For compact continuation editing, verify Select Next Action shows Edit and hides
+row actions. Edit changes to Done; Done hides actions again. Stage a deletion:
+Restore/Delete replace Done in the fixed header without changing its height.
+Resolve pending deletions through either header action or restore the final row;
+normal selection must return. Close/reopen and switch to desktop/back while
+pending: deletions and controls must persist. Check 320px width and confirm the
+header stays in place when scrolling the list or adding Hint suggestions.

@@ -143,6 +143,7 @@ jobs:
           emcmake cmake . \
             -DEMMODULE=on \
             -DTEST=off \
+            -DJSTEST=off \
             -DPYMODULE=off \
             -DCMAKE_BUILD_TYPE=Release \
             -B build-wasm

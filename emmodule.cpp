@@ -322,6 +322,16 @@ EMSCRIPTEN_BINDINGS(engine) {
                 convert_js_to_vec4(obj["from"]),
                 convert_js_to_vec4(obj["to"]), pt));
         }))
+        .function("get_submit_action", optional_override([](const game &g) {
+            auto act = g.get_submit_action();
+            return act ? convert_action_to_js(*act) : val::null();
+        }))
+        .function("delete_child", optional_override([](game &g, val js_action) {
+            return g.delete_child(convert_js_to_action(js_action, g.get_unmoved_state()));
+        }))
+        .function("visit_child", optional_override([](game &g, val js_action) {
+            return g.visit_child(convert_js_to_action(js_action, g.get_unmoved_state()));
+        }))
         .function("discard_preview", &game::discard_preview)
         .function("currently_check", &game::currently_check)
         .function("get_current_checks", optional_override([](const game &self) {
@@ -348,8 +358,11 @@ EMSCRIPTEN_BINDINGS(engine) {
             auto act = g.suggest_action();
             return act ? convert_action_to_js(*act) : val::null();
         }))
-        .function("add_child_action", optional_override([](game &g, val js_action) {
-            return g.add_child_action(convert_js_to_action(js_action, g.get_unmoved_state()));
+        .function("has_child", optional_override([](const game &g, val js_action) {
+            return g.has_child(convert_js_to_action(js_action, g.get_unmoved_state()));
+        }))
+        .function("add_child", optional_override([](game &g, val js_action) {
+            return g.add_child(convert_js_to_action(js_action, g.get_unmoved_state()));
         }))
         .function("get_comments", optional_override([](const game &self) {
             val result = val::array();
@@ -389,10 +402,6 @@ EMSCRIPTEN_BINDINGS(engine) {
                 result.set(i, move_info);
             }
             return result;
-        }))
-        .function("visit_child", optional_override([](game &g, val js_action) {
-            action act = convert_js_to_action(js_action, g.get_unmoved_state());
-            return g.visit_child(act);
         }))
         .function("show_pgn", optional_override([](game &g, uint16_t options, bool complete_game_tree, bool standard_metadata_only) {
             return g.show_pgn(static_cast<pgn_options>(options), complete_game_tree, standard_metadata_only);

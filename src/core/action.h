@@ -100,6 +100,7 @@ struct ext_move
     std::string lan(const state &) const;
     std::string pgn(const state &, pgn_options options=pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
     bool operator==(const ext_move &) const = default;
+    bool operator<(const ext_move &other) const noexcept;
 };
 
 /* move sequence (used in hypercuboid.h) */
@@ -148,6 +149,9 @@ public:
     pgn_adv_res pgn_advanced(const state &, pgn_options options, const action &witness) const;
     /* comparison and printing */
     bool operator ==(const action &other) const = default;
+    // Order canonical moves, including promotions. For siblings, their common
+    // parent state also uniquely determines branching_index from these moves.
+    bool operator<(const action &other) const noexcept;
     friend std::ostream &operator<<(std::ostream &os, const action &act);
 };
 

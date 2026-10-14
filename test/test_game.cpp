@@ -207,14 +207,41 @@ void test_states_and_attachment(const state &initial, const action &act)
     assert(child->get_info() == "child");
 }
 
-void test_owned_payload_and_formatting(const state &initial, const action &act)
+void test_child_index(const state &initial, const action &act, const action &other)
+{
+    using node_t = gnode<std::string>;
+    auto root = node_t::create_root(initial, "root");
+    assert(!root->find_child(act));
+    auto *first = root->add_child(node_t::create_child(root.get(), std::nullopt, act, "first"));
+    assert(!root->add_child(node_t::create_child(root.get(), std::nullopt, act, "duplicate")));
+    assert(root->get_children().size() == 1);
+    assert(first->get_info() == "first");
+    auto *second = root->add_child(node_t::create_child(root.get(), std::nullopt, other, "second"));
+    assert(root->find_child(act) == first);
+    assert(std::as_const(*root).find_child(act) == first);
+    auto copy = root->clone();
+    assert(copy->find_child(act) == copy->get_children().front().get());
+    assert(copy->find_child(act) != first);
+    assert(root->delete_child(act));
+    assert(!root->find_child(act));
+    assert(root->find_child(other) == second);
+    assert(root->get_children().front().get() == second);
+    assert(!root->delete_child(act));
+    auto *replacement = root->add_child(node_t::create_child(root.get(), std::nullopt, act, "replacement"));
+    assert(root->find_child(act) == replacement);
+    assert(copy->find_child(act)->get_info() == "first");
+    copy.reset();
+    assert(root->find_child(act) == replacement);
+}
+
+void test_owned_payload_and_formatting(const state &initial, const action &act, const action &other)
 {
     auto owned = gnode<std::unique_ptr<int>>::create_root(initial, std::make_unique<int>(7));
     assert(*owned->get_info() == 7);
     using node_t = gnode<counted_info>;
     auto root = node_t::create_root(initial, counted_info{1});
     auto *child = root->add_child(node_t::create_child(root.get(), std::nullopt, act, counted_info{2}));
-    root->add_child(node_t::create_child(root.get(), std::nullopt, act, counted_info{3}));
+    root->add_child(node_t::create_child(root.get(), std::nullopt, other, counted_info{3}));
     const std::function<std::string(const counted_info &)> show =
         [marker = counted_info{0}](const counted_info &info) {
             return "{" + std::to_string(info.value + marker.value) + "}";
@@ -235,11 +262,16 @@ int run() try
 {
     state initial(*pgnparser("[Variant \"Standard\"]").parse_game());
     auto [info, space] = HC_info::build_HC(initial);
-    auto moves = info.search(std::move(space)).first();
-    assert(moves);
-    const auto act = action::from_moveseq(*moves, initial);
-    test_states_and_attachment(initial, act);
-    test_owned_payload_and_formatting(initial, act);
+    std::vector<action> actions;
+    for(const auto &moves : info.search(std::move(space)))
+    {
+        actions.push_back(action::from_moveseq(moves, initial));
+        if(actions.size() == 2) break;
+    }
+    assert(actions.size() == 2);
+    test_states_and_attachment(initial, actions[0]);
+    test_owned_payload_and_formatting(initial, actions[0], actions[1]);
+    test_child_index(initial, actions[0], actions[1]);
     return 0;
 }
 
@@ -567,6 +599,167 @@ Thanks @narik for providing this position
 }
 } /* namespace mate_tests */
 
+namespace import_deduplication_tests
+{
+int run()
+{
+    const std::string header = "[Variant \"Standard - Turn Zero\"]\n";
+    game g = game::from_pgn(header + R"(
+(1. Nf3 {old branch} / Nf6 {old reply} 2. Nc3 {old descendant})
+(1. e4 {unrelated} / e5 {unrelated reply})
+(1. Ng1f3 {new branch} / d5 {new reply})
+1. d4 {main}
+)");
+    assert(g.get_comments() == std::vector<std::string>{"main"});
+    g.visit_parent();
+    const auto children = g.get_child_actions();
+    assert(children.size() == 3);
+    const auto e4 = std::get<0>(game::from_pgn(header + "1. e4").get_historical_actions().front());
+    const auto nf3 = std::get<0>(game::from_pgn(header + "1. Nf3").get_historical_actions().front());
+    const auto d4 = std::get<0>(game::from_pgn(header + "1. d4").get_historical_actions().front());
+    assert(std::get<0>(children[0]) == e4);
+    assert(std::get<0>(children[1]) == nf3);
+    assert(std::get<0>(children[2]) == d4);
+    assert(!g.add_child(nf3));
+    assert(g.visit_child(nf3));
+    assert(g.get_comments() == std::vector<std::string>{"new branch"});
+    assert(g.get_child_actions().size() == 1);
+    assert(g.visit_child(std::get<0>(g.get_child_actions().front())));
+    assert(g.get_comments() == std::vector<std::string>{"new reply"});
+    assert(g.get_child_actions().empty());
+    const auto exported = g.show_pgn();
+    assert(exported.find("old branch") == std::string::npos);
+    assert(exported.find("old reply") == std::string::npos);
+    assert(exported.find("old descendant") == std::string::npos);
+    assert(exported.find("unrelated reply") != std::string::npos);
+    game roundtrip = game::from_pgn(exported);
+    while(roundtrip.has_parent()) roundtrip.visit_parent();
+    assert(roundtrip.get_child_actions().size() == 3);
+    assert(roundtrip.visit_child(nf3));
+    assert(roundtrip.get_comments() == std::vector<std::string>{"new branch"});
+
+    // A final replacement with no descendants must become the loaded endpoint,
+    // rather than retaining a pointer to the discarded branch's deepest node.
+    game final = game::from_pgn(header + R"(
+(1. Nf3 {discarded} / Nf6 2. Nc3)
+1. Ng1f3 {survivor}
+)");
+    assert(final.get_historical_actions().size() == 1);
+    assert(final.get_comments() == std::vector<std::string>{"survivor"});
+    assert(final.get_child_actions().empty());
+    final.visit_parent();
+    assert(final.get_child_actions().size() == 1);
+    assert(final.visit_child(nf3));
+
+    game nested = game::from_pgn(header + R"(
+1. Nf3
+(1b. Nf6 {discarded reply} 2. Nc3)
+1b. Ng8f6 {surviving reply}
+)");
+    assert(nested.get_comments() == std::vector<std::string>{"surviving reply"});
+    assert(nested.get_historical_actions().size() == 2);
+    assert(nested.get_child_actions().empty());
+    nested.visit_parent();
+    assert(nested.get_child_actions().size() == 1);
+
+    // Reordered moves on independent timelines canonicalize to the same action.
+    game reordered = game::from_pgn(R"(
+[Timeline "Even"]
+[Size "8x8"]
+[r*nbqk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*NBQK*BNR*:+0:1:w]
+[r*nbqk*bnr*/p*p*p*p*p*p*p*p*/8/8/8/8/P*P*P*P*P*P*P*P*/R*NBQK*BNR*:-0:1:w]
+(1. (+0T1)e2e3 (-0T1)Ng1f3 {earlier order})
+1. (-0T1)Ng1f3 (+0T1)e2e3 {later order}
+)");
+    assert(reordered.get_comments() == std::vector<std::string>{"later order"});
+    reordered.visit_parent();
+    assert(reordered.get_child_actions().size() == 1);
+
+    const auto before_failed_load = final.show_pgn();
+    bool rejected = false;
+    try
+    {
+        final = game::from_pgn(header + "(1. Nf3 / Nf6) 1. Nf3 / e7e3");
+    }
+    catch(const std::runtime_error &) { rejected = true; }
+    assert(rejected);
+    assert(final.show_pgn() == before_failed_load);
+    return 0;
+}
+} /* namespace import_deduplication_tests */
+
+namespace deletion_tests
+{
+int run()
+{
+    game g = game::from_pgn("[Variant \"Standard - Turn Zero\"]\n1. Nf3 {branch} / Nf6 {descendant}");
+    const auto branch = std::get<0>(g.get_historical_actions().front());
+    g.visit_parent();
+    g.visit_parent();
+    game alternative = game::from_pgn("[Variant \"Standard - Turn Zero\"]\n1. e4");
+    const auto other = std::get<0>(alternative.get_historical_actions().front());
+    assert(g.has_child(branch));
+    assert(!g.has_child(other));
+    assert(!g.visit_child(other));
+    assert(g.add_child(other));
+    assert(g.has_child(other));
+    assert(!g.add_child(other));
+    assert(g.get_historical_actions().empty());
+    const auto invalid = action::from_vector(
+        {ext_move(full_move("(0T1)e2e8"), NO_PIECE)}, g.get_unmoved_state());
+    assert(!g.has_child(invalid));
+    assert(!g.visit_child(invalid));
+    assert(!g.add_child(invalid));
+    const auto before = g.get_current_boards();
+    const auto status = g.get_match_status();
+    const auto move = other.get_moves_view().front();
+    assert(g.apply_move(move));
+    assert(g.get_submit_action() == other);
+    assert(g.undo());
+    assert(g.can_redo());
+    assert(!g.get_submit_action()); // The redo tail is not part of the submitted action.
+    assert(g.preview_move(move));
+    assert(g.delete_child(branch));
+    assert(g.get_current_boards() == before);
+    assert(g.get_cached_moves().empty());
+    assert(g.can_redo());
+    assert(g.get_match_status() == status);
+    assert(!g.delete_child(branch));
+    assert(!g.has_child(branch));
+    assert(!g.visit_child(branch));
+    assert(g.get_child_actions().size() == 1);
+    const auto exported = g.show_pgn();
+    assert(exported.find("branch") == std::string::npos);
+    assert(exported.find("descendant") == std::string::npos);
+    assert(g.redo());
+    const auto draft = g.get_cached_moves();
+    assert(g.delete_child(other));
+    assert(g.get_cached_moves() == draft && g.can_undo());
+    assert(g.get_child_actions().empty());
+    assert(g.submit()); // Deletion does not prevent creating the move again later.
+    g.set_comments({"preserved"});
+    g.visit_parent();
+    assert(g.apply_move(move));
+    assert(g.submit());
+    assert(g.get_comments() == std::vector<std::string>{"preserved"});
+
+    // Owning subtree removal releases descendant payloads and retains sibling order.
+    using node = gnode<std::shared_ptr<int>>;
+    auto root = node::create_root(g.get_unmoved_state(), nullptr);
+    auto payload = std::make_shared<int>(7);
+    std::weak_ptr<int> lifetime = payload;
+    auto *child = root->add_child(node::create_child(root.get(), std::nullopt, branch, nullptr));
+    child->add_child(node::create_child(child, std::nullopt, other, std::move(payload)));
+    auto *sibling = root->add_child(node::create_child(root.get(), std::nullopt, other, nullptr));
+    assert(root->delete_child(branch));
+    assert(lifetime.expired());
+    assert(root->get_children().size() == 1 && root->get_children().front().get() == sibling);
+    assert(!root->delete_child(branch));
+    assert(root->delete_child(other) && root->get_children().empty());
+    return 0;
+}
+} /* namespace deletion_tests */
+
 int main()
 {
     std::cerr << "Running multiverse tests\n";
@@ -578,6 +771,8 @@ int main()
     std::cerr << "Running hash tests\n";
     if(const int result = hash_tests::run(); result != 0)
         return result;
+    if(const int result = import_deduplication_tests::run(); result != 0) return result;
+    if(const int result = deletion_tests::run(); result != 0) return result;
     std::cerr << "Running preview tests\n";
     if(const int result = preview_tests::run(); result != 0)
         return result;

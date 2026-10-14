@@ -1,7 +1,9 @@
 #ifndef GAMETREE_H
 #define GAMETREE_H
 
+#include <algorithm>
 #include <functional>
+#include <set>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -15,7 +17,16 @@ class gnode {
     std::optional<state> s;
     action act;
     T info;
+    // for ownership and display order
     std::vector<std::unique_ptr<gnode>> children;
+    struct child_action_less {
+        using is_transparent = void;
+        bool operator()(const gnode *a, const gnode *b) const { return a->act < b->act; }
+        bool operator()(const gnode *a, const action &b) const { return a->act < b; }
+        bool operator()(const action &a, const gnode *b) const { return a < b->act; }
+    };
+    // for lookup
+    std::set<gnode *, child_action_less> child_index;
 
     gnode(gnode<T> *parent, std::optional<state> s, action act, T info)
         : parent(parent), s(std::move(s)), act(std::move(act)), info(std::move(info)), children() {}
@@ -46,7 +57,7 @@ public:
         );
         node->children.reserve(children.size());
         for (const auto &child : children) {
-            node->children.push_back(child->clone(node.get()));
+            node->add_child(child->clone(node.get()));
         }
         return node;
     }
@@ -61,6 +72,7 @@ public:
     void set_info(T &&x) { info = std::move(x); }
     gnode<T> *get_parent() const { return parent; }
 
+    // Return nullptr for a duplicate action, leaving the existing child intact.
     gnode<T> *add_child(std::unique_ptr<gnode<T>> child) 
     {
         if(!child)
@@ -71,7 +83,17 @@ public:
         {
             throw std::invalid_argument("gnode::add_child(): Child has a different parent");
         }
-        children.push_back(std::move(child));
+        const auto [entry, inserted] = child_index.insert(child.get());
+        if(!inserted) return nullptr;
+        try
+        {
+            children.push_back(std::move(child));
+        }
+        catch(...)
+        {
+            child_index.erase(entry);
+            throw;
+        }
         return children.back().get();
     }
 
@@ -80,16 +102,29 @@ public:
         return children;
     }
 
+    // Erasing the owning pointer also destroys the complete descendant branch.
+    bool delete_child(const action &a)
+    {
+        const auto entry = child_index.find(a);
+        if(entry == child_index.end()) return false;
+        auto *target = *entry;
+        const auto owned = std::find_if(children.begin(), children.end(),
+            [target](const auto &child) { return child.get() == target; });
+        child_index.erase(entry);
+        children.erase(owned);
+        return true;
+    }
+
     gnode<T> *find_child(const action &a)
     {
-        for(const auto &child : children)
-        {
-            if(a == child->act)
-            {
-                return child.get();
-            }
-        }
-        return nullptr;
+        const auto entry = child_index.find(a);
+        return entry == child_index.end() ? nullptr : *entry;
+    }
+
+    const gnode<T> *find_child(const action &a) const
+    {
+        const auto entry = child_index.find(a);
+        return entry == child_index.end() ? nullptr : *entry;
     }
 
     static constexpr pgn_options default_pgn_options = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION | pgn_options::SHOW_MATE;

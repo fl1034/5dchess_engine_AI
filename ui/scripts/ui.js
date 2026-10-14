@@ -168,16 +168,15 @@ export const UI = (() => {
     let hintCallback = null;
     hintBtn.disabled = true;
 
-    // Sample options
-    const options = [
-        "Option 1",
-        "Option 2",
-        "This is a very long option that needs multiple lines to display properly because it contains so much text",
-        "Short option",
-        "Another extremely long option with lots and lots of text that will definitely wrap to multiple lines in the dropdown menu"
-    ];
-
-    let selectedIndex = 0;
+    const options = [];
+    let selectedIndex = -1;
+    let deletionCallback = null;
+    let selectionCallback = null;
+    let exportOpenCallback = null;
+    const pendingPanel = document.getElementById('pendingBranches');
+    let pendingPanelTimer = null;
+    document.getElementById('restoreAllBranches').onclick = () => deletionCallback?.('restore_all');
+    document.getElementById('confirmBranches').onclick = () => deletionCallback?.('commit_deletions');
 
     function calculateCollapasedPanelHeight()
     {
@@ -188,28 +187,58 @@ export const UI = (() => {
         return collapsedHeight + 'px';
     }
 
-    function renderOptions() {
-        // Clear existing options (keep hint button)
-        selectContainer.innerHTML = '';
-        selectContainer.appendChild(hintBtn);
-        
+    function renderOptions(preserveFocus = true) {
+        const active = preserveFocus ? document.activeElement : null;
+        const focusedAction = active?.dataset.branchAction;
+        const focusedOption = active?.dataset.branchOption;
+        const focusedHint = active === hintBtn;
+        selectContainer.replaceChildren();
         options.forEach((opt, idx) => {
-            const optEl = document.createElement('button');
-            optEl.type = 'button';
-            optEl.setAttribute('aria-pressed', String(idx === selectedIndex));
-            optEl.className = 'select-option';
-            if (idx === selectedIndex) optEl.classList.add('selected');
-            optEl.textContent = opt;
-            optEl.onclick = () => {
+            const row = document.createElement('div');
+            row.className = 'continuation-row';
+            row.classList.toggle('pending-deletion', Boolean(opt.deleted));
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'select-option';
+            option.dataset.branchOption = String(idx);
+            option.classList.toggle('selected', idx === selectedIndex);
+            option.setAttribute('aria-pressed', String(idx === selectedIndex));
+            option.setAttribute('aria-disabled', String(Boolean(opt.deleted)));
+            const notation = document.createElement('span');
+            notation.className = 'continuation-notation';
+            notation.textContent = opt.pgn;
+            option.append(notation);
+            option.onclick = () => {
+                if (opt.deleted) return;
                 selectedIndex = idx;
-                selectedDisplay.textContent = opt;
                 renderOptions();
                 selectContainer.querySelectorAll('.select-option')[idx]?.focus();
             };
-            selectContainer.appendChild(optEl);
+            const action = document.createElement('button');
+            action.type = 'button';
+            action.className = 'branch-action';
+            action.dataset.branchAction = String(idx);
+            const label = opt.deleted ? 'Restore branch' : 'Delete branch';
+            action.title = label;
+            action.setAttribute('aria-label', `${label}: ${opt.pgn}`);
+            const symbol = opt.deleted ? 'rotate-ccw' : 'trash';
+            action.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><use href="./icons/lucide.svg#${symbol}"></use></svg>`;
+            action.onclick = () => deletionCallback?.('toggle_deletion', idx);
+            row.append(option, action);
+            selectContainer.append(row);
         });
-        
-        selectedDisplay.textContent = options[selectedIndex] || 'No continuations';
+        selectContainer.append(hintBtn);
+        selectedDisplay.textContent = options[selectedIndex]?.pgn
+            || (options.length ? 'Choose continuation' : 'No continuations');
+        selectionCallback?.(selectedIndex);
+        const focusTarget = focusedHint ? hintBtn
+            : focusedAction !== undefined ? selectContainer.querySelector(`[data-branch-action="${focusedAction}"]`)
+            : focusedOption !== undefined ? selectContainer.querySelector(`[data-branch-option="${focusedOption}"]`)
+            : null;
+        focusTarget?.focus({ preventScroll: true });
+        if (!compactViewport.matches && controlPanel.classList.contains('collapsed')) {
+            controlPanel.style.height = calculateCollapasedPanelHeight();
+        }
     }
 
     function updatePanelToggle(expanded) {
@@ -457,15 +486,17 @@ export const UI = (() => {
         if (exportCallback) exportCallback(++exportRequestId);
     }
 
-    document.getElementById('btnExport').onclick = (event) => {
+    function openExport() {
         setExportControls(appliedExportSettings);
         const defaultFilename = getExportFilename(gameMetadata);
         document.getElementById('exportFilename').value = defaultFilename.slice(0, -'.5dpgn'.length);
         document.getElementById('exportExtension').value = '.5dpgn';
-        showPopup(event.currentTarget, 'popupExport');
+        showPopup(document.getElementById('btnExport'), 'popupExport');
         if (settingsChangeCallback) settingsChangeCallback(appliedExportSettings);
         requestExport();
     };
+
+    document.getElementById('btnExport').onclick = () => exportOpenCallback ? exportOpenCallback() : openExport();
 
     document.getElementById('exportMoreOptionsButton').onclick = (event) => {
         togglePopup(event.currentTarget, 'popupExportOptions');
@@ -1052,7 +1083,7 @@ export const UI = (() => {
         init() {
             const shortcuts = createKeyboardShortcuts({
                 onAction: (action, options) => this._pressButton(action, options),
-                isBlocked: () => popupStack.length > 0 || (compactViewport.matches
+                isBlocked: () => Boolean(document.querySelector('dialog[open]')) || popupStack.length > 0 || (compactViewport.matches
                     && document.getElementById('mobileLayout').classList.contains('has-mobile-panel')
                     && !document.querySelector('[data-mobile-pane="tools"]').hidden)
             });
@@ -1070,13 +1101,20 @@ export const UI = (() => {
     const selectControls = {
         /**
          * Set the options in the select container
-         * @param {Array<string>} newOptions - Array of option strings
+         * @param {Array<{pgn: string, deleted?: boolean}>} newOptions - Continuation rows
          */
-        setOptions(newOptions) {
+        setChangeCallback(callback) { selectionCallback = callback; },
+        setOptions(newOptions, { selection, preserveFocus = false, scrollToBottom = false } = {}) {
             options.length = 0;
             options.push(...newOptions);
-            selectedIndex = 0;
-            renderOptions();
+            selectedIndex = selection === undefined ? options.findIndex(option => !option.deleted)
+                : selection >= 0 && selection < options.length && !options[selection].deleted ? selection : -1;
+            renderOptions(preserveFocus);
+            if (scrollToBottom) {
+                const scroller = compactViewport.matches
+                    ? selectContainer.closest('.mobile-sheet-content') : selectContainer;
+                if (scroller) scroller.scrollTop = scroller.scrollHeight;
+            }
         },
 
         /**
@@ -1084,7 +1122,7 @@ export const UI = (() => {
          * @returns {string} The selected option text
          */
         getSelectedValue() {
-            return options[selectedIndex];
+            return options[selectedIndex]?.pgn;
         },
 
         /**
@@ -1100,9 +1138,8 @@ export const UI = (() => {
          * @param {number} index - The index to select
          */
         setSelectedIndex(index) {
-            if (index >= 0 && index < options.length) {
-                selectedIndex = index;
-                selectedDisplay.textContent = options[selectedIndex] || 'No continuations';
+            if (index >= -1 && index < options.length) {
+                selectedIndex = options[index]?.deleted ? -1 : index;
                 renderOptions();
             }
         },
@@ -1112,7 +1149,7 @@ export const UI = (() => {
          * @param {string} optionText - The text for the new option
          */
         addOption(optionText) {
-            options.push(optionText);
+            options.push({ pgn: optionText });
             renderOptions();
             controlPanel.style.height = calculateCollapasedPanelHeight();
         },
@@ -1127,6 +1164,40 @@ export const UI = (() => {
     };
 
     return {
+        setDeletionCallback(callback) { deletionCallback = callback; },
+        setExportOpenCallback(callback) { exportOpenCallback = callback; },
+        openExport,
+        setPendingDeletions(count) {
+            clearTimeout(pendingPanelTimer);
+            pendingPanel.inert = count === 0;
+            if (count > 0) {
+                pendingPanel.hidden = false;
+                // Establish the initial opacity before starting the shared fade.
+                void pendingPanel.offsetHeight;
+                pendingPanel.classList.add('visible');
+            } else {
+                pendingPanel.classList.remove('visible');
+                const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250;
+                pendingPanelTimer = setTimeout(() => { pendingPanel.hidden = true; }, delay);
+            }
+            document.dispatchEvent(new CustomEvent('pending-branches-change', { detail: { count } }));
+        },
+        confirmDeletions(message, callback) {
+            const dialog = document.getElementById('deletionDialog');
+            const names = { prev: 'Viewing the previous move', next: 'Viewing the next move',
+                submit: 'Submitting', open_export: 'Opening export', export: 'Exporting' };
+            document.getElementById('deletionReason').textContent =
+                `${names[message.operation]} will permanently delete these branches, including their descendants and comments.`;
+            const list = document.getElementById('deletionActions');
+            list.replaceChildren(...message.actions.map(text => {
+                const item = document.createElement('li');
+                item.textContent = text;
+                return item;
+            }));
+            dialog.returnValue = '';
+            dialog.onclose = () => callback(dialog.returnValue === 'confirm');
+            dialog.showModal();
+        },
         setGameMetadata(metadata = {}) {
             gameMetadata = { ...metadata };
             renderGameMetadata(metadata);

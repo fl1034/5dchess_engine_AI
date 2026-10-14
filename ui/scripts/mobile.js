@@ -6,6 +6,39 @@ export function initMobileLayout() {
     const shell = document.getElementById('mobileLayout');
     const sheet = document.getElementById('mobileSheet');
     const heading = document.getElementById('mobileSheetTitle');
+    const sheetHeader = document.getElementById('mobileSheetHeader');
+    const continuationActions = document.getElementById('mobileContinuationActions');
+    const editContinuations = document.getElementById('mobileEditContinuations');
+    const restoreBranches = document.getElementById('restoreAllBranches');
+    const desktopRestoreLabel = restoreBranches.textContent;
+    const deleteBranches = document.getElementById('confirmBranches');
+    const desktopDeleteLabel = deleteBranches.textContent;
+    let editingContinuations = false;
+    let pendingCount = 0;
+
+    function updateContinuationEditor() {
+        shell.classList.toggle('editing-continuations', editingContinuations || pendingCount > 0);
+        editContinuations.hidden = pendingCount > 0;
+        editContinuations.textContent = editingContinuations ? 'Done' : 'Edit';
+        editContinuations.setAttribute('aria-pressed', String(editingContinuations));
+    }
+    editContinuations.onclick = () => {
+        if (pendingCount > 0) return;
+        editingContinuations = !editingContinuations;
+        updateContinuationEditor();
+    };
+    document.addEventListener('pending-branches-change', event => {
+        const hadPending = pendingCount > 0;
+        pendingCount = event.detail.count;
+        if (pendingCount > 0) editingContinuations = true;
+        else if (hadPending) editingContinuations = false;
+        updateContinuationEditor();
+        if (hadPending && !pendingCount && compactViewport.matches
+            && document.getElementById('pendingBranches').contains(document.activeElement)) {
+            editContinuations.focus({ preventScroll: true });
+        }
+    });
+    updateContinuationEditor();
     const panes = [...shell.querySelectorAll('[data-mobile-pane]')];
     const triggers = [...shell.querySelectorAll('[data-mobile-panel]')];
     const commentButton = document.getElementById('mobileCommentButton');
@@ -31,7 +64,7 @@ export function initMobileLayout() {
     function updateCommentIcon() {
         const hasComment = commentText.textContent.trim().length > 0;
         const icon = hasComment ? 'comment-message' : 'comment-empty';
-        commentIcon.setAttribute('href', `#icon-${icon}${activePanel === 'comments' ? '-open' : ''}`);
+        commentIcon.setAttribute('href', `./icons/remix.svg#icon-${icon}${activePanel === 'comments' ? '-open' : ''}`);
         commentButton.setAttribute('aria-label', hasComment ? 'Comment (has comment)' : 'Comment (empty)');
     }
 
@@ -44,14 +77,19 @@ export function initMobileLayout() {
     function showPanel(name, trigger = null) {
         activePanel = name;
         shell.classList.toggle('has-mobile-panel', Boolean(name));
-        metadataIcon.setAttribute('href', name === 'game' ? '#icon-price-tag-3-fill' : '#icon-price-tag-3-line');
+        metadataIcon.setAttribute('href', name === 'game' ? './icons/remix.svg#icon-price-tag-3-fill' : './icons/remix.svg#icon-price-tag-3-line');
         updateCommentIcon();
         if (trigger) returnFocus = trigger;
         sheet.hidden = !name;
         panes.forEach(pane => { pane.hidden = pane.dataset.mobilePane !== name; });
         triggers.forEach(button => button.setAttribute('aria-expanded', String(button.dataset.mobilePanel === name)));
-        heading.hidden = name === 'tools';
-        heading.textContent = { variations: 'Continuations', comments: 'Comment', game: 'Game details' }[name] || '';
+        sheetHeader.hidden = name === 'tools';
+        continuationActions.hidden = name !== 'variations';
+        if (name !== 'variations' && pendingCount === 0) {
+            editingContinuations = false;
+            updateContinuationEditor();
+        }
+        heading.textContent = { variations: 'Select Next Action', comments: 'Comment', game: 'Game details' }[name] || '';
         if (name === 'tools') sheet.removeAttribute('aria-labelledby');
         else sheet.setAttribute('aria-labelledby', 'mobileSheetTitle');
         if (name && trigger) document.getElementById('mobileSheetClose').focus();
@@ -93,6 +131,11 @@ export function initMobileLayout() {
         const compact = compactViewport.matches;
         document.body.classList.toggle('compact-layout', compact);
         shell.hidden = !compact;
+        restoreBranches.textContent = compact ? 'Restore' : desktopRestoreLabel;
+        deleteBranches.textContent = compact ? 'Delete' : desktopDeleteLabel;
+        // Match visual order and keyboard traversal: the safe exit stays at the right.
+        restoreBranches.parentElement.append(...(compact
+            ? [deleteBranches, restoreBranches] : [restoreBranches, deleteBranches]));
         if (compact && placements.length === 0) {
             metadataWasExpanded = metadata.classList.contains('expanded');
             if (!metadataWasExpanded) metadataToggle.click();
@@ -103,6 +146,7 @@ export function initMobileLayout() {
                 ['.remote-control', '#mobileNavigation'],
                 ['#selectedDisplay', '#mobileContinuation'],
                 ['#selectContainer', '[data-mobile-pane="variations"]'],
+                ['#pendingBranches', '#mobileContinuationActions'],
                 ['.hud-content', '[data-mobile-pane="comments"]'],
                 ['#hudCommentActions', '[data-mobile-pane="comments"]'],
                 ['#buttonsPanel', '[data-mobile-pane="tools"]'],

@@ -12,6 +12,7 @@ remain in [Building](../usage/building.md#webassembly).
 | --- | --- |
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
+| `scripts/startup.js` | Starts the worker before piece loading and queues messages until UI setup finishes |
 | `scripts/selection.js` | Local piece selection, temporary position requests, rollback, and deferred move application |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
 | `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and Space dispatch |
@@ -36,11 +37,13 @@ main-thread modules' short import names. The worker uses relative imports.
 
 ## User, main thread, and worker communication
 
-`main.js` initializes the compact layout, creates a chess canvas, and starts
-`worker.js` with `new Worker(..., { type: 'module' })`. The worker imports
-`wasm/engine.js` and creates the compiled module. It reports `engine_version`
-and `ready`; after `ready`, the main thread sends the saved settings and loads
-the standard turn-zero position.
+`main.js` imports `startup.js` before the renderer. That module starts
+`worker.js` with `new Worker(..., { type: 'module' })`, allowing Wasm initialization
+to overlap the renderer's awaited piece loading. It queues worker messages until
+`main.js` has initialized the compact layout, chess canvas, and UI callbacks,
+then delivers them in order. The worker imports `wasm/engine.js` and creates the
+compiled module. It reports `engine_version` and `ready`; after handling `ready`,
+the main thread sends the saved settings and loads the standard turn-zero position.
 
 The worker accesses C++ through [`emmodule.cpp`](../../emmodule.cpp), which
 binds [`game`](../../src/client/game.h) and converts board coordinates, actions,
@@ -98,9 +101,13 @@ for match status again. With no pending hint, it calls `get_match_status()`;
 the flag avoids repeating the hypercuboid search. Having no unseen action can
 still mean PLAYING when every legal action is already a child.
 
-Hint calls `add_child_action()` with the stored action. This validates and adds
+Hint calls `add_child()` with the stored action. This validates and adds
 the continuation without navigating or clearing draft moves and redo history.
 The worker then prepares the next suggestion and disables Hint when exhausted.
+Adding a hint retains the selected action and keyboard focus, then scrolls the
+continuation list (or compact sheet) to the bottom. The first hint in an empty
+list is selected automatically. Explicit deselection after deleting the selected
+branch remains intact. Other list refreshes do not trigger automatic scrolling.
 Only revealed hints appear in the game tree and exports. The node's move title
 is retained across hint insertion so draft moves do not change whose turn is
 reported. Comment changes reuse the pending hint and status cache.
@@ -176,8 +183,13 @@ The HTML loads styles in this order:
 
 Canvas colors are resolved from CSS variables through `color.js`; changing a
 theme refreshes the canvas palette as well as the DOM. SVG piece files are mapped
-by piece code in `index.html`; interface icons use inline SVG symbols referenced
-with `<use>`.
+by piece code in `index.html`; interface icons use SVG symbols referenced
+with `<use>`. The existing Remix Icon symbols live in the
+[Remix sprite](../../ui/icons/remix.svg), including dynamically switched compact
+comment and metadata icons. Desktop history controls and continuation Delete/Restore use
+the bundled [Lucide sprite](../../ui/icons/lucide.svg). Its source revision is
+recorded in the sprite, and the [Lucide/Feather license notices](../../ui/icons/LUCIDE-LICENSE.txt)
+ship beside it. The compact navigation retains its existing icons.
 
 ## Behavior of UI components
 
@@ -308,7 +320,9 @@ minimum 600-pixel viewport height; its continuation list scrolls internally.
 
 The metadata summary displays White, Black, and recorded Result. Expansion
 reveals Event, Site, Date, and Round. Full values wrap; summaries truncate long
-names. Missing player names become “Unknown Player”, missing details become a
+names. Metadata titles show the full value only when visible text is ellipsized.
+Resize observations and font-load events refresh titles after size and layout
+changes; wrapped values, placeholders, and visible results have no titles. Missing player names become “Unknown Player”, missing details become a
 dash, and missing or unfinished results use a muted slash in the expanded view.
 The recorded Result is independent of the current node's match status.
 
@@ -320,7 +334,7 @@ a game replaces the displayed headers.
 
 Expand/fold controls have fading hover/focus highlights: a corner highlight for
 metadata and centered shallow highlights for HUD and navigation (480 × 50 and
-320 × 48 pixels respectively). Hint has its own neutral surface above the
+320 × 48 pixels respectively). Hint has its own neutral surface below the
 continuations and highlights independently of the selected option.
 
 The HUD and navigation expand/fold controls are native buttons with accessible
@@ -443,7 +457,10 @@ desktop-sized window restores the original controls without resetting the game.
 
 Import reads pasted, selected, or dropped text and sends a `load` command.
 Parsing and game creation occur in the worker. The main thread handles file
-selection and display errors.
+selection and display errors. Duplicate child actions in imported PGN use the
+last occurrence, replacing the earlier branch's comments and descendants rather
+than merging them. The surviving branch occupies its later position in the
+continuation list.
 
 `ui.js` owns dialog state and saved preferences. Settings callbacks forward
 changes to the worker or apply them locally, such as theme, metadata visibility,
@@ -475,3 +492,71 @@ preserving the date and extension. Export options do not affect the default
 filename. Desktop retains its editable filename and extension fields, Mate and
 Short Notation controls, More Options panel, Save as File button, and explicit
 Refresh workflow; closing desktop More Options does not regenerate the preview.
+
+## Pending continuation deletion
+
+The desktop navigation retains the cross arrangement inside a thin rounded
+outline. Continuation text uses the full row width. Delete and Restore overlay
+the trailing text on hover or keyboard focus; selection alone does not reveal
+them. Pending rows use muted, struck-through text without changing their height.
+Selecting a pending row is disabled. Marking the selected row clears selection
+and disables Next until another active continuation is selected.
+
+`branch-deletion.js` tracks exact action identities, including promotions, in a
+set owned by the worker. Collapsing the panel leaves this set intact. Floating buttons below navigation offer Restore and Delete while the set is
+nonempty; in compact mode these actions move into the fixed continuation header. Delete
+commits directly without another dialog.
+
+Previous, Next, Submit, and opening Export request confirmation when deletion
+is pending. Cancel changes neither the tree nor pending edits. Confirmation
+validates every target against current children before calling singular C++
+`delete_child` operations, then performs the requested action. Position IDs and
+confirmation tokens reject stale requests. Next uses `visit_child`
+and cannot recreate missing branches. Submit validates its canonical action
+first and excludes any matching pending branch from deletion, preserving that
+branch's comments and descendants. Hint availability refreshes after deletion.
+
+Export opening is guarded before displaying its window or calculating PGN.
+Successful import replaces the game and clears pending edits without a deletion
+prompt; failed import leaves the tree and pending edits intact.
+
+The desktop navigation panel is 220px wide. Its cross has 4px gaps and 8px
+inner padding, a 50% opaque pill surface over the 88% opaque panel (94%
+combined opacity), and 24px icons. Submit uses the original
+14px text and 72 × 48px button size. Pending-branch actions float below the
+panel without a count or enclosing surface. They reuse the comment controls
+at the same size and fade in/out over 250ms. Row action buttons have transparent
+backgrounds and borders. A localized radial mask fades only the text beneath
+the 40px action area, retaining 34% text opacity at the centre and smoothly
+restoring full opacity at its edge. The mask follows hover/keyboard focus
+visibility and is always applied when actions are visible in compact mode.
+There is no painted patch where the area contains no text.
+
+
+The compact continuation sheet is titled **Select Next Action**. Normal selection
+hides row actions and their text masks. **Edit**, styled like the compact dialog
+Exit control, reveals row actions and changes to **Done**. Done exits editing
+when no deletions are pending. Once a deletion is staged, Restore/Delete replace
+Done in the same 48px header. Delete is on the left and Restore on the far
+right, matching the safe Edit/Done exit location. Both use the Edit text-control
+style, with Delete in the theme error color. Restoring all branches, restoring the last pending
+branch individually, or committing deletions returns to normal selection. Closing
+or changing sheets exits ordinary editing but preserves pending deletions; reopening
+shows their controls and row icons. Desktop controls retain their existing labels
+and hover/focus behavior after switching between layouts.
+
+Navigation controls expose their existing keyboard shortcuts through titles:
+Submit [↵], Previous Action [↑], Next Action [↓], Undo [←], and Redo [→].
+Accessible labels remain separate. Labeled Restore/Delete controls omit
+redundant titles.
+
+Desktop navigation availability uses tonal icons and four tapered crescents
+on the enclosing pill. Each crescent follows its corresponding enabled
+Previous/Next/Undo/Redo control. Filled SVG geometry narrows from a 2px centre
+to pointed tips. Each extends 5 degrees past its diagonal junction, so adjacent
+enabled crescents overlap and form a continuous accent. Four supplementary
+2px quarter arcs fill the junctions at full width, each visible only when both
+adjacent controls are enabled. Isolated crescents keep their pointed tips.
+Navigation icons have no background, including on hover. Disabled icons and
+Submit use lighter neutral gray, while enabled Submit retains its primary fill.
+The arcs are decorative, ignore pointer events, and are hidden in compact mode.

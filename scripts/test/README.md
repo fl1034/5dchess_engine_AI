@@ -22,7 +22,7 @@ From `scripts/`, use `python -m unittest discover -s test -v`.
 | [`pymodule.cpp`](../../pymodule.cpp), through compiled `engine` | Coordinate/move objects, legal and illegal moves, undo/redo, submission, history navigation, comments, and PGN round trips. |
 
 The binding tests cover `game.get_current_hash()` across metadata changes
-and history navigation. This hash uses `hash_state`; equal hashes require an
+and history navigation. Child-operation checks cover membership, insertion without navigation, duplicate rejection, existing-only navigation, comments, deletion, and last-occurrence replacement of duplicate imported branches. This hash uses `hash_state`; equal hashes require an
 exact endpoint comparison before removing duplicate fixtures.
 
 Controllers use scripted 5DUCI engine subprocesses with fixed moves/statistics

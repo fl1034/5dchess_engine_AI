@@ -49,6 +49,14 @@ int run()
     const action e4_with_irrelevant_promotion = action::from_vector(
         {ext_move(full_move("(0T1)e2e4"), QUEEN_W)}, standard);
     assert(e4 == e4_with_irrelevant_promotion);
+    assert(!(e4 < e4_with_irrelevant_promotion) && !(e4_with_irrelevant_promotion < e4));
+    const auto d4 = action::from_vector({ext_move("(0T1)d2d4")}, standard);
+    assert((d4 < e4) != (e4 < d4));
+    assert(!(e4 < e4));
+    assert(action{} < e4 && !(e4 < action{}));
+    const auto prefix = action::from_vector(
+        {ext_move("(0T1)e2e4"), ext_move("(0T1)f2f4")}, standard);
+    assert(e4 < prefix && !(prefix < e4));
     assert(e4.get_moves()[0].promote_to == NO_PIECE);
     const auto after_e4 = standard.can_apply(e4);
     assert(after_e4.has_value());
@@ -418,6 +426,12 @@ int run()
         {ext_move(*fm, QUEEN_W)}, promotion_state);
     assert(implicit_queen == explicit_queen);
     assert(implicit_queen.get_moves()[0].promote_to == QUEEN_W);
+    std::string multiple_promotions = before_promotion;
+    multiple_promotions.replace(multiple_promotions.find("\"Q\""), 3, "\"QR\"");
+    const state promotion_order_state(*pgnparser(multiple_promotions).parse_game());
+    const auto rook = action::from_vector({ext_move(*fm, ROOK_W)}, promotion_order_state);
+    const auto queen = action::from_vector({ext_move(*fm, QUEEN_W)}, promotion_order_state);
+    assert((rook < queen) != (queen < rook));
     assert(!promotion_state.can_apply(*fm, KNIGHT_W));
     assert(!promotion_state.can_apply(*fm, KNIGHT_B));
 

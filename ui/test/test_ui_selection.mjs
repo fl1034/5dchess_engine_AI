@@ -19,6 +19,8 @@ function fixture() {
     return { selection, messages, changes, reply, state: () => changes.at(-1) };
 }
 
+const { PendingBranches, actionKey } = await import('data:text/javascript,' + encodeURIComponent(await readFile(new URL('../scripts/branch-deletion.js', import.meta.url), 'utf8')));
+
 test('selection feedback is immediate and legal destinations arrive before commitment', () => {
     const { selection, messages, reply, state } = fixture();
     const token = selection.preview(from);
@@ -143,8 +145,10 @@ test('stale selection responses cannot overwrite a newer selection', () => {
 test('main-thread wiring renders local feedback, preserves it on refresh and clears it on position changes', async () => {
     const messages = [], callbacks = {};
     let worker, highlights, displayed;
+    let selectedIndex = -1;
+    let selectConfig;
     const context = {
-        structuredClone, createSelection, initMobileLayout() {}, compactViewport: { addEventListener() {}, matches: false },
+        structuredClone, actionKey, createSelection, initMobileLayout() {}, compactViewport: { addEventListener() {}, matches: false },
         window: {},
         Worker: class {
             constructor() { worker = this; }
@@ -155,13 +159,49 @@ test('main-thread wiring renders local feedback, preserves it on refresh and cle
             setSelectionHighlights(value) { highlights = structuredClone(value); }
             setData(value) { displayed = structuredClone(value); }
         },
-        UI: new Proxy({ buttons: { setCallbacks(value) { callbacks.buttons = value; } } }, {
+        UI: new Proxy({ select: {
+            setChangeCallback() {},
+            getSelectedIndex: () => selectedIndex,
+            setOptions(options, config) {
+                selectConfig = config;
+                selectedIndex = config.selection === undefined ? options.findIndex(option => !option.deleted)
+                    : options[config.selection]?.deleted ? -1 : config.selection;
+            }
+        }, buttons: { setCallbacks(value) { callbacks.buttons = value; } } }, {
             get(target, key) { return target[key] || (value => { callbacks[key] = value; }); }
         })
     };
     const main = (await readFile(new URL('../scripts/main.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
+    const startup = (await readFile(new URL('../scripts/startup.js', import.meta.url), 'utf8'))
+        .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+    Object.assign(context, {
+        document: { getElementById() { return null; } },
+        reportLoaded() {}
+    });
+    vm.runInNewContext(startup, context);
+    vm.runInNewContext('startWorker()', context);
     vm.runInNewContext(main, context);
     const canvas = context.window.chessBoardCanvas;
+    const firstAction = [{ from, to, promote: 0 }];
+    const secondAction = [{ from: to, to: from, promote: 0 }];
+    const refresh = (options, extra = {}) => worker.onmessage({ data: {
+        type: 'update_select', positionId: 1, options, preserveSelection: true, hintAdded: true, ...extra
+    } });
+    refresh([{ action: firstAction, pgn: 'first' }]);
+    assert.equal(selectedIndex, 0); // The first Hint gets an immediately usable selection.
+    refresh([{ action: firstAction, pgn: 'first' }, { action: secondAction, pgn: 'second' }]);
+    assert.equal(selectedIndex, 0);
+    selectedIndex = 1;
+    refresh([{ action: secondAction, pgn: 'second' }, { action: firstAction, pgn: 'first' }]);
+    assert.equal(selectedIndex, 0); // Identity survives reordering, not just its index.
+    assert.equal(selectConfig.preserveFocus, true);
+    assert.equal(selectConfig.scrollToBottom, true);
+    selectedIndex = -1; // Explicit deselection after staging deletion must survive Hint.
+    refresh([{ action: firstAction, pgn: 'first', deleted: true }, { action: secondAction, pgn: 'second' }]);
+    assert.equal(selectedIndex, -1);
+    refresh([{ action: secondAction, pgn: 'second' }], { hintAdded: false });
+    assert.equal(selectConfig.scrollToBottom, false);
+
     const data = changed => worker.onmessage({ data: { type: 'data', data: { present: { c: false } }, positionChanged: changed } });
     data(true);
     const token = canvas.onPreviewSquare(from);
@@ -198,7 +238,7 @@ test('worker echoes selection identifiers and distinguishes refreshes from chang
     const engine = { get_version: () => 'test' };
     const workerSource = (await readFile(new URL('../scripts/worker.js', import.meta.url), 'utf8'))
         .replace(/^import .*;\n/gm, '');
-    vm.runInNewContext(workerSource, { self, createModule: () => Promise.resolve(engine) });
+    vm.runInNewContext(workerSource, { self, PendingBranches, actionKey, createModule: () => Promise.resolve(engine) });
     await Promise.resolve();
     let previewActive = false;
     self.game = {

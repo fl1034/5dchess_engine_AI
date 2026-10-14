@@ -20,7 +20,7 @@ int main()
     
     for(int i=0; i < 10; i++)
         if(auto act = g.suggest_action())
-            g.add_child_action(*act);
+            g.add_child(*act);
     bool flag = g.suggest_action().has_value();
     std::cout << flag << "\n";
     auto comments = g.get_comments();

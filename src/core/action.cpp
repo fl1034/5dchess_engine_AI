@@ -272,6 +272,17 @@ int action::sort(std::vector<ext_move> &mvs, const state &s)
     return static_cast<int>(mvs.size() - rbranching_index);
 }
 
+bool ext_move::operator<(const ext_move &other) const noexcept
+{
+    return std::tie(fm, promote_to) < std::tie(other.fm, other.promote_to);
+}
+
+bool action::operator<(const action &other) const noexcept
+{
+    return std::lexicographical_compare(
+        mvs.begin(), mvs.end(), other.mvs.begin(), other.mvs.end());
+}
+
 action action::from_vector(const std::vector<ext_move> &mvs, const state &s)
 {
     action a{mvs};

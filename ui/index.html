@@ -59,101 +59,43 @@
         }
     }
     </script>
-    <script src="scripts/main.js" type="module" defer></script>
+    <script type="module">
+        import { startWorker } from './scripts/startup.js';
+        startWorker();
+        import('./scripts/main.js');
+    </script>
 </head>
 
 <body>
 
-<!-- SVG Icon Definitions -->
-<svg style="display: none;">
-    <defs>
-        <symbol id="icon-focus" viewBox="0 0 24 24">
-            <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 14C10.8954 14 10 13.1046 10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14Z"></path>
-        </symbol>
-        <symbol id="icon-screenshot" viewBox="0 0 24 24">
-            <path d="M14.4336 3C15.136 3 15.7869 3.36852 16.1484 3.9707L16.9209 5.25684C17.0113 5.40744 17.174 5.5 17.3496 5.5H19C20.6569 5.5 22 6.84315 22 8.5V18C22 19.6569 20.6569 21 19 21H5C3.34315 21 2 19.6569 2 18V8.5C2 6.84315 3.34315 5.5 5 5.5H6.65039C6.82602 5.5 6.98874 5.40744 7.0791 5.25684L7.85156 3.9707C8.21306 3.36852 8.86403 3 9.56641 3H14.4336ZM8.79492 6.28613C8.34311 7.03915 7.52855 7.5 6.65039 7.5H5C4.44772 7.5 4 7.94772 4 8.5V18C4 18.5523 4.44772 19 5 19H19C19.5523 19 20 18.5523 20 18V8.5C20 7.94772 19.5523 7.5 19 7.5H17.3496C16.4715 7.5 15.6569 7.03915 15.2051 6.28613L14.4336 5H9.56641L8.79492 6.28613ZM12 8.5C14.4853 8.5 16.5 10.5147 16.5 13C16.5 15.4853 14.4853 17.5 12 17.5C9.51472 17.5 7.5 15.4853 7.5 13C7.5 10.5147 9.51472 8.5 12 8.5ZM12 10.5C10.6193 10.5 9.5 11.6193 9.5 13C9.5 14.3807 10.6193 15.5 12 15.5C13.3807 15.5 14.5 14.3807 14.5 13C14.5 11.6193 13.3807 10.5 12 10.5Z"></path>
-        </symbol>
-        <symbol id="icon-import" viewBox="0 0 24 24">
-            <path d="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z"></path>
-        </symbol>
-        <symbol id="icon-export" viewBox="0 0 24 24">
-            <path d="M4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19ZM13 9V16H11V9H6L12 3L18 9H13Z"></path>
-        </symbol>
-        <symbol id="icon-info" viewBox="0 0 24 24">
-            <path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 7H13V9H11V7ZM11 11H13V17H11V11Z"></path>
-        </symbol>
-        <symbol id="icon-edit" viewBox="0 0 24 24">
-            <path d="M6.93912 14.0328C6.7072 14.6563 6.51032 15.2331 6.33421 15.8155C7.29345 15.1189 8.43544 14.6767 9.75193 14.5121C12.2652 14.198 14.4976 12.5385 15.6279 10.4537L14.1721 8.99888L15.5848 7.58417C15.9185 7.25004 16.2521 6.91614 16.5858 6.58248C17.0151 6.15312 17.5 5.35849 18.0129 4.2149C12.4197 5.08182 8.99484 8.50647 6.93912 14.0328ZM17 8.99739L18 9.99669C17 12.9967 14 15.9967 10 16.4967C7.33146 16.8303 5.66421 18.6636 4.99824 21.9967H3C4 15.9967 6 1.99669 21 1.99669C20.0009 4.99402 19.0018 6.99313 18.0027 7.99402C17.6662 8.33049 17.3331 8.66382 17 8.99739Z"></path>
-        </symbol>
-        <symbol id="icon-settings" viewBox="0 0 24 24">
-            <path d="M2.21232 14.0601C1.91928 12.6755 1.93115 11.2743 2.21316 9.94038C3.32308 10.0711 4.29187 9.7035 4.60865 8.93871C4.92544 8.17392 4.50032 7.22896 3.62307 6.53655C4.3669 5.3939 5.34931 4.39471 6.53554 3.62289C7.228 4.50059 8.17324 4.92601 8.93822 4.60914C9.7032 4.29227 10.0708 3.32308 9.93979 2.21281C11.3243 1.91977 12.7255 1.93164 14.0595 2.21364C13.9288 3.32356 14.2964 4.29235 15.0612 4.60914C15.8259 4.92593 16.7709 4.5008 17.4633 3.62356C18.606 4.36739 19.6052 5.3498 20.377 6.53602C19.4993 7.22849 19.0739 8.17373 19.3907 8.93871C19.7076 9.70369 20.6768 10.0713 21.7871 9.94028C22.0801 11.3248 22.0682 12.726 21.7862 14.06C20.6763 13.9293 19.7075 14.2969 19.3907 15.0616C19.0739 15.8264 19.4991 16.7714 20.3763 17.4638C19.6325 18.6064 18.6501 19.6056 17.4638 20.3775C16.7714 19.4998 15.8261 19.0743 15.0612 19.3912C14.2962 19.7081 13.9286 20.6773 14.0596 21.7875C12.675 22.0806 11.2738 22.0687 9.93989 21.7867C10.0706 20.6768 9.70301 19.708 8.93822 19.3912C8.17343 19.0744 7.22848 19.4995 6.53606 20.3768C5.39341 19.633 4.39422 18.6506 3.62241 17.4643C4.5001 16.7719 4.92552 15.8266 4.60865 15.0616C4.29179 14.2967 3.32259 13.9291 2.21232 14.0601ZM3.99975 12.2104C5.09956 12.5148 6.00718 13.2117 6.45641 14.2963C6.90564 15.3808 6.75667 16.5154 6.19421 17.5083C6.29077 17.61 6.38998 17.7092 6.49173 17.8056C7.4846 17.2432 8.61912 17.0943 9.70359 17.5435C10.7881 17.9927 11.485 18.9002 11.7894 19.9999C11.9295 20.0037 12.0697 20.0038 12.2099 20.0001C12.5143 18.9003 13.2112 17.9927 14.2958 17.5435C15.3803 17.0942 16.5149 17.2432 17.5078 17.8057C17.6096 17.7091 17.7087 17.6099 17.8051 17.5081C17.2427 16.5153 17.0938 15.3807 17.543 14.2963C17.9922 13.2118 18.8997 12.5149 19.9994 12.2105C20.0032 12.0704 20.0033 11.9301 19.9996 11.7899C18.8998 11.4856 17.9922 10.7886 17.543 9.70407C17.0937 8.61953 17.2427 7.48494 17.8052 6.49204C17.7086 6.39031 17.6094 6.2912 17.5076 6.19479C16.5148 6.75717 15.3803 6.9061 14.2958 6.4569C13.2113 6.0077 12.5144 5.10016 12.21 4.00044C12.0699 3.99666 11.9297 3.99659 11.7894 4.00024C11.4851 5.10005 10.7881 6.00767 9.70359 6.4569C8.61904 6.90613 7.48446 6.75715 6.49155 6.1947C6.38982 6.29126 6.29071 6.39047 6.19431 6.49222C6.75668 7.48509 6.90561 8.61961 6.45641 9.70407C6.00721 10.7885 5.09967 11.4855 3.99995 11.7899C3.99617 11.93 3.9961 12.0702 3.99975 12.2104ZM11.9997 15.0002C10.3428 15.0002 8.99969 13.657 8.99969 12.0002C8.99969 10.3433 10.3428 9.00018 11.9997 9.00018C13.6565 9.00018 14.9997 10.3433 14.9997 12.0002C14.9997 13.657 13.6565 15.0002 11.9997 15.0002ZM11.9997 13.0002C12.552 13.0002 12.9997 12.5525 12.9997 12.0002C12.9997 11.4479 12.552 11.0002 11.9997 11.0002C11.4474 11.0002 10.9997 11.4479 10.9997 12.0002C10.9997 12.5525 11.4474 13.0002 11.9997 13.0002Z"></path>
-        </symbol>
-        <symbol id="icon-refresh" viewBox="0 0 24 24">
-            <path d="M12 4C9.25144 4 6.82508 5.38626 5.38443 7.5H8V9.5H2V3.5H4V5.99936C5.82381 3.57166 8.72764 2 12 2C17.5228 2 22 6.47715 22 12H20C20 7.58172 16.4183 4 12 4ZM4 12C4 16.4183 7.58172 20 12 20C14.7486 20 17.1749 18.6137 18.6156 16.5H16V14.5H22V20.5H20V18.0006C18.1762 20.4283 15.2724 22 12 22C6.47715 22 2 17.5228 2 12H4Z"></path>
-        </symbol>
-        <symbol id="icon-copy" viewBox="0 0 24 24">
-            <path d="M7 4V2H17V4H20.0066C20.5552 4 21 4.44495 21 4.9934V21.0066C21 21.5552 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5551 3 21.0066V4.9934C3 4.44476 3.44495 4 3.9934 4H7ZM7 6H5V20H19V6H17V8H7V6ZM9 4V6H15V4H9Z"></path>
-        </symbol>
-        <symbol id="icon-flip" viewBox="0 0 24 24">
-            <path d="M22 11L2 11L2 13L22 13V11ZM18 2C19.1046 2 20 2.89543 20 4V7C20 8.10457 19.1046 9 18 9L6 9C4.89543 9 4 8.10457 4 7L4 4C4 2.89543 4.89543 2 6 2L18 2ZM18 20H6V17L18 17V20ZM20 17C20 15.8954 19.1046 15 18 15L6 15C4.89543 15 4 15.8954 4 17L4 20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V17Z"></path>
-        </symbol>
-        <symbol id="icon-submit" viewBox="0 0 24 24">
-            <path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z"></path>
-        </symbol>
-        <symbol id="icon-previous" viewBox="0 0 24 24">
-            <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
-        </symbol>
-        <symbol id="icon-undo" viewBox="0 0 24 24">
-            <path d="M5.82843 6.99955L8.36396 9.53509L6.94975 10.9493L2 5.99955L6.94975 1.0498L8.36396 2.46402L5.82843 4.99955H13C17.4183 4.99955 21 8.58127 21 12.9996C21 17.4178 17.4183 20.9996 13 20.9996H4V18.9996H13C16.3137 18.9996 19 16.3133 19 12.9996C19 9.68584 16.3137 6.99955 13 6.99955H5.82843Z"></path>
-        </symbol>
-        <symbol id="icon-redo" viewBox="0 0 24 24">
-            <path d="M18.1716 6.99955H11C7.68629 6.99955 5 9.68584 5 12.9996C5 16.3133 7.68629 18.9996 11 18.9996H20V20.9996H11C6.58172 20.9996 3 17.4178 3 12.9996C3 8.58127 6.58172 4.99955 11 4.99955H18.1716L15.636 2.46402L17.0503 1.0498L22 5.99955L17.0503 10.9493L15.636 9.53509L18.1716 6.99955Z"></path>
-        </symbol>
-        <symbol id="icon-comment-empty" viewBox="0 0 24 24">
-            <path d="M5.76282 17H20V5H4V18.3851L5.76282 17ZM6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455Z"></path>
-        </symbol>
-        <symbol id="icon-comment-empty-open" viewBox="0 0 24 24">
-            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455Z"></path>
-        </symbol>
-        <symbol id="icon-comment-message" viewBox="0 0 24 24">
-            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455ZM5.76282 17H20V5H4V18.3851L5.76282 17ZM11 10H13V12H11V10ZM7 10H9V12H7V10ZM15 10H17V12H15V10Z"></path>
-        </symbol>
-        <symbol id="icon-comment-message-open" viewBox="0 0 24 24">
-            <path d="M6.45455 19L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V18C22 18.5523 21.5523 19 21 19H6.45455ZM7 10V12H9V10H7ZM11 10V12H13V10H11ZM15 10V12H17V10H15Z"></path>
-        </symbol>
-        <symbol id="icon-price-tag-3-line" viewBox="0 0 24 24">
-            <path d="M10.9042 2.10025L20.8037 3.51446L22.2179 13.414L13.0255 22.6063C12.635 22.9969 12.0019 22.9969 11.6113 22.6063L1.71184 12.7069C1.32131 12.3163 1.32131 11.6832 1.71184 11.2926L10.9042 2.10025ZM11.6113 4.22157L3.83316 11.9997L12.3184 20.485L20.0966 12.7069L19.036 5.28223L11.6113 4.22157ZM13.7327 10.5855C12.9516 9.80448 12.9516 8.53815 13.7327 7.7571C14.5137 6.97606 15.78 6.97606 16.5611 7.7571C17.3421 8.53815 17.3421 9.80448 16.5611 10.5855C15.78 11.3666 14.5137 11.3666 13.7327 10.5855Z"></path>
-        </symbol>
-        <symbol id="icon-price-tag-3-fill" viewBox="0 0 24 24">
-            <path d="M10.9042 2.10025L20.8037 3.51446L22.2179 13.414L13.0255 22.6063C12.635 22.9969 12.0019 22.9969 11.6113 22.6063L1.71184 12.7069C1.32131 12.3163 1.32131 11.6832 1.71184 11.2926L10.9042 2.10025ZM13.7327 10.5855C14.5137 11.3666 15.78 11.3666 16.5611 10.5855C17.3421 9.80448 17.3421 8.53815 16.5611 7.7571C15.78 6.97606 14.5137 6.97606 13.7327 7.7571C12.9516 8.53815 12.9516 9.80448 13.7327 10.5855Z"></path>
-        </symbol>
-        <symbol id="icon-more-2-fill" viewBox="0 0 24 24">
-            <path d="M12 3C10.9 3 10 3.9 10 5C10 6.1 10.9 7 12 7C13.1 7 14 6.1 14 5C14 3.9 13.1 3 12 3ZM12 17C10.9 17 10 17.9 10 19C10 20.1 10.9 21 12 21C13.1 21 14 20.1 14 19C14 17.9 13.1 17 12 17ZM12 10C10.9 10 10 10.9 10 12C10 13.1 10.9 14 12 14C13.1 14 14 13.1 14 12C14 10.9 13.1 10 12 10Z"></path>
-        </symbol>
-        <symbol id="icon-close-line" viewBox="0 0 24 24">
-            <path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"></path>
-        </symbol>
-    </defs>
-</svg>
+<div id="loadingScreen" aria-labelledby="loadingTitle">
+    <h1 id="loadingTitle">5D Chess Analyzer</h1>
+    <p id="loadingStatus" role="status" aria-live="polite" aria-atomic="true">[1/5] Preparing the analyzer…</p>
+</div>
 
 <div id="mobileLayout" hidden>
     <header class="mobile-header">
         <div id="mobileStatus"></div>
         <button type="button" id="mobileCommentButton" class="mobile-comment-button" data-mobile-panel="comments" aria-expanded="false" aria-controls="mobileSheet" aria-label="Comment (empty)">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-comment-empty"></use></svg>
         </button>
         <button type="button" class="mobile-game-button" hidden data-mobile-panel="game" aria-expanded="false" aria-controls="mobileSheet" aria-label="Game details">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-price-tag-3-line"></use></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-price-tag-3-line"></use></svg>
         </button>
         <button type="button" class="mobile-tools-button" data-mobile-panel="tools" aria-expanded="false" aria-controls="mobileSheet" aria-label="Additional actions">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-more-2-fill"></use></svg>
         </button>
     </header>
     <div id="mobileBoard"></div>
     <section id="mobileSheet" hidden aria-labelledby="mobileSheetTitle">
-        <h2 id="mobileSheetTitle" class="mobile-sheet-title"></h2>
+        <div class="mobile-sheet-header" id="mobileSheetHeader">
+            <h2 id="mobileSheetTitle" class="mobile-sheet-title"></h2>
+            <div id="mobileContinuationActions" hidden>
+                <button type="button" id="mobileEditContinuations" aria-pressed="false">Edit</button>
+            </div>
+        </div>
         <button type="button" id="mobileSheetClose" aria-label="Close panel">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-close-line"></use></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-close-line"></use></svg>
         </button>
         <div class="mobile-sheet-content">
             <div data-mobile-pane="variations" hidden></div>
@@ -219,18 +161,31 @@
     </div>
 </div>
 
+<div class="navigation-stack">
 <div class="control-panel collapsed" id="controlPanel">
     <div class="remote-control">
         <div class="remote-grid">
-            <button class="remote-btn up active" aria-label="Previous"><span class="desktop-remote-label">PR<br>EV</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg><span>Previous</span></span></button>
-            <button class="remote-btn left active" aria-label="Undo"><span class="desktop-remote-label">UN<br>DO</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-undo"></use></svg><span>Undo</span></span></button>
-            <button class="remote-btn ok inactive" aria-label="Submit"><span class="desktop-remote-label">SUB<br>MIT</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-submit"></use></svg><span>Submit</span></span></button>
-            <button class="remote-btn right inactive" aria-label="Redo"><span class="desktop-remote-label">RE<br>DO</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-redo"></use></svg><span>Redo</span></span></button>
-            <button class="remote-btn down active" aria-label="Next"><span class="desktop-remote-label">NE<br>XT</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg><span>Next</span></span></button>
+            <!-- Tapered 2px crescents extend 5 degrees beyond each diagonal junction. -->
+            <svg class="navigation-arcs" viewBox="0 0 194 170" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false">
+                <path class="navigation-arc arc-prev" d="M20.269 30.684 C21.083 29.763 23.447 26.924 25.154 25.154 C26.862 23.384 28.654 21.681 30.513 20.065 C32.372 18.449 34.310 16.907 36.307 15.459 C38.303 14.010 40.373 12.643 42.493 11.375 C44.612 10.107 46.798 8.927 49.025 7.850 C51.251 6.774 53.536 5.791 55.851 4.915 C58.167 4.039 60.533 3.263 62.920 2.596 C65.307 1.929 67.735 1.366 70.174 0.915 C72.612 0.463 75.083 0.119 77.554 -0.113 C80.025 -0.344 81.759 -0.411 85.000 -0.476 C88.241 -0.540 93.000 -0.500 97.000 -0.500 C101.000 -0.500 105.759 -0.540 109.000 -0.476 C112.241 -0.411 113.975 -0.344 116.446 -0.113 C118.917 0.119 121.388 0.463 123.826 0.915 C126.265 1.366 128.693 1.929 131.080 2.596 C133.467 3.263 135.833 4.039 138.149 4.915 C140.464 5.791 142.749 6.774 144.975 7.850 C147.202 8.927 149.388 10.107 151.507 11.375 C153.627 12.643 155.697 14.010 157.693 15.459 C159.690 16.907 161.628 18.449 163.487 20.065 C165.346 21.681 167.138 23.384 168.846 25.154 C170.553 26.924 172.917 29.763 173.731 30.684 C172.885 29.794 170.420 27.046 168.655 25.345 C166.891 23.643 165.046 22.014 163.144 20.474 C161.242 18.934 159.266 17.473 157.241 16.105 C155.216 14.737 153.125 13.453 150.993 12.266 C148.860 11.080 146.670 9.982 144.447 8.984 C142.224 7.985 139.951 7.080 137.653 6.277 C135.355 5.473 133.016 4.767 130.660 4.163 C128.305 3.558 125.916 3.054 123.520 2.653 C121.124 2.251 118.703 1.952 116.283 1.756 C113.863 1.560 112.214 1.519 109.000 1.476 C105.786 1.433 101.000 1.500 97.000 1.500 C93.000 1.500 88.214 1.433 85.000 1.476 C81.786 1.519 80.137 1.560 77.717 1.756 C75.297 1.952 72.876 2.251 70.480 2.653 C68.084 3.054 65.695 3.558 63.340 4.163 C60.984 4.767 58.645 5.473 56.347 6.277 C54.049 7.080 51.776 7.985 49.553 8.984 C47.330 9.982 45.140 11.080 43.007 12.266 C40.875 13.453 38.784 14.737 36.759 16.105 C34.734 17.473 32.758 18.934 30.856 20.474 C28.954 22.014 27.109 23.643 25.345 25.345 C23.580 27.046 21.115 29.794 20.269 30.684 Z"/>
+                <path class="navigation-arc arc-redo" d="M163.316 20.269 C164.240 21.081 167.086 23.436 168.861 25.139 C170.636 26.842 172.346 28.630 173.967 30.486 C175.589 32.341 177.137 34.277 178.590 36.272 C180.044 38.267 181.416 40.337 182.688 42.456 C183.960 44.576 185.145 46.762 186.224 48.990 C187.303 51.218 188.288 53.504 189.164 55.823 C190.041 58.141 190.817 60.509 191.481 62.899 C192.146 65.289 192.706 67.720 193.153 70.162 C193.600 72.603 193.938 75.076 194.162 77.549 C194.387 80.022 194.500 82.516 194.500 85.000 C194.500 87.484 194.387 89.978 194.162 92.451 C193.938 94.924 193.600 97.397 193.153 99.838 C192.706 102.280 192.146 104.711 191.481 107.101 C190.817 109.491 190.041 111.859 189.164 114.177 C188.288 116.496 187.303 118.782 186.224 121.010 C185.145 123.238 183.960 125.424 182.688 127.544 C181.416 129.663 180.044 131.733 178.590 133.728 C177.137 135.723 175.589 137.659 173.967 139.514 C172.346 141.370 170.636 143.158 168.861 144.861 C167.086 146.564 164.240 148.919 163.316 149.731 C164.203 148.882 166.943 146.409 168.640 144.640 C170.336 142.871 171.960 141.022 173.494 139.117 C175.028 137.211 176.484 135.234 177.846 133.207 C179.209 131.180 180.487 129.089 181.670 126.956 C182.853 124.824 183.947 122.634 184.942 120.412 C185.938 118.190 186.841 115.919 187.644 113.624 C188.447 111.329 189.154 108.992 189.760 106.640 C190.366 104.287 190.874 101.902 191.280 99.508 C191.685 97.115 191.991 94.697 192.195 92.279 C192.398 89.861 192.500 87.426 192.500 85.000 C192.500 82.574 192.398 80.139 192.195 77.721 C191.991 75.303 191.685 72.885 191.280 70.492 C190.874 68.098 190.366 65.713 189.760 63.360 C189.154 61.008 188.447 58.671 187.644 56.376 C186.841 54.081 185.938 51.810 184.942 49.588 C183.947 47.366 182.853 45.176 181.670 43.044 C180.487 40.911 179.209 38.820 177.846 36.793 C176.484 34.766 175.028 32.789 173.494 30.883 C171.960 28.978 170.336 27.129 168.640 25.360 C166.943 23.591 164.203 21.118 163.316 20.269 Z"/>
+                <path class="navigation-arc arc-next" d="M173.731 139.316 C172.917 140.237 170.553 143.076 168.846 144.846 C167.138 146.616 165.346 148.319 163.487 149.935 C161.628 151.551 159.690 153.093 157.693 154.541 C155.697 155.990 153.627 157.357 151.507 158.625 C149.388 159.893 147.202 161.073 144.975 162.150 C142.749 163.226 140.464 164.209 138.149 165.085 C135.833 165.961 133.467 166.737 131.080 167.404 C128.693 168.071 126.265 168.634 123.826 169.085 C121.388 169.537 118.917 169.881 116.446 170.113 C113.975 170.344 112.241 170.411 109.000 170.476 C105.759 170.540 101.000 170.500 97.000 170.500 C93.000 170.500 88.241 170.540 85.000 170.476 C81.759 170.411 80.025 170.344 77.554 170.113 C75.083 169.881 72.612 169.537 70.174 169.085 C67.735 168.634 65.307 168.071 62.920 167.404 C60.533 166.737 58.167 165.961 55.851 165.085 C53.536 164.209 51.251 163.226 49.025 162.150 C46.798 161.073 44.612 159.893 42.493 158.625 C40.373 157.357 38.303 155.990 36.307 154.541 C34.310 153.093 32.372 151.551 30.513 149.935 C28.654 148.319 26.862 146.616 25.154 144.846 C23.447 143.076 21.083 140.237 20.269 139.316 C21.115 140.206 23.580 142.954 25.345 144.655 C27.109 146.357 28.954 147.986 30.856 149.526 C32.758 151.066 34.734 152.527 36.759 153.895 C38.784 155.263 40.875 156.547 43.007 157.734 C45.140 158.920 47.330 160.018 49.553 161.016 C51.776 162.015 54.049 162.920 56.347 163.723 C58.645 164.527 60.984 165.233 63.340 165.837 C65.695 166.442 68.084 166.946 70.480 167.347 C72.876 167.749 75.297 168.048 77.717 168.244 C80.137 168.440 81.786 168.481 85.000 168.524 C88.214 168.567 93.000 168.500 97.000 168.500 C101.000 168.500 105.786 168.567 109.000 168.524 C112.214 168.481 113.863 168.440 116.283 168.244 C118.703 168.048 121.124 167.749 123.520 167.347 C125.916 166.946 128.305 166.442 130.660 165.837 C133.016 165.233 135.355 164.527 137.653 163.723 C139.951 162.920 142.224 162.015 144.447 161.016 C146.670 160.018 148.860 158.920 150.993 157.734 C153.125 156.547 155.216 155.263 157.241 153.895 C159.266 152.527 161.242 151.066 163.144 149.526 C165.046 147.986 166.891 146.357 168.655 144.655 C170.420 142.954 172.885 140.206 173.731 139.316 Z"/>
+                <path class="navigation-arc arc-undo" d="M30.684 149.731 C29.760 148.919 26.914 146.564 25.139 144.861 C23.364 143.158 21.654 141.370 20.033 139.514 C18.411 137.659 16.863 135.723 15.410 133.728 C13.956 131.733 12.584 129.663 11.312 127.544 C10.040 125.424 8.855 123.238 7.776 121.010 C6.697 118.782 5.712 116.496 4.836 114.177 C3.959 111.859 3.183 109.491 2.519 107.101 C1.854 104.711 1.294 102.280 0.847 99.838 C0.400 97.397 0.062 94.924 -0.162 92.451 C-0.387 89.978 -0.500 87.484 -0.500 85.000 C-0.500 82.516 -0.387 80.022 -0.162 77.549 C0.062 75.076 0.400 72.603 0.847 70.162 C1.294 67.720 1.854 65.289 2.519 62.899 C3.183 60.509 3.959 58.141 4.836 55.823 C5.712 53.504 6.697 51.218 7.776 48.990 C8.855 46.762 10.040 44.576 11.312 42.456 C12.584 40.337 13.956 38.267 15.410 36.272 C16.863 34.277 18.411 32.341 20.033 30.486 C21.654 28.630 23.364 26.842 25.139 25.139 C26.914 23.436 29.760 21.081 30.684 20.269 C29.797 21.118 27.057 23.591 25.360 25.360 C23.664 27.129 22.040 28.978 20.506 30.883 C18.972 32.789 17.516 34.766 16.154 36.793 C14.791 38.820 13.513 40.911 12.330 43.044 C11.147 45.176 10.053 47.366 9.058 49.588 C8.062 51.810 7.159 54.081 6.356 56.376 C5.553 58.671 4.846 61.008 4.240 63.360 C3.634 65.713 3.126 68.098 2.720 70.492 C2.315 72.885 2.009 75.303 1.805 77.721 C1.602 80.139 1.500 82.574 1.500 85.000 C1.500 87.426 1.602 89.861 1.805 92.279 C2.009 94.697 2.315 97.115 2.720 99.508 C3.126 101.902 3.634 104.287 4.240 106.640 C4.846 108.992 5.553 111.329 6.356 113.624 C7.159 115.919 8.062 118.190 9.058 120.412 C10.053 122.634 11.147 124.824 12.330 126.956 C13.513 129.089 14.791 131.180 16.154 133.207 C17.516 135.234 18.972 137.211 20.506 139.117 C22.040 141.022 23.664 142.871 25.360 144.640 C27.057 146.409 29.797 148.882 30.684 149.731 Z"/>
+                <!-- Full-width joins appear only when both adjacent controls are enabled. -->
+                <path class="navigation-arc navigation-connector connector-prev-undo" d="M.5 85 A84.5 84.5 0 0 1 85 .5"/>
+                <path class="navigation-arc navigation-connector connector-prev-redo" d="M109 .5 A84.5 84.5 0 0 1 193.5 85"/>
+                <path class="navigation-arc navigation-connector connector-next-redo" d="M193.5 85 A84.5 84.5 0 0 1 109 169.5"/>
+                <path class="navigation-arc navigation-connector connector-next-undo" d="M85 169.5 A84.5 84.5 0 0 1 .5 85"/>
+            </svg>
+            <button class="remote-btn up active" aria-label="Previous" title="Previous Action [↑]"><span class="desktop-remote-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><use href="./icons/lucide.svg#chevrons-up"></use></svg></span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-previous"></use></svg><span>Previous</span></span></button>
+            <button class="remote-btn left active" aria-label="Undo" title="Undo [←]"><span class="desktop-remote-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><use href="./icons/lucide.svg#undo-2"></use></svg></span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-undo"></use></svg><span>Undo</span></span></button>
+            <button class="remote-btn ok inactive" aria-label="Submit" title="Submit [↵]"><span class="desktop-remote-label">Submit</span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-submit"></use></svg><span>Submit</span></span></button>
+            <button class="remote-btn right inactive" aria-label="Redo" title="Redo [→]"><span class="desktop-remote-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><use href="./icons/lucide.svg#redo-2"></use></svg></span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-redo"></use></svg><span>Redo</span></span></button>
+            <button class="remote-btn down active" aria-label="Next" title="Next Action [↓]"><span class="desktop-remote-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><use href="./icons/lucide.svg#chevrons-down"></use></svg></span><span class="mobile-remote-label"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-previous"></use></svg><span>Next</span></span></button>
         </div>
     </div>
 
-    <div class="selected-display" id="selectedDisplay">Option 1</div>
+    <div class="selected-display" id="selectedDisplay">No continuations</div>
 
     <div class="select-container" id="selectContainer">
         <button type="button" class="hint-btn" id="hintBtn">+ Hint</button>
@@ -239,32 +194,49 @@
     <button class="panel-toggle" id="panelToggle" type="button" aria-label="Expand continuations" aria-expanded="false" aria-controls="selectContainer"></button>
 </div>
 
+    <div class="pending-branches" id="pendingBranches" hidden>
+        <div class="pending-branch-actions">
+            <button type="button" class="hud-comment-btn secondary" id="restoreAllBranches">Restore All</button>
+            <button type="button" class="hud-comment-btn delete" id="confirmBranches">Confirm Deletion</button>
+        </div>
+    </div>
+</div><!-- .navigation-stack -->
 </div><!-- .top-panels -->
+
+<dialog id="deletionDialog" class="deletion-dialog" aria-labelledby="deletionTitle" aria-describedby="deletionReason">
+    <h2 id="deletionTitle">Delete pending branches?</h2>
+    <p id="deletionReason"></p>
+    <ul id="deletionActions"></ul>
+    <form method="dialog" class="branch-buttons">
+        <button value="cancel" autofocus>Cancel</button>
+        <button value="confirm">Delete and continue</button>
+    </form>
+</dialog>
 
 <div class="buttons-panel" id="buttonsPanel">
     <button class="btn-icon" id="btnFocus" title="Focus (F)">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-focus"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-focus"></use></svg>
     </button>
     <button class="btn-icon" id="btnFlip" title="Flip">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-flip"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-flip"></use></svg>
     </button>
     <button class="btn-icon" id="btnScreenshot" title="Screenshot">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-screenshot"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-screenshot"></use></svg>
     </button>
     <button class="btn-icon" id="btnImport" title="Import">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-import"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-import"></use></svg>
     </button>
     <button class="btn-icon" id="btnExport" title="Export">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-export"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-export"></use></svg>
     </button>
     <button class="btn-icon" id="btnInfo" title="Information">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-info"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-info"></use></svg>
     </button>
     <button class="btn-icon" id="btnEdit" title="Edit">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-edit"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-edit"></use></svg>
     </button>
     <button class="btn-icon" id="btnSettings" title="Settings">
-        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-settings"></use></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-settings"></use></svg>
     </button>
 </div>
 
@@ -308,11 +280,11 @@
                 <div id="copiedLabel" class="copied-label">Copied!</div>
                 <div class="export-actions">
                     <button class="btn-icon" id="refreshButton" title="Refresh export data">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><use href="#icon-refresh"></use></svg>
+                        <svg viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-refresh"></use></svg>
                     </button>
                     <button class="btn-icon" id="copyButton" type="button" title="Copy to Clipboard" aria-label="Copy to clipboard">
                         <span class="mobile-export-label">Copy</span>
-                        <svg class="desktop-export-label" viewBox="0 0 24 24" fill="currentColor"><use href="#icon-copy"></use></svg>
+                        <svg class="desktop-export-label" viewBox="0 0 24 24" fill="currentColor"><use href="./icons/remix.svg#icon-copy"></use></svg>
                     </button>
                 </div>
             </div>
@@ -422,7 +394,7 @@
             </div>
             <div id="interfaceGuideDesktop">
                 <p>Welcome to 5D Chess Engine! This guide introduces the controls for exploring and editing games.</p>
-                <p>Click outside this window to close it. Click <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> at the bottom to open it again.</p>
+                <p>Click outside this window to close it. Click <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-info"></use></svg> <b>Info</b> at the bottom to open it again.</p>
                 <h4>Viewport</h4>
                 <p>The main area displays the chessboards.</p>
                 <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
@@ -447,17 +419,18 @@
                     <li><b>SUBMIT</b> — Submit your moves to complete the turn. Shortcut: <b>Enter</b></li>
                 </ul>
                 <p>Expand the control panel to choose a continuation before using <b>NEXT</b>. Submitted turns are added to the list. Click <b>Hint</b> to add a suggested legal action, or press <b>H</b>.</p>
+                <p>Hover over a continuation to delete its branch; keyboard focus also reveals the action. Pending deletions are crossed out and can be restored. Collapsing the list keeps them pending. <b>Restore</b> and <b>Delete</b> appear below the panel. Previous, Next, Submit, and opening Export ask for confirmation before permanently deleting pending branches and their descendants. Submitting a pending branch preserves it. Loading another game replaces the current game and clears pending edits.</p>
                 <h4>Action Buttons</h4>
                 <p>The buttons at the bottom provide these actions:</p>
                 <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-focus"></use></svg> <b>Focus</b> — Cycle through the game’s focus boards.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-focus"></use></svg> <b>Focus</b> — Cycle through the game’s focus boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
                 </ul>
                 <h4>HUD</h4>
                 <p>The header at the top shows the game’s status. Expand it to read or edit comments.</p>
@@ -466,7 +439,7 @@
             </div>
             <div id="interfaceGuideMobile" hidden>
                 <p>Welcome to 5D Chess Engine! This guide introduces the controls for exploring and editing games.</p>
-                <p>Tap <b>Close</b> to close this window. To open it again, tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg> three-dot menu in the header and choose <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b>.</p>
+                <p>Tap <b>Close</b> to close this window. To open it again, tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-more-2-fill"></use></svg> three-dot menu in the header and choose <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-info"></use></svg> <b>Info</b>.</p>
                 <h4>Viewport</h4>
                 <p>The main area displays the chessboards.</p>
                 <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
@@ -479,28 +452,29 @@
                 <h4>Control Panel</h4>
                 <p>Use the controls at the bottom to navigate the game:</p>
                 <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg> <b>Previous</b> — Go to the previous action.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0; transform: scaleX(-1);" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-previous"></use></svg> <b>Next</b> — Follow the selected continuation.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-undo"></use></svg> <b>Undo</b> — Undo a move.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-redo"></use></svg> <b>Redo</b> — Redo a move.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-submit"></use></svg> <b>Submit</b> — Submit your moves to complete the turn.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-previous"></use></svg> <b>Previous</b> — Go to the previous action.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0; transform: scaleX(-1);" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-previous"></use></svg> <b>Next</b> — Follow the selected continuation.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-undo"></use></svg> <b>Undo</b> — Undo a move.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-redo"></use></svg> <b>Redo</b> — Redo a move.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-submit"></use></svg> <b>Submit</b> — Submit your moves to complete the turn.</li>
                 </ul>
                 <p>Tap <b>Choose</b> to select a continuation before using <b>Next</b>. Submitted turns are added to the list. Tap <b>Hint</b> in the continuations panel to add a suggested legal action.</p>
-                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-close-line"></use></svg> to close the panel.</p>
+                <p>Tap <b>Edit</b> beside <b>Select Next Action</b> to show branch Delete/Restore icons. Tap <b>Done</b> to return to selection when no deletions are pending. Pending deletions replace Done with <b>Restore</b> and <b>Delete</b> in the fixed header; either action returns to normal selection. Closing the panel keeps deletions pending. Navigation, Submit, and Export still ask for confirmation before committing pending deletions.</p>
+                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-close-line"></use></svg> to close the panel.</p>
                 <h4>Action Buttons</h4>
-                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-focus"></use></svg> <b>Focus</b> at the lower-right of the board area to cycle through the game’s focus boards.</p>
-                <p>Open the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-more-2-fill"></use></svg> three-dot menu in the header for these actions:</p>
+                <p>Tap <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-focus"></use></svg> <b>Focus</b> at the lower-right of the board area to cycle through the game’s focus boards.</p>
+                <p>Open the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-more-2-fill"></use></svg> three-dot menu in the header for these actions:</p>
                 <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format. Use <b>Options</b> to adjust the export, then <b>Copy</b> or <b>Download</b>.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
-                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-flip"></use></svg> <b>Flip</b> — Switch between White’s and Black’s perspectives. To keep files running left to right, enable <b>Do not reverse files when flipped</b> under <b>Settings → Interface</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-screenshot"></use></svg> <b>Screenshot</b> — Download an image of the boards.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-import"></use></svg> <b>Import</b> — Open a game in Branched 5DPGN format.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-export"></use></svg> <b>Export</b> — Save the current game in Branched 5DPGN format. Use <b>Options</b> to adjust the export, then <b>Copy</b> or <b>Download</b>.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-info"></use></svg> <b>Info</b> — Open this guide.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-edit"></use></svg> <b>Edit</b> — Under development.</li>
+                    <li><svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-settings"></use></svg> <b>Settings</b> — Adjust the application’s preferences.</li>
                 </ul>
                 <h4>HUD</h4>
-                <p>The header at the top shows the game’s status. Tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-price-tag-3-line"></use></svg> tag icon to view game details, or the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="#icon-comment-empty"></use></svg> comment icon to read or edit comments.</p>
+                <p>The header at the top shows the game’s status. Tap the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-price-tag-3-line"></use></svg> tag icon to view game details, or the <svg style="width: 20px; height: 20px; vertical-align: middle; flex-shrink: 0;" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><use href="./icons/remix.svg#icon-comment-empty"></use></svg> comment icon to read or edit comments.</p>
                 <p>Tap the comment area to edit it, then choose <b>Update Comment</b> to save or <b>Discard Changes</b> to cancel. To delete a comment, clear its text and tap <b>Delete Comment</b>.</p>
                 <p>A glowing red indicator means phantom checks are present. Tap it to show or hide phantom boards.</p>
             </div>
