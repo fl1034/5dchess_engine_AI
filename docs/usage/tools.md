@@ -21,6 +21,12 @@ turn `16b` is submitted. A count equal to its maximum is the cap sentinel;
 for example, `max=10001` and a result of `10001` means 10,000 or more
 actions.
 
+Checkmate and stalemate are distinguished by simulating a pass only on active
+boards at the present. Inactive boards and boards ahead of the present are not
+advanced for this check. PGN check symbols use the same rule from the opponent's
+perspective after each move; during an unfinished action, the opponent's present
+is the turn following the apparent present if that still belongs to the mover.
+
 ## Supporting utilities
 
 Convert a 5DUCI position command to full 5DPGN:

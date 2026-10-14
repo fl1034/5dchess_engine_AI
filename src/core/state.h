@@ -89,11 +89,10 @@ public:
     bool submit();
     
     /*
-     phantom: state used for deciding whether the current is a checkmate or stalemate
+     Pass on active boards at the stored present to distinguish checkmate
+     from stalemate. The returned state retains its stored present/player.
      */
     state phantom() const;
-    // Repeat endpoint boards of this color on the following turn.
-    state phantom(bool endpoint_color) const;
     // Equivalent to phantom().find_checks(!get_present().second).first(),
     // tested for presence, without cloning the multiverse. Includes physical checks.
     bool has_phantom_check() const;
@@ -154,8 +153,6 @@ public:
     // Generators borrow this state; moving, swapping, or modifying it invalidates them.
     generator<vec4> gen_piece_move(vec4 p) const &;
     generator<vec4> gen_piece_move(vec4 p) const && = delete;
-    generator<vec4> gen_piece_move(vec4 p, bool c) const &;
-    generator<vec4> gen_piece_move(vec4 p, bool c) const && = delete;
     std::string to_string() const;
     std::string show_fen() const;
     std::string pretty_l(int l) const;

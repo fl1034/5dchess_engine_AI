@@ -7,6 +7,7 @@
 #include <iterator>
 #include <sstream>
 #include "state.h"
+#include "check_position.h"
 
 full_move::full_move(std::string str): from{0,0,0,0}, to{0,0,0,0}
 {
@@ -351,8 +352,8 @@ std::string full_move::pgn(const state &s, piece_t pt, pgn_options options) cons
         if (applied)
         {
             const bool moving_player = s.get_present().second;
-            const state check_view = after.phantom(!moving_player);
-            if (check_view.find_checks(moving_player).first()) check_symbol = '+';
+            const auto check_view = check_position::for_check_symbols(after);
+            if (check_view.first_check(moving_player)) check_symbol = '+';
         }
     }
     return pgn_impl(s, pt, options, check_symbol, false);
@@ -647,8 +648,8 @@ std::pair<std::string, std::optional<mate_type>> action::pgn_advanced(
             {
                 return {"---INVALID ACTION---", std::nullopt};
             }
-            const state check_view = final_state.phantom(!moving_player);
-            if(check_view.find_checks(moving_player).first())
+            const auto check_view = check_position::for_check_symbols(final_state);
+            if(check_view.first_check(moving_player))
             {
                 check_symbols[i] = '+';
             }

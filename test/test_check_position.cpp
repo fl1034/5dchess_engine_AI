@@ -276,11 +276,88 @@ void test_phantom_cases()
     }
 }
 
+void test_present_boundaries()
+{
+    for (bool mover : {false,true}) {
+        multiverse m(timeline_layout::odd(), {
+            {0,2,mover,empty}, {1,3,mover,empty}, {2,2,mover,empty}
+        });
+        const state s(m);
+        assert((s.get_active_range() == std::pair{0,1}));
+        compare_phantom(s);
+        const auto view = check_position::for_phantom(s);
+        for (int l : {0,1,2}) {
+            const auto after = next_turn(s.get_timeline_end(l));
+            assert(static_cast<bool>(view.get_board_ptr(l,after.first,after.second))
+                   == (l == 0));
+        }
+    }
+}
+
+void compare_check_symbols(const state &s)
+{
+    const auto before = s.get_boards();
+    const auto stored = s.get_present();
+    auto opponent_present = s.apparent_present();
+    if (opponent_present.second == stored.second)
+        opponent_present = next_turn(opponent_present);
+    assert(opponent_present.second != stored.second);
+    multiverse expected(timeline_layout::odd(), before);
+    const auto [lo, hi] = s.get_active_range();
+    for (int l = lo; l <= hi; ++l) {
+        if (s.get_timeline_end(l) == opponent_present)
+            expected.append_board(l, s.get_board(l,
+                opponent_present.first, opponent_present.second));
+    }
+    const auto view = check_position::for_check_symbols(s);
+    check_position_tests::compare(view,state(expected));
+    for (int l = s.get_lines_range().first; l <= s.get_lines_range().second; ++l) {
+        const auto end = expected.get_timeline_end(l);
+        for (auto at = s.get_timeline_start(l); at <= end; at = next_turn(at)) {
+            const auto *b = view.get_board_ptr(l,at.first,at.second);
+            assert(b && b->get_fen<true>() == expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
+        }
+        const auto after = next_turn(end);
+        assert(!view.get_board_ptr(l,after.first,after.second));
+    }
+    assert(s.get_boards() == before && s.get_present() == stored);
+}
+
+void test_check_symbol_contexts()
+{
+    for (bool mover : {false,true}) {
+        const std::string fen = mover ? "8/8/8/8/8/8/8/r7" : "8/8/8/8/8/8/8/R7";
+        multiverse m(timeline_layout::odd(), {
+            {0,2,mover,fen}, {1,3,mover,fen}, {2,2,mover,fen}
+        });
+        state partial(m);
+        // Move inactive and future boards before the mandatory present board.
+        for (int l : {2,1,0}) {
+            const int t = partial.get_timeline_end(l).first;
+            assert(partial.apply_move<true>(full_move(vec4(0,0,t,l),vec4(0,1,t,l))));
+            compare_check_symbols(partial);
+        }
+        assert(partial.submit());
+        compare_phantom(partial);
+
+        // A historical branch moves the apparent present behind the stored one.
+        std::vector<boards_info_t> history;
+        for (auto at = turn_t{1,mover}; at <= turn_t{3,mover}; at = next_turn(at))
+            history.emplace_back(0,at.first,at.second,fen);
+        state branching(multiverse(timeline_layout::odd(), history));
+        assert(branching.apply_move<true>(full_move(vec4(0,0,3,0),vec4(0,1,1,0))));
+        assert(branching.apparent_present() == next_turn(turn_t{1,mover}));
+        compare_check_symbols(branching);
+    }
+}
+
 }
 
 int run()
 {
     test_phantom_cases();
+    test_present_boundaries();
+    test_check_symbol_contexts();
     return 0;
 }
 } /* namespace phantom_checks_tests */

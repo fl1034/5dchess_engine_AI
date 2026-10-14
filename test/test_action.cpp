@@ -3,6 +3,7 @@
 #include "core/action.h"
 #include "core/pgnparser.h"
 #include "core/state.h"
+#include "core/check_position.h"
 #include <stdexcept>
 #include <string>
 #include "core/semimove.h"
@@ -59,8 +60,8 @@ int run()
     assert(quiet.move_type(standard) == special_move_t::NONE);
     state after_quiet = standard;
     assert(after_quiet.apply_move(quiet));
-    const state quiet_check_view = after_quiet.phantom(!standard.get_present().second);
-    assert(!quiet_check_view.find_checks(standard.get_present().second).first());
+    const auto quiet_check_view = check_position::for_check_symbols(after_quiet);
+    assert(!quiet_check_view.first_check(standard.get_present().second));
 
     state capture_position = standard;
     assert(capture_position.apply_move(full_move("(0T1)e2e4")));
@@ -108,14 +109,43 @@ int run()
     const full_move checking_move("(0T1)a1a4");
     state after_check = checking_position;
     assert(after_check.apply_move(checking_move));
-    const state checking_view = after_check.phantom(!checking_position.get_present().second);
-    assert(checking_view.find_checks(checking_position.get_present().second).first());
+    const auto checking_view = check_position::for_check_symbols(after_check);
+    assert(checking_view.first_check(checking_position.get_present().second));
     assert(checking_move.pgn(checking_position, QUEEN_W, pgn_options::SHOW_MATE)
                .find('+') != std::string::npos);
     const action checking_action = action::from_vector(
         {ext_move(checking_move, checking_position)}, checking_position);
     assert(checking_action.pgn(checking_position, pgn_options::SHOW_MATE)
                .find('+') != std::string::npos);
+
+    // Attacks created on inactive or future boards are not checks at the
+    // opponent's present, even while a multi-move action is unfinished.
+    for (bool mover : {false,true}) {
+        const std::string fen = mover ? "r2k/4/4/3K" : "3k/4/4/R2K";
+        const state multi(multiverse(timeline_layout::odd(), {
+            {0,1,mover,fen}, {1,3,mover,fen}, {2,1,mover,fen}
+        },4,4));
+        for (int l : {1,2}) {
+            const int t = multi.get_timeline_end(l).first;
+            const int from_y = mover ? 3 : 0, to_y = mover ? 0 : 3;
+            const full_move optional_check(vec4(0,from_y,t,l),vec4(0,to_y,t,l));
+            assert(optional_check.pgn(multi, QUEEN_W, pgn_options::SHOW_MATE)
+                       .find('+') == std::string::npos);
+            const full_move mandatory_quiet(vec4(0,from_y,1,0),
+                vec4(0,mover ? 2 : 1,1,0));
+            const action turn = action::from_vector({
+                ext_move(optional_check,multi), ext_move(mandatory_quiet,multi)
+            },multi);
+            const auto notation = turn.pgn_advanced(multi,pgn_options::SHOW_MATE);
+            assert(notation.first != "---INVALID ACTION---");
+            assert(notation.first.find('+') == std::string::npos);
+        }
+        // A move on the active present board still receives a check symbol.
+        const full_move present_check(vec4(0,mover ? 3 : 0,1,0),
+            vec4(0,mover ? 0 : 3,1,0));
+        assert(present_check.pgn(multi,QUEEN_W,pgn_options::SHOW_MATE)
+                   .find('+') != std::string::npos);
+    }
 
     assert(e4.pgn(standard, pgn_options::SHOW_OUTCOME)
         == e4.pgn(standard, pgn_options::SHOW_NOTHING));

@@ -28,6 +28,8 @@ class check_position {
     int first_line;
     std::vector<line_view> lines;
 
+    static check_position for_present(const state &s, turn_t present);
+
     template<bool C, check_emitter Emit>
     bool scan_physical(vec4 p0, const board &source,
                        bitboard_t friendly, Emit &emit) const;
@@ -60,10 +62,16 @@ public:
     check_position(const state &s, int l_min, int l_max);
     check_position(const state &&, int, int) = delete;
 
-    /* View s.phantom() without constructing it. For endpoints matching s's
-       stored player, reuse the endpoint board on the following turn. */
+    /* View s.phantom() without constructing it. Repeat only active endpoints
+       equal to s's stored present on the following turn. */
     static check_position for_phantom(const state &s);
     static check_position for_phantom(const state &&) = delete;
+
+    /* Check symbols after a move, before submission. Use the apparent present,
+       advanced one turn if it still belongs to the stored mover, and repeat
+       only active endpoints equal to that opponent present. */
+    static check_position for_check_symbols(const state &s);
+    static check_position for_check_symbols(const state &&) = delete;
 
     /* Prepare for candidate checks. Repeat opposite-color endpoint boards on
        the moving player's turn and reserve s.new_line() for a possible branch.

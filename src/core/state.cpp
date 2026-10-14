@@ -429,18 +429,14 @@ bool state::has_phantom_check() const
 
 state state::phantom() const
 {
-    return phantom(player);
-}
-
-state state::phantom(bool endpoint_color) const
-{
-    const auto [l_min, l_max] = get_lines_range();
+    const auto [l_min, l_max] = m.get_active_range();
     state s = *this;
     for(int l = l_min; l <= l_max; l++)
     {
-        auto [t,c] = get_timeline_end(l);
-        if(c == endpoint_color)
+        auto turn = get_timeline_end(l);
+        if(turn == get_present())
         {
+            auto [t, c] = turn;
             s.m.append_board(l, m.get_board(l, t, c));
         }
     }
@@ -784,11 +780,6 @@ std::vector<std::tuple<int, int, bool, std::string>> state::get_boards() const
 generator<vec4> state::gen_piece_move(vec4 p) const &
 {
     return m.gen_piece_move(p, player);
-}
-
-generator<vec4> state::gen_piece_move(vec4 p, bool c) const &
-{
-    return m.gen_piece_move(p, c);
 }
 
 std::string state::to_string() const

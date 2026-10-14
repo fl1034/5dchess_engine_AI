@@ -404,14 +404,13 @@ void test_states()
     assert(hash_board(*edited) != source_hash);
     assert(hash_board(*position.get_board(0, 2, false)) == source_hash);
 
-    // Phantom states retain their stored present. Advancing both colors
-    // changes its time while retaining the same player and board contents.
-    const state phantom = queen.phantom(false).phantom(true);
-    multiverse phantom_universe(timeline_layout::odd(), phantom.get_boards());
+    // Phantom states retain their stored present despite advancing the boards.
+    const state phantom = queen.phantom();
+    multiverse phantom_universe = universe;
+    phantom_universe.append_board(0, queen.get_board(0, 1, false));
     const state apparent(phantom_universe, promotion_options::QUEEN);
     assert(phantom.show_fen() == apparent.show_fen());
-    assert(phantom.get_present().second == apparent.get_present().second);
-    assert(phantom.get_present().first != apparent.get_present().first);
+    assert(phantom.get_present() != apparent.get_present());
     assert(hash_state(phantom) != hash_state(apparent));
 }
 } /* anonymous namespace */
@@ -545,6 +544,29 @@ int run()
 }
 } /* namespace preview_tests */
 
+namespace mate_tests
+{
+int run()
+{
+    const game stalemate = game::from_pgn(R"(
+[Board "Custom"]
+[Mode "5D"]
+[k7/pn6/K7/8/8/8/6PB/8:0:1:w]
+{
+Expected result: Stalemate
+Thanks @narik for providing this position
+}
+1. Bg1 / Kb8
+2. Bd4 / Kc8
+3. Bc3 / (0T3)Nb7>>(0T1)c7~
+4. (0T4)Bc3>>(0T1)c6~ / (1T1)Ka8>>(0T1)b8~
+5. (-2T2)Bxa7 (-1T2)Ka6>>(0T3)b5~ (1T2)Bc6>>(0T1)c6~
+)");
+    assert(stalemate.get_current_state().get_mate_type() == mate_type::STALEMATE);
+    return 0;
+}
+} /* namespace mate_tests */
+
 int main()
 {
     std::cerr << "Running multiverse tests\n";
@@ -558,6 +580,9 @@ int main()
         return result;
     std::cerr << "Running preview tests\n";
     if(const int result = preview_tests::run(); result != 0)
+        return result;
+    std::cerr << "Running mate tests\n";
+    if(const int result = mate_tests::run(); result != 0)
         return result;
     return 0;
 }

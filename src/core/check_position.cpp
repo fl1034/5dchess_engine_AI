@@ -21,18 +21,29 @@ check_position::check_position(const state &s, int l_min, int l_max)
     }
 }
 
-check_position check_position::for_phantom(const state &s)
+check_position check_position::for_present(const state &s, turn_t present)
 {
     check_position result(s);
-    const bool player = s.get_present().second;
-    for (int i = 0; i < static_cast<int>(result.lines.size()); ++i) {
-        const auto [t, c] = result.lines[i].end;
-        if (c == player) {
-            const int l = result.first_line + i;
+    const auto [lo, hi] = s.get_active_range();
+    for (int l = lo; l <= hi; ++l) {
+        const auto [t, c] = s.get_timeline_end(l);
+        if (turn_t{t,c} == present) {
             result.add_board(l, next_turn({t,c}), *s.get_board_ptr(l,t,c));
         }
     }
     return result;
+}
+
+check_position check_position::for_phantom(const state &s)
+{
+    return for_present(s, s.get_present());
+}
+
+check_position check_position::for_check_symbols(const state &s)
+{
+    auto present = s.apparent_present();
+    if (present.second == s.get_present().second) present = next_turn(present);
+    return for_present(s, present);
 }
 
 check_position check_position::for_move_candidates(const state &s)

@@ -18,7 +18,7 @@ position FEN, expected move count, and passing result.
 
 - `multiverse::gen_physical_moves<C>(p)`: destination squares on the source board.
 - `multiverse::gen_superphysical_moves<C>(p)` and `gen_moves<C>(p)`: lazy destinations grouped by board; the latter includes physical moves. `C` is `false` for White and `true` for Black.
-- `multiverse::gen_piece_move(p, color)`: individual destination coordinates. `state::gen_piece_move(p)` uses the current player; its color overload selects explicitly. `state::get_movable_pieces()` lists sources on playable timelines.
+- `multiverse::gen_piece_move(p, color)`: individual destination coordinates. `state::gen_piece_move(p)` uses the current player. `state::get_movable_pieces()` lists sources on playable timelines.
 - `state::find_checks(attacker)`: moves capturing enemy royals. `check_position::checks()` and `first_check()` scan for all checks or one check without general move generation.
 
 Piece destinations alone do not establish turn legality. Lazy generators borrow

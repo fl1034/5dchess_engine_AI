@@ -346,9 +346,17 @@ void compare(const state &position, coverage &seen)
             const ext_move prepared(cached->move, position);
             assert(after.apply_move<true>(prepared));
             const bool checking = evaluator.is_check(axis, coordinate);
-            const state check_view = after.phantom(!position.get_present().second);
+            // Candidate features scan attacks beyond the active present too.
+            check_position check_view(after);
+            const auto [lo, hi] = after.get_lines_range();
+            for (int l = lo; l <= hi; ++l) {
+                const auto at = after.get_timeline_end(l);
+                if (at.second != position.get_present().second)
+                    check_view.add_board(l, next_turn(at),
+                        *after.get_board_ptr(l,at.first,at.second));
+            }
             assert(checking == static_cast<bool>(
-                check_view.find_checks(position.get_present().second).first()));
+                check_view.first_check(position.get_present().second)));
             assert(checking == (evaluator.is_physical_check(axis, coordinate)
                                 || evaluator.is_sp_check(axis, coordinate)));
             if (evaluator.is_historical_check(axis, coordinate)) assert(checking);
