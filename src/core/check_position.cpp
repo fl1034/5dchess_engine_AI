@@ -150,6 +150,8 @@ template<bool C, check_emitter Emit>
 bool check_position::scan_physical(vec4 p0, const board &source,
                                    bitboard_t friendly, Emit &emit) const
 {
+    // Physical captures of enemy royals, including pawn and brawn diagonals.
+    // En passant can uncover a check; scan the resulting board for that attack.
     for (int dst : marked_pos(source.royal() & source.hostile<C>())) {
         for (int src : marked_pos(source.attacks_to(dst) & friendly)) {
             if (emit(full_move(vec4(src,p0),vec4(dst,p0)))) return true;
@@ -170,13 +172,16 @@ bool check_position::scan_pure_sliders(vec4 p0, const board &source,
             for (int xy : marked_pos(hits)) {
                 if (emit(full_move(vec4(xy,p0),vec4(xy,q)))) return true;
             }
+            // A capture or friendly blocker ends this ray for its source square.
             pieces &= ~b->occupied();
         }
         return false;
     };
+    // Rook-like captures along time or timeline axes, without spatial movement.
     for (vec4 direction : orthogonal_tl_directions) {
         if (scan_direction(direction,source.lrook() & friendly)) return true;
     }
+    // Bishop-like captures along time/timeline diagonals, at the same square.
     for (vec4 direction : diagonal_tl_directions) {
         if (scan_direction(direction,source.lbishop() & friendly)) return true;
     }
@@ -193,6 +198,7 @@ bool check_position::scan_compound_sliders(vec4 p0, const board &source,
         std::array<bitboard_t,8> occupied_boards{}, royal_boards{};
         int count = 0;
         bitboard_t any_royal = 0;
+        // Collect blockers and enemy royals on each board crossed by the ray.
         for (vec4 q = p0+direction; count < 7; q = q+direction) {
             const board *b = get_board_ptr(q.l(),q.t(),C);
             if (!b) break;
@@ -202,6 +208,7 @@ bool check_position::scan_compound_sliders(vec4 p0, const board &source,
             any_royal |= royal_boards[count];
         }
         if (!any_royal) return false;
+        // Project the spatial ray across those boards to find unobstructed captures.
         auto project = [&]<bool Diagonal>(bitboard_t pieces) {
             constexpr auto mask_fn = Diagonal ? bishop_copy_mask : rook_copy_mask;
             for (int src : marked_pos(pieces)) {
@@ -227,10 +234,12 @@ bool check_position::scan_compound_sliders(vec4 p0, const board &source,
         return project.template operator()<false>(orthogonal_pieces)
             || project.template operator()<true>(diagonal_pieces);
     };
+    // One non-spatial axis plus one spatial axis (bishop) or two (unicorn).
     for (vec4 direction : orthogonal_tl_directions) {
         if (scan_direction(direction,source.lbishop() & friendly,
                            source.lunicorn() & friendly)) return true;
     }
+    // Two non-spatial axes plus one spatial axis (unicorn) or two (dragon).
     for (vec4 direction : diagonal_tl_directions) {
         if (scan_direction(direction,source.lunicorn() & friendly,
                            source.ldragon() & friendly)) return true;
@@ -265,30 +274,35 @@ bool check_position::scan_jumps(vec4 p0, const board &source,
         return false;
     };
     const auto same_xy = [](int src) { return pmask(src); };
+    // King and knight captures combining spatial movement with time or timeline.
     for (vec4 direction : orthogonal_tl_directions) {
         if (jump(direction,source.lking() & friendly,king_jump_attack)) return true;
         if (jump(direction,source.lknight() & friendly,knight_jump1_attack)) return true;
         if (jump(direction*2,source.lknight() & friendly,knight_jump2_attack)) return true;
     }
+    // King captures along time/timeline diagonals, with optional spatial steps.
     for (vec4 direction : diagonal_tl_directions) {
         if (jump(direction,source.lking() & friendly,king_jump_attack)) return true;
     }
+    // Knight captures using only time and timeline movement.
     for (vec4 direction : purely_superphysical_knight_directions) {
         if (jump(direction,source.lknight() & friendly,same_xy)) return true;
     }
+    // Pawn and brawn captures: forward timeline plus past or future time.
     constexpr int forward_l = C ? 1 : -1;
     for (int dt : {-1,1}) {
         if (jump(vec4(0,0,dt,forward_l),source.lpawn() & friendly,same_xy)) return true;
     }
-    // Match multiverse::gen_moves_impl: additional L-direction brawn
-    // captures are enabled only in its white pawn/brawn branch.
-    if constexpr (!C) {
-        if (jump(vec4(0,0,0,forward_l),source.lrawn() & friendly,[](int src) {
-            const bitboard_t source_mask = pmask(src);
-            return shift_north(source_mask) |
-                shift_west(source_mask) | shift_east(source_mask);
-        })) return true;
-    }
+    const auto forward_rank = [](int src) {
+        if constexpr (C) return shift_south(pmask(src));
+        else return shift_north(pmask(src));
+    };
+    // Additional brawn captures: forward timeline plus forward rank or either file.
+    if (jump(vec4(0,0,0,forward_l),source.lrawn() & friendly,[&](int src) {
+        return forward_rank(src) | shift_west(pmask(src)) | shift_east(pmask(src));
+    })) return true;
+    // Additional brawn capture: forward rank plus past time on the same timeline.
+    if (jump(vec4(0,0,-1,0),source.lrawn() & friendly,forward_rank)) return true;
     return false;
 }
 

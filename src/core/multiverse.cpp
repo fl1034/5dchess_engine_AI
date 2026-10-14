@@ -617,7 +617,7 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         // normal move and capture
 		a = (patt & hostile) | (shift_north(z) & empty);
         // en passant
-        bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->pawn();
+        bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->lpawn();
         bitboard_t s = shift_north(shift_north(r)) & empty;
         if(s)
         {
@@ -625,8 +625,8 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
             if(inbound(q, C))
             {
                 const board *b1_ptr = get_board_ptr(q.l(), q.t(), C);
-                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->pawn();
-                a |= shift_south(j);
+                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->lpawn();
+                a |= shift_south(j) & empty;
             }
         }
         // additional move for unmoved pawns
@@ -641,7 +641,7 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         // normal move and capture
         a = (patt & hostile) | (shift_south(z) & empty);
         // en passant
-        bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->pawn();
+        bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->lpawn();
         bitboard_t s = shift_south(shift_south(r)) & empty;
         if(s)
         {
@@ -649,8 +649,8 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
             if(inbound(q, C))
             {
                 const board *b1_ptr = get_board_ptr(q.l(), q.t(), C);
-                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->pawn();
-                a |= shift_north(j);
+                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->lpawn();
+                a |= shift_north(j) & empty;
             }
         }
         // additional move for unmoved pawns
@@ -888,7 +888,6 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
                         bitboard_t bc = z & ~b1_ptr->occupied();
                         if(bc)
                         {
-                            //result[r.tl()] |= bc;
                             co_yield std::make_pair(r.tl(), bc);
                         }
                     }
@@ -907,18 +906,15 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
         }
         if constexpr(P == BRAWN_W || P == BRAWN_UW)
         {
-            static std::vector<vec4> brawn_w_cap_tl_delta = {vec4(1, 0, 0, -1), vec4(-1, 0, 0, -1), vec4(0, 1, 0, -1), vec4(0, 1, -1, 0)};
-            for(vec4 d : brawn_w_cap_tl_delta)
+            // Forward rank and past time, on the same timeline.
+            vec4 q = p + vec4(0,1,-1,0);
+            if(inbound(q, C))
             {
-                vec4 s = p + d;
-                if(inbound(s, C))
+                const board *b_ptr = get_board_ptr(q.l(), q.t(), C);
+                bitboard_t bb = pmask(q.xy()) & b_ptr->hostile<C>();
+                if(bb)
                 {
-                    const board *b2_ptr = get_board_ptr(s.l(), s.t(), C);
-                    bitboard_t bd = shift_north(z) & ~b2_ptr->occupied();
-                    if(bd)
-                    {
-                        co_yield std::make_pair(s.tl(), bd);
-                    }
+                    co_yield std::make_pair(q.tl(), bb);
                 }
             }
         }
@@ -943,7 +939,6 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
         }
         // normal pawn movement -- bitboard saved in the very end of the if block
         vec4 q = p + vec4(0,0,0,1);
-//        std::cout << p << " " << q << inbound(q,C) << "\n";
         if(inbound(q, C))
         {
             const board *b_ptr = get_board_ptr(q.l(), q.t(), C);
@@ -951,7 +946,7 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
             if(bb)
             {
                 // unmoved pawn movement
-                if constexpr(P == PAWN_UW || P == BRAWN_UW)
+                if constexpr(P == PAWN_UB || P == BRAWN_UB)
                 {
                     vec4 r = q + vec4(0,0,0,1);
                     if(inbound(r,C))
@@ -966,7 +961,7 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
                 }
             }
             // brawn capture
-            if constexpr(P == BRAWN_W || P == BRAWN_UW)
+            if constexpr(P == BRAWN_B || P == BRAWN_UB)
             {
                 bitboard_t mask = shift_south(z) | shift_west(z) | shift_east(z);
                 bb |= mask & b_ptr->hostile<C>();
@@ -976,20 +971,17 @@ movegen_t multiverse::gen_moves_impl(vec4 p) const &
                 co_yield std::make_pair(q.tl(), bb);
             }
         }
-        if constexpr(P == BRAWN_W || P == BRAWN_UW)
+        if constexpr(P == BRAWN_B || P == BRAWN_UB)
         {
-            static std::vector<vec4> brawn_w_cap_tl_delta = {vec4(1, 0, 0, 1), vec4(-1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, -1, -1, 0)};
-            for(vec4 d : brawn_w_cap_tl_delta)
+            // Forward rank and past time, on the same timeline.
+            vec4 q = p + vec4(0,-1,-1,0);
+            if(inbound(q, C))
             {
-                vec4 s = p + d;
-                if(inbound(s, C))
+                const board *b_ptr = get_board_ptr(q.l(), q.t(), C);
+                bitboard_t bb = pmask(q.xy()) & b_ptr->hostile<C>();
+                if(bb)
                 {
-                    const board *b2_ptr = get_board_ptr(s.l(), s.t(), C);
-                    bitboard_t bd = shift_north(z) & ~b2_ptr->occupied();
-                    if(bd)
-                    {
-                        co_yield std::make_pair(s.tl(), bd);
-                    }
+                    co_yield std::make_pair(q.tl(), bb);
                 }
             }
         }
