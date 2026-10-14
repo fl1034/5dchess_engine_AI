@@ -1,3 +1,4 @@
+import { PendingBranches } from './branch-deletion.js';
 import createModule from '../wasm/engine.js';
 import { parse_FEN } from './parse.js';
 import { hashAction, hashActionList } from './hash.js';
@@ -17,6 +18,53 @@ createModule().then((engine) => {
     let nodeMoveStatus = null;
     let previewMove = null;
     let previewId = null;
+    const pendingBranches = new PendingBranches();
+    let positionId = 0;
+    let confirmationId = 0;
+    let confirmation = null;
+
+    function children() {
+        let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
+        if (self.settings.useShortMoveNotation) flags |= engine.SHOW_SHORT;
+        return self.game.get_child_actions(flags);
+    }
+
+    function commitBranches(plan) {
+        // plan() has already validated and deduplicated all direct children.
+        for (const child of plan) {
+            if (!self.game.delete_child(child.action)) throw new Error('Could not delete the continuation.');
+        }
+        pendingBranches.clear();
+        previewMove = previewId = null;
+        self.game.discard_preview();
+        prepareHint(true);
+        updateSelect(true);
+        updateButtons();
+        updateHudStatus();
+        viewGame();
+    }
+
+    function guardTransition(data) {
+        if (data.positionId !== undefined && data.positionId !== positionId) return false;
+        let submitted = null;
+        if (data.type === 'next' && (!data.action || pendingBranches.has(data.action)
+            || !self.game.has_child(data.action))) return false;
+        if (data.type === 'prev' && !self.game.has_parent()) return false;
+        if (data.type === 'submit') {
+            submitted = self.game.get_submit_action();
+            if (!submitted || (!self.settings.allowSubmitWithChecks && self.game.currently_check())) return false;
+        }
+        if (!pendingBranches.keys.size) return true;
+        const plan = pendingBranches.plan(children(), submitted);
+        if (plan.length && !data.confirmed) {
+            confirmation = { id: ++confirmationId, data };
+            self.postMessage({ type: 'confirm_deletions', id: confirmation.id,
+                operation: data.type, actions: plan.map(child => child.pgn) });
+            return false;
+        }
+        if (pendingBranches.keys.size) commitBranches(plan);
+        return true;
+    }
 
     function prepareHint(preserveStatus = false) {
         pendingHint = self.game ? self.game.suggest_action() : null;
@@ -50,11 +98,17 @@ createModule().then((engine) => {
         let g0 = self.engine.from_pgn(pgn);
         if (!g0.success) {
             self.postMessage({ type: 'alert', message: g0.message });
+            return false;
         } else {
             if (self.game) {
                 self.game.delete();
             }
             self.game = g0.game;
+            pendingBranches.clear();
+            previewMove = previewId = null;
+            positionId++;
+            confirmation = null;
+            return true;
         }
     }
 
@@ -197,27 +251,30 @@ createModule().then((engine) => {
         return self.game.gen_move_if_playable(pos);
     }
 
-    function updateSelect(preserveSelection = false) {
-        let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
-        if (self.settings.useShortMoveNotation) flags |= engine.SHOW_SHORT;
-        let children = self.game.get_child_actions(flags);
-        self.has_children = children.length > 0;
+    function updateSelect(preserveSelection = false, hintAdded = false) {
+        const options = children().map(child => ({ ...child, deleted: pendingBranches.has(child.action) }));
+        self.has_children = options.some(child => !child.deleted);
+        self.postMessage({ type: 'pending_deletions', count: pendingBranches.keys.size });
         let action = readMemorizedAction();
         if (action) {
-            let found = children.findIndex(child => {
+            let found = options.findIndex(child => {
                 return hashAction(child.action) === hashAction(action);
             });
             self.postMessage({
                 type: 'update_select',
                 preserveSelection,
-                options: children,
+                hintAdded,
+                options,
+                positionId,
                 selectedIndex: found
             });
         } else {
             self.postMessage({
                 type: 'update_select',
                 preserveSelection,
-                options: children
+                hintAdded,
+                options,
+                positionId
             });
         }
     }
@@ -283,13 +340,40 @@ createModule().then((engine) => {
     }
 
     self.onmessage = (e) => {
-        const data = e.data;
-        if (['load', 'apply_move', 'undo', 'redo', 'submit', 'prev', 'next', 'hint'].includes(data.type)) {
+        let data = e.data;
+        if (data.type === 'cancel_deletions') {
+            if (confirmation?.id === data.id) confirmation = null;
+            return;
+        }
+        if (data.type === 'accept_deletions') {
+            if (!confirmation || confirmation.id !== data.id) return;
+            data = { ...confirmation.data, confirmed: true };
+            confirmation = null;
+        }
+        if (['prev', 'next', 'submit', 'open_export', 'export'].includes(data.type)) {
+            if (!guardTransition(data)) return;
+        }
+        if (['load', 'apply_move', 'undo', 'redo', 'submit', 'prev', 'next', 'hint',
+            'toggle_deletion', 'restore_all', 'commit_deletions'].includes(data.type)) confirmation = null;
+        if (data.type === 'toggle_deletion' || data.type === 'restore_all' || data.type === 'commit_deletions') {
+            if (data.positionId !== positionId) return;
+            if (data.type === 'toggle_deletion') pendingBranches.toggle(data.action, children());
+            else if (data.type === 'restore_all') pendingBranches.clear();
+            else commitBranches(pendingBranches.plan(children()));
+            updateSelect(true);
+            updateButtons();
+            return;
+        }
+        if (data.type === 'open_export') {
+            self.postMessage({ type: 'open_export' });
+            return;
+        }
+        if (['apply_move', 'undo', 'redo', 'submit', 'prev', 'next', 'hint'].includes(data.type)) {
             self.game?.discard_preview();
             previewMove = previewId = null;
         }
         if (data.type === 'load') {
-            loadGame(data.pgn);
+            if (!loadGame(data.pgn)) return;
             prepareHint();
             updateSelect();
             updateButtons();
@@ -317,7 +401,9 @@ createModule().then((engine) => {
             const moves = genMoveIfPlayable(data.pos);
             self.postMessage({ type: 'moves', moves: moves, requestId: data.requestId });
         } else if (data.type === 'submit') {
-            self.game.submit();
+            if (!self.game.submit()) return;
+            positionId++;
+            self.postMessage({ type: 'navigated' });
             prepareHint();
             updateSelect();
             updateMemorizedAction();
@@ -334,13 +420,17 @@ createModule().then((engine) => {
             viewGame(true);
         } else if (data.type === 'prev') {
             self.game.visit_parent();
+            positionId++;
+            self.postMessage({ type: 'navigated' });
             prepareHint();
             updateSelect();
             updateButtons();
             updateHudStatus();
             viewGame(true);
         } else if (data.type === 'next') {
-            self.game.visit_child(data.action);
+            if (!self.game.visit_child(data.action)) return;
+            positionId++;
+            self.postMessage({ type: 'navigated' });
             prepareHint();
             updateSelect();
             updateMemorizedAction();
@@ -348,9 +438,9 @@ createModule().then((engine) => {
             updateHudStatus();
             viewGame(true);
         } else if (data.type === 'hint') {
-            if (pendingHint !== null && self.game.add_child_action(pendingHint)) {
+            if (pendingHint !== null && self.game.add_child(pendingHint)) {
                 prepareHint(true);
-                updateSelect(true);
+                updateSelect(true, true);
             }
             updateButtons();
         } else if (data.type === 'update_settings') {

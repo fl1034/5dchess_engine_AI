@@ -1,6 +1,7 @@
 // main.js
 
 import { UI } from 'ui';
+import { actionKey } from './branch-deletion.js';
 import ChessBoardCanvasBase from 'draw';
 import { compactViewport, initMobileLayout } from './mobile.js';
 import { createSelection } from './selection.js';
@@ -13,6 +14,7 @@ let worker = new Worker(window.worker_path, { type: 'module' });
 // State management for move selection
 let presentC;
 let nextOptions = [];
+let positionId = 0;
 let showPhantom = true;
 let focusOnNextData = true;
 let committedData = null;
@@ -149,7 +151,7 @@ worker.onmessage = (e) => {
         UI.setHintAvailable(msg.hint);
         for(let key of ['undo', 'redo', 'prev', 'next', 'submit'])
         {
-            if(msg[key])
+            if(msg[key] && (key !== 'next' || UI.select.getSelectedIndex() >= 0))
             {
                 UI.buttons.enable(key);
             }
@@ -161,15 +163,36 @@ worker.onmessage = (e) => {
     }
     else if (msg.type === 'update_select')
     {
-        let options = msg.options.map(obj => obj.pgn);
+        positionId = msg.positionId;
+        let options = msg.options;
+        const wasEmpty = nextOptions.length === 0;
+        const previous = nextOptions[UI.select.getSelectedIndex()];
         nextOptions = msg.options.map(obj => obj.action);
-        const selectedIndex = UI.select.getSelectedIndex();
-        UI.select.setOptions(options);
-        if (msg.preserveSelection) {
-            UI.select.setSelectedIndex(selectedIndex);
-        } else if (msg.selectedIndex !== undefined) {
-            UI.select.setSelectedIndex(msg.selectedIndex);
+        let selection;
+        if (msg.preserveSelection && !(msg.hintAdded && wasEmpty)) {
+            selection = previous ? nextOptions.findIndex(action => actionKey(action) === actionKey(previous)) : -1;
+        } else if (!msg.preserveSelection && msg.selectedIndex !== undefined) {
+            selection = msg.selectedIndex;
         }
+        UI.select.setOptions(options, {
+            selection,
+            preserveFocus: Boolean(msg.preserveSelection),
+            scrollToBottom: Boolean(msg.hintAdded),
+        });
+    }
+    else if (msg.type === 'navigated') {
+        disablePhantom();
+    }
+    else if (msg.type === 'pending_deletions') {
+        UI.setPendingDeletions(msg.count);
+    }
+    else if (msg.type === 'confirm_deletions') {
+        UI.confirmDeletions(msg, accepted => worker.postMessage({
+            type: accepted ? 'accept_deletions' : 'cancel_deletions', id: msg.id
+        }));
+    }
+    else if (msg.type === 'open_export') {
+        UI.openExport();
     }
     else if (msg.type === 'update_pgn')
     {
@@ -188,18 +211,20 @@ worker.onmessage = (e) => {
     }
 }
 
+UI.select.setChangeCallback(index => index < 0 ? UI.buttons.disable('next') : UI.buttons.enable('next'));
+UI.setDeletionCallback((type, index) => worker.postMessage({ type, positionId, action: nextOptions[index] }));
+UI.setExportOpenCallback(() => worker.postMessage({ type: 'open_export', positionId }));
+
 UI.buttons.setCallbacks({
     prev: () => {
         deselect();
-        worker.postMessage({type: 'prev'});
-        disablePhantom();
+        worker.postMessage({type: 'prev', positionId});
     },
     next: () => {
         deselect();
         let index = UI.select.getSelectedIndex();
         let action = nextOptions[index];
-        worker.postMessage({type: 'next', action: action});
-        disablePhantom();
+        worker.postMessage({type: 'next', action: action, positionId});
     },
     undo: () => {
         deselect();
@@ -211,8 +236,7 @@ UI.buttons.setCallbacks({
     },
     submit: () => {
         deselect();
-        worker.postMessage({type: 'submit'});
-        disablePhantom();
+        worker.postMessage({type: 'submit', positionId});
     }
 });
 

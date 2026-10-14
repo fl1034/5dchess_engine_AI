@@ -159,7 +159,7 @@ def handle_submit():
 def suggest_action():
     print('received hint request', end='')
     act = g.suggest_action()
-    flag = act is not None and g.add_child_action(act)
+    flag = act is not None and g.add_child(act)
     global no_more_hint
     no_more_hint = not flag
     print(' ---', 'success' if flag else 'failed')

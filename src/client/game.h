@@ -55,6 +55,7 @@ public:
     bool preview_move(ext_move m);
     void discard_preview();
     bool submit();
+    std::optional<action> get_submit_action() const;
     bool currently_check() const;
     std::vector<std::pair<vec4,vec4>> get_current_checks() const;
     std::pair<int, int> get_board_size() const;
@@ -62,7 +63,10 @@ public:
     
     std::optional<action> suggest_action();
     // Insert a validated continuation without navigating or clearing draft moves.
-    bool add_child_action(action act);
+    bool add_child(action act);
+    bool has_child(const action &act) const;
+    // Remove a direct continuation without changing the current draft or history.
+    bool delete_child(const action &act);
 
     comments_t get_comments() const;
     void set_comments(const comments_t &c) const;
@@ -71,12 +75,8 @@ public:
     std::vector<std::tuple<action, std::string>> get_child_actions(
         pgn_options show_flags = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
     std::vector<std::tuple<action, std::string>> get_historical_actions() const;
-    /*
-    visit_child:
-    visit a child node (will create one if that child doesn't exist)
-    returns true if the child exists; false if a new child is created
-    */
-    bool visit_child(action act, comments_t comments = {}, std::optional<state> newstate = std::nullopt);
+    // Navigate only to an existing child; return false without mutation if absent.
+    bool visit_child(const action &act);
     
     std::string show_pgn(
         pgn_options show_flags = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION | pgn_options::SHOW_MATE,

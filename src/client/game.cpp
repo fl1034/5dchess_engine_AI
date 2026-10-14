@@ -48,10 +48,10 @@ game game::from_pgn(std::string input)
     {
         g.metadata["promotions"] = format_promotions(variant_setup.promotions);
     }
-    gnode<comments_t> *cn = nullptr;
     // parse moves
-    std::function<void(gnode<comments_t> *, const pgnparser_ast::gametree &)> dfs;
-    dfs = [&dfs, &cn](gnode<comments_t> *node, const pgnparser_ast::gametree &gt_ast) -> void {
+    std::function<gnode<comments_t> *(gnode<comments_t> *, const pgnparser_ast::gametree &)> dfs;
+    dfs = [&dfs](gnode<comments_t> *node, const pgnparser_ast::gametree &gt_ast) -> gnode<comments_t> * {
+        auto *last = node;
         if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome))
         {
             const auto &variations = std::get<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome);
@@ -109,16 +109,20 @@ game game::from_pgn(std::string input)
                 }
                 action act = action::from_vector(moves, node->get_state());
                 std::unique_ptr<gnode<comments_t>> child_node = gnode<comments_t>::create_child(node, std::move(s), std::move(act), act_ast.comments);
-                gnode<comments_t> *child_node_ptr = node->add_child(std::move(child_node));
-                cn = child_node_ptr;
-                dfs(child_node_ptr, *child_gt);
+                // Validate the complete incoming subtree before replacing a duplicate.
+                auto *endpoint = dfs(child_node.get(), *child_gt);
+                if(node->find_child(child_node->get_action()))
+                {
+                    node->delete_child(child_node->get_action());
+                }
+                node->add_child(std::move(child_node));
+                last = endpoint;
             }
         }
+        return last;
     };
-    
-    dfs(g.gametree.get(), gt_ast);
-    if(cn)
-        g.current_node = cn;
+
+    g.current_node = dfs(g.gametree.get(), gt_ast);
     g.fresh();
     return g;
 }
@@ -345,25 +349,50 @@ void game::discard_preview()
     preview.reset();
 }
 
+std::optional<action> game::get_submit_action() const
+{
+    if(!can_submit()) return std::nullopt;
+    return action::from_vector(get_cached_moves(), get_unmoved_state());
+}
+
 bool game::submit()
 {
-    // Submit only recorded draft moves, including when submission fails.
     discard_preview();
-    std::optional<state> ans = now->first.can_submit();
-    if(ans)
+    auto submitted = now->first.can_submit();
+    if(!submitted) return false;
+    auto act = action::from_vector(get_cached_moves(), get_unmoved_state());
+    auto *child = current_node->find_child(act);
+    if(!child)
     {
-        std::vector<ext_move> mvs;
-        for(const auto &[s,m] : cached)
-        {
-            if(m)
-            {
-                mvs.push_back(*m);
-            }
-        }
-        visit_child(action::from_vector(mvs, cached.begin()->first));
-        return true;
+        // The draft already supplies a validated successor. Keep submission's
+        // existing policy for checks rather than revalidating through add_child.
+        child = current_node->add_child(gnode<comments_t>::create_child(
+            current_node, std::move(submitted), std::move(act), comments_t{}));
     }
-    return false;
+    current_node = child;
+    fresh();
+    return true;
+}
+
+bool game::has_child(const action &act) const
+{
+    return current_node->find_child(act) != nullptr;
+}
+
+bool game::delete_child(const action &act)
+{
+    if(!current_node->find_child(act)) return false;
+    discard_preview();
+    return current_node->delete_child(act);
+}
+
+bool game::visit_child(const action &act)
+{
+    auto *child = current_node->find_child(act);
+    if(!child) return false;
+    current_node = child;
+    fresh();
+    return true;
 }
 
 bool game::currently_check() const
@@ -418,7 +447,7 @@ std::optional<action> game::suggest_action()
     return std::nullopt;
 }
 
-bool game::add_child_action(action act)
+bool game::add_child(action act)
 {
     discard_preview();
     if(current_node->find_child(act))
@@ -496,31 +525,6 @@ std::vector<std::tuple<action, std::string>> game::get_historical_actions() cons
     // Reverse since we built it backwards
     std::reverse(result.begin(), result.end());
     return result;
-}
-
-bool game::visit_child(action act, comments_t comments, std::optional<state> newstate)
-{
-    discard_preview();
-    // check if the child already exists
-    auto &children = current_node->get_children();
-    const auto moves = act.get_moves_view();
-    for(auto &child : children)
-    {
-        const auto child_moves = child->get_action().get_moves_view();
-        if(std::equal(
-            child_moves.begin(), child_moves.end(),
-            moves.begin(), moves.end()))
-        {
-            current_node = child.get();
-            fresh();
-            return true;
-        }
-    }
-    // create a new child
-    auto new_child = gnode<comments_t>::create_child(current_node, std::move(newstate), std::move(act), std::move(comments));
-    current_node = current_node->add_child(std::move(new_child));
-    fresh();
-    return false;
 }
 
 std::string game::show_pgn(

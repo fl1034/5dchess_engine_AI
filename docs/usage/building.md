@@ -41,7 +41,7 @@ Native regression test executables are grouped by functionality:
 | Executable | Coverage |
 |---|---|
 | `test_action` | Actions, semimoves, move application, and promotions |
-| `test_game` | Multiverse ownership and layout, game trees, hashing, and temporary move previews |
+| `test_game` | Multiverse ownership and layout, indexed game trees, child operations, hashing, and temporary move previews |
 | `test_check_position` | Check views and phantom checks |
 | `test_hcutils` | Hypercuboid geometry and graph matching |
 | `test_move_evaluation` | Move scoring and HC semimove features |

@@ -178,6 +178,7 @@ PYBIND11_MODULE(engine, m) {
         })
         .def(py::self == py::self);
     py::class_<action>(m, "action")
+        .def("__lt__", &action::operator<)
         .def("get_moves", &action::get_moves)
         .def(py::self == py::self)
         // optional: nice repr
@@ -228,7 +229,9 @@ PYBIND11_MODULE(engine, m) {
             return static_cast<uint8_t>(g.get_promotion_options());
         })
         .def("suggest_action", &game::suggest_action)
-        .def("add_child_action", &game::add_child_action)
+        .def("has_child", &game::has_child)
+        .def("add_child", &game::add_child)
+        .def("delete_child", &game::delete_child)
         .def("get_comments", &game::get_comments)
         .def("set_comments", &game::set_comments)
         .def("has_parent", &game::has_parent)
@@ -236,13 +239,7 @@ PYBIND11_MODULE(engine, m) {
         .def("get_child_actions", [](const game &g, uint16_t show_flags) {
             return g.get_child_actions(static_cast<pgn_options>(show_flags));
         }, py::arg("show_flags") = static_cast<uint16_t>(pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION))
-        // Python version of visit_child without newstate argument
-        .def("visit_child",
-             [](game &g, const action &a) {
-                 return g.visit_child(a); 
-             },
-             py::arg("action")
-        )
+        .def("visit_child", &game::visit_child, py::arg("action"))
         .def("show_pgn", [](game &g, uint16_t options, bool complete_game_tree, bool standard_metadata_only) {
             return g.show_pgn(
                 static_cast<pgn_options>(options),

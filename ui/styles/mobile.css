@@ -70,7 +70,7 @@
     color: var(--ui-text); background: var(--ui-close-background);
     box-shadow: 0 3px 12px #0003, 0 1px 3px #0002;
 }
-#mobileSheetTitle[hidden] ~ .mobile-sheet-content { padding-top: 12px; }
+#mobileSheetHeader[hidden] ~ .mobile-sheet-content { padding-top: 12px; }
 .mobile-sheet-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 12px 10px; }
 #mobileSheet .select-container { overflow: visible; padding: 0; opacity: 1; }
 #mobileSheet .select-option { overflow-wrap: anywhere; min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; color: inherit; }
@@ -164,3 +164,21 @@
     #mobileLayout.has-mobile-panel #btnFocus { bottom: 12px; }
     #mobileLayout .mobile-footer { grid-row: 3; grid-column: 1 / -1; }
 }
+
+/* Fixed continuation header: selection stays uncluttered until Edit is enabled. */
+.mobile-sheet-header { display: flex; align-items: center; min-height: 48px; flex-shrink: 0; padding: 0 12px; gap: 8px; border-bottom: 1px solid var(--ui-border); }
+.mobile-sheet-header[hidden], #mobileContinuationActions[hidden], #mobileEditContinuations[hidden] { display: none; }
+.mobile-sheet-header .mobile-sheet-title { padding: 0; flex: 1; min-width: 0; }
+#mobileContinuationActions { display: flex; align-items: center; flex-shrink: 0; }
+#mobileEditContinuations,
+#mobileContinuationActions .hud-comment-btn { min-width: 44px; height: 44px; padding: 0 8px; border: 0; border-radius: 4px; color: var(--ui-primary); background: transparent; font: inherit; font-size: 16px; font-weight: 500; }
+#mobileEditContinuations:active,
+#mobileContinuationActions .hud-comment-btn:active { background: var(--ui-soft); }
+#mobileContinuationActions .pending-branches { align-self: auto; }
+#mobileContinuationActions .pending-branches:not(.visible) { display: none; }
+#mobileContinuationActions .pending-branch-actions { gap: 8px; }
+#mobileContinuationActions .hud-comment-btn { min-height: 44px; flex: none; box-shadow: none; }
+#mobileContinuationActions .hud-comment-btn.delete { color: var(--md-sys-color-error, #c62828); }
+#mobileContinuationActions .hud-comment-btn:hover:not(:disabled) { background: transparent; transform: none; box-shadow: none; }
+#mobileLayout:not(.editing-continuations) .branch-action { visibility: hidden; opacity: 0; pointer-events: none; }
+#mobileLayout:not(.editing-continuations) .continuation-notation { mask-image: none; }
