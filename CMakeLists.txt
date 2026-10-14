@@ -76,6 +76,7 @@ endif()
 option(ENGINE "Build the 5dchess UCI executable" OFF)
 option(TOOLS "Build the 5dtools command-line utilities" OFF)
 option(TEST "Build test executables" OFF)
+option(JSTEST "Copy JavaScript tests into the WebAssembly interface" OFF)
 option(PYMODULE "Build Python module" OFF)
 option(EMMODULE "Build Emscripten/WebAssembly module" OFF)
 
@@ -226,14 +227,15 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             )
         endif()
 
-        # add_custom_command(TARGET engine_wasm POST_BUILD
-        #     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        #     ${CMAKE_SOURCE_DIR}/ui
-        #     $<TARGET_FILE_DIR:engine_wasm>
-        # )
-
+        set(UI_COPY_EXCLUDE "")
+        if(NOT "${TEST}" AND NOT "${JSTEST}")
+            set(UI_COPY_EXCLUDE "PATTERN \"test\" EXCLUDE")
+        endif()
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/copy_ui.cmake" CONTENT
+            "file(COPY \"${CMAKE_CURRENT_SOURCE_DIR}/ui/\" DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/ui\" ${UI_COPY_EXCLUDE})\n"
+        )
         add_custom_target(copy_files ALL
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ui" "${CMAKE_BINARY_DIR}/ui"
+            COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/copy_ui.cmake"
             COMMENT "Copying ui/ to build directory"
         )
 

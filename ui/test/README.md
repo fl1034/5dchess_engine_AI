@@ -1,5 +1,10 @@
 # Web UI tests
 
+Startup tests cover ordered worker-message delivery when the engine becomes
+ready before or after the UI, including replay without duplicate messages.
+Loading-screen tests cover either asset group finishing first, both completing
+together, and removal after the starting position is displayed.
+
 The dependency-free Node tests cover phone taps, immediate selection and position previews, double-tap recognition and rollback, drags, pinch release, and canvas
 resizing when panels reserve screen space, and display-density changes without
 shifting camera bounds or pointer coordinates, plus export filename metadata

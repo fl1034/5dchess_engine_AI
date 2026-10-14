@@ -172,6 +172,14 @@ test('main-thread wiring renders local feedback, preserves it on refresh and cle
         })
     };
     const main = (await readFile(new URL('../scripts/main.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
+    const startup = (await readFile(new URL('../scripts/startup.js', import.meta.url), 'utf8'))
+        .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+    Object.assign(context, {
+        document: { getElementById() { return null; } },
+        reportLoaded() {}
+    });
+    vm.runInNewContext(startup, context);
+    vm.runInNewContext('startWorker()', context);
     vm.runInNewContext(main, context);
     const canvas = context.window.chessBoardCanvas;
     const firstAction = [{ from, to, promote: 0 }];

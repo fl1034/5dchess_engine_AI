@@ -1,5 +1,7 @@
 // main.js
 
+// index.html has already started the worker before these imports load piece assets.
+import { worker, connectWorker, reportLoaded } from './startup.js';
 import { UI } from 'ui';
 import { actionKey } from './branch-deletion.js';
 import ChessBoardCanvasBase from 'draw';
@@ -8,8 +10,6 @@ import { createSelection } from './selection.js';
 
 initMobileLayout();
 
-
-let worker = new Worker(window.worker_path, { type: 'module' });
 
 // State management for move selection
 let presentC;
@@ -34,6 +34,15 @@ class ChessBoardCanvas extends ChessBoardCanvasBase {
 }
 
 window.chessBoardCanvas = new ChessBoardCanvas('canvas');
+const renderBoard = window.chessBoardCanvas.infCanvas.onRender;
+window.chessBoardCanvas.infCanvas.onRender = (ctx, bounds) => {
+    renderBoard(ctx, bounds);
+    if (committedData) {
+        window.chessBoardCanvas.infCanvas.onRender = renderBoard;
+        reportLoaded('position');
+        UI.showInfoPage();
+    }
+};
 compactViewport.addEventListener('change', () => {
     if (compactViewport.matches) {
         requestAnimationFrame(() => {
@@ -110,7 +119,7 @@ function addHighlight(data, color, field, values) {
 }
 
 
-worker.onmessage = (e) => {
+function onWorkerMessage(e) {
     const msg = e.data;
     if (msg.type === 'ready') {
         // Send current export options to worker on startup
@@ -124,8 +133,6 @@ worker.onmessage = (e) => {
         // Update the version in the Information popup and welcome popup
         UI.setVersionNumber(msg.version);
         console.log('Version', msg.version);
-        // Show info popup on startup if enabled
-        UI.showInfoPage();
     }
     else if (msg.type === 'alert') {
         alert('[WORKER] ' + msg.message);
@@ -307,3 +314,7 @@ UI.setHudLightCallback((isOn) => {
 });
 
 UI.setHudLight(false); // Initialize HUD light to off
+
+// Replay early engine messages only after all UI callbacks are installed.
+reportLoaded('interface');
+connectWorker(onWorkerMessage);

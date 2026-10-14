@@ -59,10 +59,19 @@
         }
     }
     </script>
-    <script src="scripts/main.js" type="module" defer></script>
+    <script type="module">
+        import { startWorker } from './scripts/startup.js';
+        startWorker();
+        import('./scripts/main.js');
+    </script>
 </head>
 
 <body>
+
+<div id="loadingScreen" aria-labelledby="loadingTitle">
+    <h1 id="loadingTitle">5D Chess Analyzer</h1>
+    <p id="loadingStatus" role="status" aria-live="polite" aria-atomic="true">[1/5] Preparing the analyzer…</p>
+</div>
 
 <div id="mobileLayout" hidden>
     <header class="mobile-header">

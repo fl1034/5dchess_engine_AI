@@ -29,6 +29,7 @@ Single-configuration generators put the executables at `build/5dchess` and `buil
 | `ENGINE` | 5DUCI engine executable |
 | `TOOLS` | Command-line utilities |
 | `TEST` | Native tests |
+| `JSTEST` | Copy JavaScript tests into the WebAssembly interface |
 | `PYMODULE` | Python binding |
 | `EMMODULE` | WebAssembly binding and static web interface |
 
@@ -139,10 +140,24 @@ cmake --build build-wasm --parallel
 
 The static website is generated in the `build-wasm/ui/`.
 
+UI tests are copied into `ui/test/` only when `TEST` or `JSTEST` is enabled.
+Use `-DJSTEST=ON` to include them without building native tests. Disabling both
+options skips copying tests but leaves any previously copied tests in place.
+
+On opening the interface, the engine initializes alongside chess-piece loading.
+The starting position appears once both are ready; bundled board-label fonts
+load in the background.
+
 For interface structure and behavior, see
 [Web UI architecture](../architecture/webui.md).
 
 ### Serving the browser interface
+
+On opening the analyzer, a text-only loading screen shows numbered checkpoints
+while WebAssembly and chess pieces load, the interface is prepared, and the
+starting position loads. Checkpoint 3 names whichever resource is still loading
+and may be skipped. The numbers identify startup checkpoints rather than a
+percentage. The screen closes when the starting board is drawn.
 
 Note that simply double-clicking index.html will likely fail to initialize the JavaScript components due to [CORS (Cross-Origin Resource Sharing)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) restrictions enforced by modern browsers when using the `file://` protocol.
 

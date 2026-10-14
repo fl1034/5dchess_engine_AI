@@ -1,4 +1,4 @@
-
+import { reportLoaded } from './startup.js';
 const LOD_SIZES = [32, 16, 8, 4, 2, 1];
 
 // Load a single SVG as Image
@@ -56,6 +56,7 @@ async function loadAllSvgs() {
 }
 
 const svgImages = await loadAllSvgs();
+reportLoaded('pieces');
 
 export function chooseLOD(pixelSize) {
     if (pixelSize >= 24) return svgImages.img;

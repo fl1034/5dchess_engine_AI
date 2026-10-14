@@ -12,6 +12,7 @@ remain in [Building](../usage/building.md#webassembly).
 | --- | --- |
 | `index.html` | Panel/dialog markup, inline SVG icon definitions, piece asset mapping, theme names, import map, and the `main.js` entry point |
 | `scripts/main.js` | Connects UI callbacks and board interactions to worker messages; applies responses to the display |
+| `scripts/startup.js` | Starts the worker before piece loading and queues messages until UI setup finishes |
 | `scripts/selection.js` | Local piece selection, temporary position requests, rollback, and deferred move application |
 | `scripts/ui.js` | Desktop controls, dialogs, keyboard shortcuts, comment editing, settings, continuation selection, and export requests |
 | `scripts/keyboard.js` | Shortcut routing, editing/dialog guards, repeat handling, and Space dispatch |
@@ -36,11 +37,13 @@ main-thread modules' short import names. The worker uses relative imports.
 
 ## User, main thread, and worker communication
 
-`main.js` initializes the compact layout, creates a chess canvas, and starts
-`worker.js` with `new Worker(..., { type: 'module' })`. The worker imports
-`wasm/engine.js` and creates the compiled module. It reports `engine_version`
-and `ready`; after `ready`, the main thread sends the saved settings and loads
-the standard turn-zero position.
+`main.js` imports `startup.js` before the renderer. That module starts
+`worker.js` with `new Worker(..., { type: 'module' })`, allowing Wasm initialization
+to overlap the renderer's awaited piece loading. It queues worker messages until
+`main.js` has initialized the compact layout, chess canvas, and UI callbacks,
+then delivers them in order. The worker imports `wasm/engine.js` and creates the
+compiled module. It reports `engine_version` and `ready`; after handling `ready`,
+the main thread sends the saved settings and loads the standard turn-zero position.
 
 The worker accesses C++ through [`emmodule.cpp`](../../emmodule.cpp), which
 binds [`game`](../../src/client/game.h) and converts board coordinates, actions,
