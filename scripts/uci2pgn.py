@@ -21,7 +21,7 @@ LAN_RE = re.compile(
     r"^\((-?\d+)T(\d+)\)([a-h])([1-8])"
     r"(?:\((-?\d+)T(\d+)\))?([a-h])([1-8])([A-Za-z])?$"
 )
-FEN_BLOCK_RE = re.compile(r"\[[^:\]\s]+:-?\d+:\d+:[wb]\]")
+FEN_BLOCK_RE = re.compile(r"\[[^:\]\s]+:[+-]?\d+:\d+:[wb]\]")
 SIZE_RE = re.compile(r"^[1-8]x[1-8]$")
 
 
@@ -29,7 +29,7 @@ class PositionSyntaxError(ValueError):
     """Raised when input is not a single valid 5DUCI position command."""
 
 
-def lan_to_pgn(move: str) -> str:
+def lan_to_pgn(move: str, even: bool = False) -> str:
     """Convert one 5DUCI LAN token to unambiguous 5DPGN notation."""
 
     match = LAN_RE.fullmatch(move)
@@ -37,7 +37,17 @@ def lan_to_pgn(move: str) -> str:
         raise PositionSyntaxError(f"invalid 5DUCI move: {move!r}")
 
     line0, time0, file0, rank0, line1, time1, file1, rank1, promotion = match.groups()
-    source = f"({line0}T{time0}){file0}{rank0}"
+    def timeline(line: str) -> str:
+        if not even:
+            return line
+        number = int(line)
+        if number == 0:
+            return "+0"
+        if number == -1:
+            return "-0"
+        return str(number + 1 if number < 0 else number)
+
+    source = f"({timeline(line0)}T{time0}){file0}{rank0}"
     suffix = f"{file1}{rank1}" + (f"={promotion.upper()}" if promotion else "")
     if line1 is None:
         return source + suffix
@@ -45,7 +55,7 @@ def lan_to_pgn(move: str) -> str:
     # The jump indicator is deliberately omitted.  The 5DPGN grammar permits
     # it when an absolute destination board is present, and omitting it lets a
     # PGN reader derive whether the jump is branching from the game state.
-    return source + f"({line1}T{time1})" + suffix
+    return source + f"({timeline(line1)}T{time1})" + suffix
 
 
 def split_position(command: str) -> tuple[str, list[str]]:
@@ -83,7 +93,7 @@ def pgn_start(position: str) -> list[str]:
 
     fen = " ".join(words[1:])
     blocks = FEN_BLOCK_RE.findall(fen)
-    if not blocks or " ".join(blocks) != fen:
+    if not blocks or FEN_BLOCK_RE.sub("", fen).strip():
         raise PositionSyntaxError("FEN must be one or more [board:timeline:turn:color] blocks")
     return [f'[Size "{size}"]', f'[Board "Custom - {parity.title()}"]', *blocks]
 
@@ -93,6 +103,7 @@ def convert(command: str) -> str:
 
     position, moves = split_position(command)
     lines = pgn_start(position)
+    even = '[Board "Custom - Even"]' in lines
     actions: list[list[str]] = []
     action: list[str] = []
     for token in moves:
@@ -102,7 +113,7 @@ def convert(command: str) -> str:
             actions.append(action)
             action = []
         else:
-            action.append(lan_to_pgn(token))
+            action.append(lan_to_pgn(token, even=even))
     if action:
         raise PositionSyntaxError("move history ends without 'submit'")
 

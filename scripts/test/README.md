@@ -10,6 +10,10 @@ From `scripts/`, use `python -m unittest discover -s test -v`.
 
 ## Tested files
 
+`test_uci2pgn.py` checks the converter CLI with adjacent and separated FEN
+blocks, signed timeline labels, a complete two-timeline history, even-timeline
+jumps and promotions, odd timelines, and invalid text between FEN blocks.
+
 `test_public_api.py` checks these files through their public interfaces:
 
 | File | What passing verifies |

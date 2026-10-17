@@ -267,6 +267,84 @@ void file_edges(bool black, bool brawn)
     }
 }
 
+void promotion(bool black, bool brawn)
+{
+    const int dy = black ? -1 : 1, dl = black ? 1 : -1;
+    const piece_t original = black ? (brawn ? BRAWN_B : PAWN_B)
+                                   : (brawn ? BRAWN_W : PAWN_W);
+    // Approach the opponent's corner, or travel sideways from the home corner.
+    for (bool home : {false,true}) {
+        const vec4 p(black ? 6 : 1,home ? (black ? 7 : 0) : (black ? 1 : 6),2,0);
+        std::vector<vec4> directions{vec4(0,0,0,dl)};
+        if (!home) {
+            directions.push_back(vec4(0,dy,0,0));
+            directions.push_back(vec4(black ? 1 : -1,dy,0,0));
+            if (brawn) {
+                directions.push_back(vec4(0,dy,0,dl));
+                directions.push_back(vec4(0,dy,-1,0));
+            }
+        } else if (brawn) {
+            directions.push_back(vec4(black ? 1 : -1,0,0,dl));
+        }
+        for (vec4 d : directions) {
+            const vec4 q = p+d;
+            const bool physical = d.tl() == vec4(0,0,0,0);
+            const bool capture = d.x() != 0 || (d.y() != 0 && !physical);
+            for (bool branching : {false,true}) {
+                if (physical && branching) continue;
+                if (d.t() != 0 && !branching) continue;
+                auto boards = fixture(black,brawn,false,p.x(),p.y());
+                if (capture) place(boards,black,q,black ? KNIGHT_W : KNIGHT_B);
+                if (!physical && !branching) {
+                    std::erase_if(boards,[&](const boards_info_t &board) {
+                        return std::get<0>(board) == q.l()
+                            && turn_t{std::get<1>(board),std::get<2>(board)} > turn_t{q.t(),black};
+                    });
+                }
+                for (auto rules : {promotion_options::QUEEN, promotion_options::KNIGHT,
+                                   promotion_options::NONE}) {
+                    const state before(multiverse(timeline_layout::odd(),boards),rules);
+                    const full_move move(p,q);
+                    const bool promotes = !home && d.y() != 0 && (physical || brawn)
+                        && rules != promotion_options::NONE;
+                    const piece_t choice = promotes ? default_promote_to(rules) : NO_PIECE;
+                    const piece_t expected = promotes ? (black ? to_black(choice) : choice) : original;
+                    const auto normalized = before.normalize_promotion(ext_move(move,NO_PIECE));
+                    log_case("promotion application",boards,1);
+                    if (!normalized || normalized->promote_to != choice) {
+                        ++failures;
+                        std::cerr << "incorrect promotion normalization for " << move << '\n';
+                    }
+                    // Check normalization through full_move and application of prepared moves.
+                    for (bool prepared : {false,true}) {
+                        state result = before;
+                        const int line = branching ? before.new_line() : q.l();
+                        const bool applied = prepared
+                            ? result.apply_move(ext_move(move,choice)) : result.apply_move(move);
+                        if (!applied) {
+                            ++failures;
+                            std::cerr << "promotion move rejected: " << move << '\n';
+                            continue;
+                        }
+                        const auto [t,c] = result.get_timeline_end(line);
+                        const board *destination = result.get_board_ptr(line,t,c);
+                        const auto [source_t,source_c] = result.get_timeline_end(p.l());
+                        const board *source = result.get_board_ptr(p.l(),source_t,source_c);
+                        if (!destination || !source
+                            || destination->get_piece(q.xy()) != expected
+                            || source->get_piece(p.xy()) != NO_PIECE) {
+                            ++failures;
+                            std::cerr << "incorrect promotion application for " << move
+                                      << " home=" << home << " branching=" << branching
+                                      << " prepared=" << prepared << '\n';
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void en_passant(bool black, bool brawn)
 {
     const vec4 p(3,black ? 3 : 4,2,0);
@@ -341,6 +419,8 @@ int main(int argc, char **argv)
             captures(black,brawn,false);
             test_group = piece+" file edges";
             file_edges(black,brawn);
+            test_group = piece+" promotion";
+            promotion(black,brawn);
             test_group = piece+" en passant";
             en_passant(black,brawn);
         }

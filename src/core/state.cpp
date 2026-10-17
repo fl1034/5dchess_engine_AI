@@ -252,7 +252,7 @@ bool state::apply_move(ext_move mv)
                             ->move_piece(p.xy(), q.xy()));
         }
         // promotion
-        else if((b_ptr->lpawn()&z) && (q.y() == 0 || q.y() == size_y - 1))
+        else if((b_ptr->lpawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -297,7 +297,7 @@ bool state::apply_move(ext_move mv)
         const board *c_ptr = m.get_board_ptr(q.l(), q.t(), player);
         
         // promotion (only brawns can do)
-        if ((b_ptr->lrawn()&z) && (q.y() == 0 || q.y() == size_y - 1))
+        if ((b_ptr->lrawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -331,7 +331,7 @@ bool state::apply_move(ext_move mv)
         const auto &[size_x, size_y] = m.get_board_size();
         
         // promotion (only brawns can do)
-        if ((b_ptr->lrawn()&z) && (q.y() == 0 || q.y() == size_y - 1))
+        if ((b_ptr->lrawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -368,7 +368,7 @@ std::optional<ext_move> state::normalize_promotion(ext_move move) const
     const vec4 d = q - p;
     const auto &[size_x, size_y] = get_board_size();
     (void)size_x;
-    const bool last_rank = q.y() == 0 || q.y() == size_y - 1;
+    const bool last_rank = q.y() == (player ? 0 : size_y - 1);
     if(!last_rank)
     {
         move.promote_to = NO_PIECE;

@@ -297,7 +297,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
             }
             // Legality checking only needed occupancy here. Outgoing-check scoring
             // also needs the promoted piece's attacks, so cache the default promotion.
-            if ((source_board.lpawn() & z) && (q.y() == 0 || q.y() == size_y-1)) {
+            if ((source_board.lpawn() & z) && (q.y() == (player ? 0 : size_y - 1))) {
                 const piece_t promotion = ext_move(m,s).promote_to;
                 if (promotion != NO_PIECE)
                     newboard.set_piece(q.xy(), player ? to_black(promotion) : promotion);
@@ -340,7 +340,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
                     // store the arriving board after move is made
                     vec4 p = m.from, q = m.to;
                     piece_t pic = s.get_piece(p, player);
-                    if (to_white(piece_name(pic)) == BRAWN_W && (q.y() == 0 || q.y() == size_y-1)) {
+                    if (to_white(piece_name(pic)) == BRAWN_W && (q.y() == (player ? 0 : size_y - 1))) {
                         const piece_t promotion = ext_move(m,s).promote_to;
                         if (promotion != NO_PIECE) pic = player ? to_black(promotion) : promotion;
                     }
@@ -383,7 +383,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
         {
             vec4 p = m.from, q = m.to;
             piece_t pic = s.get_piece(p, player);
-            if (to_white(piece_name(pic)) == BRAWN_W && (q.y() == 0 || q.y() == size_y-1)) {
+            if (to_white(piece_name(pic)) == BRAWN_W && (q.y() == (player ? 0 : size_y - 1))) {
                 const piece_t promotion = ext_move(m,s).promote_to;
                 if (promotion != NO_PIECE) pic = player ? to_black(promotion) : promotion;
             }
