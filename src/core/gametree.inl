@@ -53,6 +53,8 @@ inline std::string gnode<T>::render_pgn_turn(
         oss << t << ". ";
     }
 
+    if(has_illegal_history())
+        show_flags &= ~(pgn_options::SHOW_MATE | pgn_options::SHOW_OUTCOME);
     auto [move_pgn, mt] = act.pgn_advanced(
         parent->get_state(), show_flags, witness
     );
@@ -88,12 +90,22 @@ inline std::string gnode<T>::pgn_tree(
     if(parent) // non-root
     {
         const action empty_witness;
-        const action &witness = children.empty()
-            ? empty_witness
-            : children.back()->get_action();
+        const action *witness = &empty_witness;
+        if(!has_illegal_history()) {
+            for(auto it = children.rbegin(); it != children.rend(); ++it) {
+                if(!(*it)->has_illegal_history()) {
+                    witness = &(*it)->get_action();
+                    break;
+                }
+            }
+        }
+        // A result token ends the variation in PGN. Keep inspection-only
+        // continuations reloadable even when the legal position is checkmate.
+        const auto turn_flags = children.empty()
+            ? show_flags : show_flags & ~pgn_options::SHOW_OUTCOME;
         oss << render_pgn_turn(
-            show, show_flags, start_turn, full_turn_display,
-            witness, !children.empty()
+            show, turn_flags, start_turn, full_turn_display,
+            *witness, !children.empty()
         );
         start_turn = next_turn(start_turn);
     }
@@ -136,11 +148,13 @@ inline std::string gnode<T>::pgn_path(
     for(size_t i = 1; i < path.size(); ++i)
     {
         auto *node = path[i];
-        const action &witness = i + 1 < path.size()
+        const action &witness = i + 1 < path.size() && !path[i + 1]->has_illegal_history()
             ? path[i + 1]->get_action()
             : empty_witness;
+        const auto turn_flags = i + 1 < path.size()
+            ? show_flags & ~pgn_options::SHOW_OUTCOME : show_flags;
         oss << node->render_pgn_turn(
-            show, show_flags, start_turn, false,
+            show, turn_flags, start_turn, false,
             witness, i + 1 < path.size()
         );
         start_turn = next_turn(start_turn);

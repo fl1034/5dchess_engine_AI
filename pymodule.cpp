@@ -87,12 +87,13 @@ PYBIND11_MODULE(engine, m) {
         .value("ROYAL_QUEEN_B", ROYAL_QUEEN_B)
         .value("COMMON_KING_B", COMMON_KING_B)
         .export_values();  // Exports the values for easy access
-    py::enum_<match_status_t>(m, "match_status_t")
-        .value("PLAYING", match_status_t::PLAYING)
-        .value("WHITE_WINS", match_status_t::WHITE_WINS)
-        .value("BLACK_WINS", match_status_t::BLACK_WINS)
-        .value("STALEMATE", match_status_t::STALEMATE)
-        .def("__str__", [](match_status_t status) {
+    py::enum_<game::match_status_t>(m, "match_status_t")
+        .value("PLAYING", game::match_status_t::PLAYING)
+        .value("WHITE_WINS", game::match_status_t::WHITE_WINS)
+        .value("BLACK_WINS", game::match_status_t::BLACK_WINS)
+        .value("STALEMATE", game::match_status_t::STALEMATE)
+        .value("ILLEGAL_HISTORY", game::match_status_t::ILLEGAL_HISTORY)
+        .def("__str__", [](game::match_status_t status) {
             std::ostringstream oss;
             oss << status;
             return oss.str();
@@ -192,6 +193,10 @@ PYBIND11_MODULE(engine, m) {
         .def(py::init<multiverse>())
         .def("apply_move", &state::apply_move<false>);
     */
+    py::class_<game::action_summary>(m, "action_summary")
+        .def_readonly("act", &game::action_summary::act)
+        .def_readonly("pgn", &game::action_summary::pgn)
+        .def_readonly("is_illegal", &game::action_summary::is_illegal);
     py::class_<game>(m, "game")
         // metadata
         .def_property("metadata",
@@ -200,7 +205,10 @@ PYBIND11_MODULE(engine, m) {
             py::return_value_policy::reference_internal,
             "Live metadata mapping. Assignment replaces all headers; edits do not change the loaded position.")
         // factory
-        .def_static("from_pgn", &game::from_pgn)
+        .def_static("from_pgn", [](std::string pgn, bool allow_illegal_history) {
+            return game::from_pgn(std::move(pgn), {allow_illegal_history});
+        }, py::arg("pgn"), py::arg("allow_illegal_history") = false)
+        .def("has_illegal_history", &game::has_illegal_history)
         // core functions
         .def("get_current_fen", [](const game &g) {
             return g.get_current_state().show_fen();

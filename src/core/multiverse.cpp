@@ -563,37 +563,20 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
     else if constexpr (P == KING_UW || P == KING_UB)
     {
         a = king_attack(p.xy()) & ~friendly;
-        bitboard_t urook = b_ptr->umove() & b_ptr->rook() & friendly;
         if(!b_ptr->is_under_attack(p.xy(), C))
         {
-            for(vec4 d : {vec4(1,0,0,0), vec4(-1,0,0,0)})
+            for(int rook_pos : marked_pos(b_ptr->castling_rooks(p.xy(), C)))
             {
-                int i = 0;
-                for(vec4 q = p + d; !q.outbound(); q = q + d)
+                const int rook_x = rook_pos % BOARD_LENGTH;
+                if(abs(rook_x - p.x()) < 2) continue;
+                const vec4 d(rook_x > p.x() ? 1 : -1, 0, 0, 0);
+                const vec4 crossed = p + d;
+                const vec4 destination = crossed + d;
+                if(destination.outbound() || destination.x() >= size_x) continue;
+                if(!b_ptr->is_under_attack(crossed.xy(), C)
+                   && !b_ptr->is_under_attack(destination.xy(), C))
                 {
-                    bitboard_t w = pmask(q.xy());
-                    if(i < 2 && b_ptr->is_under_attack(q.xy(), C))
-                    {
-                        break;
-                    }
-                    else if(w & urook)
-                    {
-                        /*
-                        Consider the castling move valid only when the unmoved rook
-                          is at the edge of the board
-                        (this is because the state.apply_move only moves the rooks on edges)
-                        */
-                        if((q+d).outbound())
-                        {
-                            a |= pmask((p + d + d).xy());
-                        }
-                        break;
-                    }
-                    else if(w & b_ptr->occupied())
-                    {
-                        break;
-                    }
-                    i++;
+                    a |= pmask(destination.xy());
                 }
             }
         }
@@ -621,11 +604,11 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         bitboard_t s = shift_north(shift_north(r)) & empty;
         if(s)
         {
-            vec4 q = p+vec4(0, 2, -1, 0);
-            if(inbound(q, C))
+            const auto [previous_t, previous_color] = previous_turn({p.t(), C});
+            const board *b1_ptr = get_board_ptr(p.l(), previous_t, previous_color);
+            if(b1_ptr)
             {
-                const board *b1_ptr = get_board_ptr(q.l(), q.t(), C);
-                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->lpawn();
+                bitboard_t j = s & b1_ptr->umove() & b1_ptr->hostile<C>() & b1_ptr->lpawn();
                 a |= shift_south(j) & empty;
             }
         }
@@ -645,11 +628,11 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         bitboard_t s = shift_south(shift_south(r)) & empty;
         if(s)
         {
-            vec4 q = p+vec4(0, 2, -1, 0);
-            if(inbound(q, C))
+            const auto [previous_t, previous_color] = previous_turn({p.t(), C});
+            const board *b1_ptr = get_board_ptr(p.l(), previous_t, previous_color);
+            if(b1_ptr)
             {
-                const board *b1_ptr = get_board_ptr(q.l(), q.t(), C);
-                bitboard_t j = s & b1_ptr->umove() & ~friendly & b1_ptr->lpawn();
+                bitboard_t j = s & b1_ptr->umove() & b1_ptr->hostile<C>() & b1_ptr->lpawn();
                 a |= shift_north(j) & empty;
             }
         }

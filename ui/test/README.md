@@ -160,3 +160,39 @@ Resolve pending deletions through either header action or restore the final row;
 normal selection must return. Close/reopen and switch to desktop/back while
 pending: deletions and controls must persist. Check 320px width and confirm the
 header stays in place when scrolling the list or adding Hint suggestions.
+
+## Illegal history
+
+Worker tests in `test_branch_deletion.mjs` cover strict/permissive imports,
+failed-load preservation, destination-summary permission checks before draft or
+branch changes, rechecking permission after deletion confirmation, checkbox
+locking/unlocking without restoring a preference, disabled Hint, illegal-history
+status, and ordinary submission checks. `ui/wasm/test.js` exercises the real
+binding's import option, continuation summaries, inherited flags, status and Hint.
+
+In the built browser interface, import an illegal setup with the option off and
+on. Check the red continuation rows in light and dark themes, selected and with
+pending deletion. Enter illegal history, verify the checkbox is checked and
+locked and Hint disabled, return to a legal ancestor, turn it off manually, and
+press Next on an illegal continuation. The alert must leave drafts and pending
+deletions unchanged. Repeat in the compact layout.
+
+## Import diagnostics
+
+`test_import_diagnostics.mjs` checks location labels, hover and pin behavior,
+failed/loading/edited status transitions, retaining stale messages after edits,
+suspending highlights during retries, cancellation and stale results, range-free
+errors, missing-input markers and viewport synchronization. Worker tests verify
+that prepared imports do not replace the open game before acceptance.
+`ui/wasm/test.js` verifies real serialized syntax, move, setup and FEN diagnostics,
+including UTF-8 to UTF-16 conversion and rebased board-metadata errors.
+
+Browser checks should include wrapped text, tabs, Unicode comments, scrolling,
+resizing and compact layouts. Verify that the yellow highlight follows the
+native text, edits preserve the exact diagnostic wording with a gray state line and
+disabled highlighting, and successful loads close the dialog without a browser alert. Check
+short and long errors, missing ranges, and multiline ranges in light and dark
+themes, including enlarged text. The editor height and bottom button positions
+must stay unchanged across empty, failed, loading, and edited states; long
+diagnostics must scroll within the reserved region. Check keyboard preview and
+pinning, disabled stale locations, and live status announcements.

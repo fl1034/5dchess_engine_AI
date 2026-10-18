@@ -16,17 +16,15 @@ namespace
 {
 state position(std::string board)
 {
-    return state(*pgnparser(
-        "[Size \"4x4\"]\n[Board \"custom\"]\n[" + board + ":0:1:w]\n")
-        .parse_game());
+    return state::from_pgn<true>(
+        "[Size \"4x4\"]\n[Board \"custom\"]\n[" + board + ":0:1:w]\n");
 }
 
 state capture_position(char victim)
 {
-    return state(*pgnparser(
+    return state::from_pgn<true>(
         "[Size \"8x8\"]\n[Board \"custom\"]\n"
-        "[7k/8/8/8/8/8/1" + std::string(1, victim) + "6/KR6:0:1:w]\n")
-        .parse_game());
+        "[7k/8/8/8/8/8/1" + std::string(1, victim) + "6/KR6:0:1:w]\n");
 }
 
 index_t coordinate_for(const HC_info &info, const full_move &wanted)
@@ -115,9 +113,9 @@ void test_capture_groups()
         assert(move_evaluator(info, weights).score(0, coordinate) == 13.0f);
     }
 
-    const state black_to_move(*pgnparser(
+    const state black_to_move = state::from_pgn<true>(
         "[Size \"8x8\"]\n[Board \"custom\"]\n"
-        "[7k/8/8/8/8/8/1P6/Kr6:0:1:b]\n").parse_game());
+        "[7k/8/8/8/8/8/1P6/Kr6:0:1:b]\n");
     auto [black_info, black_space] = HC_info::build_HC(black_to_move);
     (void)black_space;
     const auto black_capture = coordinate_for(
@@ -148,10 +146,10 @@ void test_check_and_combined_scoring()
 
 void test_king_branch_scoring()
 {
-    const state before(*pgnparser(
+    const state before = state::from_pgn<true>(
         "[Size \"8x8\"]\n[Board \"custom\"]\n"
         "[7k/8/8/8/8/8/1K6/1R6:0:1:w]\n"
-        "1. Rb1c1 / Kh8g8\n").parse_game());
+        "1. Rb1c1 / Kh8g8\n");
     auto [info, space] = HC_info::build_HC(before);
     (void)space;
     const full_move wanted("(0T2)b2(0T1)c3");
@@ -215,7 +213,7 @@ void test_score_table_and_cancellation()
 
 void test_superphysical_scoring()
 {
-    multiverse boards(timeline_layout::odd(), {
+    multiverse boards(timeline_layout::odd, {
         {-1, 1, false, "r6k/8/8/8/8/8/8/K7"},
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });
@@ -304,7 +302,7 @@ struct coverage
 
 state parse(const std::string &pgn)
 {
-    return state(*pgnparser(pgn).parse_game());
+    return state::from_pgn<true>(pgn);
 }
 
 void compare(const state &position, coverage &seen)
@@ -403,9 +401,9 @@ void test_superphysical_and_historical_checks()
         assert(found);
         assert(found_physical);
     };
-    multiverse endpoint(timeline_layout::odd(), {{0,1,false,source},{1,1,true,target}});
+    multiverse endpoint(timeline_layout::odd, {{0,1,false,source},{1,1,true,target}});
     verify(state(endpoint), false);
-    multiverse history(timeline_layout::odd(), {{0,1,false,source},{1,2,false,target},
+    multiverse history(timeline_layout::odd, {{0,1,false,source},{1,2,false,target},
                             {1,2,true,target},{1,3,false,target},
                             {1,3,true,target}});
     verify(state(history), true);
@@ -418,12 +416,12 @@ int run()
     coverage seen;
     compare(parse("[Size \"4x4\"]\n[3k/4/Kp2/1R2:0:1:w]"), seen);
 
-    multiverse promotion_boards(timeline_layout::odd(), {
+    multiverse promotion_boards(timeline_layout::odd, {
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });
     compare(state(promotion_boards, promotion_options::QUEEN), seen);
 
-    multiverse jump_boards(timeline_layout::odd(), {
+    multiverse jump_boards(timeline_layout::odd, {
         {-1, 1, false, "r6k/8/8/8/8/8/8/K7"},
         {0, 1, false, "7k/P7/8/8/8/8/8/K7"},
     });

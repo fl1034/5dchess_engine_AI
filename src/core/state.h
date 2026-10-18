@@ -16,8 +16,7 @@
 #include "promotion_header.h"
 #include "generator.h"
 #include "ast.h"
-
-struct variant_setup_t;
+#include "pgnerror.h"
 
 class state
 {
@@ -43,14 +42,14 @@ class state
     template<bool C>
     generator<full_move> find_checks_impl(std::vector<int> lines) const &;
 
-    state(const pgnparser_ast::game &g, const variant_setup_t &setup);
-    
 public:
-    state(const multiverse &mtv, promotion_options promotions = promotion_options::QUEEN);
-    state(multiverse &&mtv, promotion_options promotions = promotion_options::QUEEN) noexcept;
-    state(const pgnparser_ast::game &g);
-    virtual ~state() = default;
-    
+    explicit state(multiverse mtv, promotion_options promotions = promotion_options::QUEEN) noexcept;
+    // Load the main line. UNSAFE skips only royal-exposure checks.
+    template<bool UNSAFE = false>
+    static state from_pgn(const std::string &pgn);
+    template<bool UNSAFE = false>
+    static state from_ast(const pgnparser_ast::game &g);
+
     // standard copy-constructors
     state(const state &other) = default;
     state(state &&) noexcept = default;
@@ -85,6 +84,12 @@ public:
     bool apply_move(full_move fm);
     template<bool UNSAFE = false>
     bool apply_move(ext_move mv);
+    /*
+     submit(): Submit the current state as a completed action.
+     + UNSAFE=false validates the action actually pushes the Present foward, it does not
+     detect whether a friendly royal piece is put in check.
+     + UNSAFE=true skips the validation.
+     */
     template<bool UNSAFE = false>
     bool submit();
     
@@ -117,7 +122,13 @@ public:
      */
     generator<full_move> find_checks(bool attacker) const &;
     generator<full_move> find_checks(bool attacker) const && = delete;
-    
+
+    // Initial setups scan both attacker colors. After submit(), action
+    // validation scans only the current player (the previous mover's opponent).
+    // A missing result means no exposure; this does not throw a validation error.
+    std::optional<pgn_validation_error::royal_exposed> find_royal_exposure(
+        bool is_from_initial_setup) const;
+
     std::vector<vec4> get_movable_pieces() const;
     std::vector<vec4> get_movable_pieces(const std::vector<int> &lines) const;
     std::vector<vec4> get_all_pieces(const std::vector<int> &lines) const;
@@ -158,6 +169,11 @@ public:
     std::string pretty_l(int l) const;
     std::string pretty_lt(vec4 p0) const;
     
+    /* apply_move_ast: Resolve, normalize promotion, and apply one AST move. Does not submit.
+     Throws pgn_validation_error; source-free ASTs use a fallback description. */
+    ext_move apply_move_ast(const pgnparser_ast::move &move,
+        const std::shared_ptr<const std::string> &source_text = nullptr);
+
     /*
     parse_move: Given a state `s` and a move in string format `move`, try to parse the move and match it to a unique full_move in the context of state `s`.
     - If successful, return a tuple with first index set to the matched full_move and second index set to the promotion piece if any.

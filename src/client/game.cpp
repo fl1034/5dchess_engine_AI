@@ -7,9 +7,11 @@
 #include <optional>
 #include <variant>
 #include <array>
+#include <string_view>
+#include "check_position.h"
 #include "pgnparser.h"
+#include "pgn_loading.h"
 #include "hypercuboid.h"
-#include "variants.h"
 
 
 std::string show_comments(std::vector<std::string> const &comments)
@@ -32,25 +34,30 @@ game::game(std::unique_ptr<gnode<comments_t>> gt)
     now = cached.begin();
 }
 
-game game::from_pgn(std::string input)
+game game::from_pgn(std::string input, game::load_options options)
 {
     auto ag = pgnparser(input).parse_game();
     if(!ag.has_value())
         throw std::runtime_error("Bad input, parse failed");
     pgnparser_ast::gametree &gt_ast = ag->gt;
-    variant_setup_t variant_setup = derive_variant_setup(*ag);
-    game g(gnode<comments_t>::create_root(
-        state(create_multiverse_from_variant_setup(variant_setup), variant_setup.promotions), ag->comments));
+    auto [initial, error] = pgn_loading::load_initial_position<false>(*ag);
+    const bool illegal_setup = error.has_value();
+    if(illegal_setup && !options.allow_illegal_history)
+        throw *error;
+    const auto [size_x, size_y] = initial.get_board_size();
+    const bool is_even = initial.get_initial_lines_range() == timeline_layout::even.initial_range();
+    const auto promotions = initial.get_promotion_options();
+    game g(gnode<comments_t>::create_root(std::move(initial), ag->comments, illegal_setup));
     g.metadata = ag->headers;
-    g.metadata["timeline"] = variant_setup.is_even_timelines ? "even" : "odd";
-    g.metadata["size"] = std::to_string(variant_setup.size_x) + "x" + std::to_string(variant_setup.size_y);
+    g.metadata["timeline"] = is_even ? "even" : "odd";
+    g.metadata["size"] = std::to_string(size_x) + "x" + std::to_string(size_y);
     if(g.metadata.contains("promotions"))
     {
-        g.metadata["promotions"] = format_promotions(variant_setup.promotions);
+        g.metadata["promotions"] = format_promotions(promotions);
     }
     // parse moves
     std::function<gnode<comments_t> *(gnode<comments_t> *, const pgnparser_ast::gametree &)> dfs;
-    dfs = [&dfs](gnode<comments_t> *node, const pgnparser_ast::gametree &gt_ast) -> gnode<comments_t> * {
+    dfs = [&dfs, &ag, options](gnode<comments_t> *node, const pgnparser_ast::gametree &gt_ast) -> gnode<comments_t> * {
         auto *last = node;
         if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(gt_ast.variations_or_outcome))
         {
@@ -61,54 +68,27 @@ game game::from_pgn(std::string input)
                 std::vector<ext_move> moves;
                 for(const auto &mv_ast: act_ast.moves)
                 {
-                    auto [fm_opt, pt_opt, candidates] = s.parse_move(mv_ast);
-                    if(!fm_opt.has_value())
-                    {
-                        if(candidates.empty())
-                        {
-                            std::ostringstream oss;
-                            oss << "game::from_pgn(): Invalid move: " << mv_ast;
-                            
-                            throw std::runtime_error(oss.str());
-                        }
-                        else
-                        {
-                            std::ostringstream oss;
-                            oss << "game::from_pgn(): Ambiguous move: " << mv_ast << "; candidates: ";
-                            oss << range_to_string(candidates, "", "");
-                            throw std::runtime_error(oss.str());
-                        }
-                    }
-                    else
-                    {
-                        full_move fm = fm_opt.value();
-                        const auto normalized = s.normalize_promotion(ext_move(
-                            fm, pt_opt.value_or(NO_PIECE)));
-                        if(!normalized)
-                        {
-                            std::ostringstream oss;
-                            oss << "game::from_pgn(): Illegal promotion: " << mv_ast;
-                            throw std::runtime_error(oss.str());
-                        }
-                        const bool flag = s.apply_move<false>(*normalized);
-                        if(!flag)
-                        {
-                            std::ostringstream oss;
-                            oss << "game::from_pgn(): Illegal move: " << mv_ast << " (parsed as: " << fm << ")";
-                            throw std::runtime_error(oss.str());
-                        }
-                        moves.push_back(*normalized);
-                    }
+                    moves.push_back(s.apply_move_ast(mv_ast, ag->source_text));
                 }
-                bool flag = s.submit();
-                if(!flag)
+                if(!s.submit())
                 {
-                    std::ostringstream oss;
-                    oss << "game::from_pgn(): Cannot submit after parsing these moves: " << act_ast;
-                    throw std::runtime_error(oss.str());
+                    throw pgn_validation_error(
+                        pgn_validation_error::present_not_advanced{},
+                        pgn_validation_error::make_subject(act_ast, ag->source_text)
+                    );
+                }
+                bool illegal_history = node->has_illegal_history();
+                if(!illegal_history) 
+                {
+                    const auto exposure = s.find_royal_exposure(false);
+                    illegal_history = exposure.has_value();
+                    if(illegal_history && !options.allow_illegal_history)
+                        throw pgn_validation_error(*exposure,
+                            pgn_validation_error::make_subject(act_ast, ag->source_text));
                 }
                 action act = action::from_vector(moves, node->get_state());
-                std::unique_ptr<gnode<comments_t>> child_node = gnode<comments_t>::create_child(node, std::move(s), std::move(act), act_ast.comments);
+                std::unique_ptr<gnode<comments_t>> child_node = gnode<comments_t>::create_child(
+                    node, std::move(s), std::move(act), act_ast.comments, illegal_history);
                 // Validate the complete incoming subtree before replacing a duplicate.
                 auto *endpoint = dfs(child_node.get(), *child_gt);
                 if(node->find_child(child_node->get_action()))
@@ -222,8 +202,9 @@ std::vector<vec4> game::gen_move_if_playable(vec4 p) const
     }
 }
 
-match_status_t game::get_match_status() const
+game::match_status_t game::get_match_status() const
 {
+    if(has_illegal_history()) return match_status_t::ILLEGAL_HISTORY;
     const state &s = current_node->get_state();
     if(!nonterminal.has_value())
     {
@@ -364,10 +345,10 @@ bool game::submit()
     auto *child = current_node->find_child(act);
     if(!child)
     {
-        // The draft already supplies a validated successor. Keep submission's
-        // existing policy for checks rather than revalidating through add_child.
+        // Keep permissive manual submission, but classify the new history once.
+        const bool illegal_history = has_illegal_history() || submitted->find_royal_exposure(false).has_value();
         child = current_node->add_child(gnode<comments_t>::create_child(
-            current_node, std::move(submitted), std::move(act), comments_t{}));
+            current_node, std::move(submitted), std::move(act), comments_t{}, illegal_history));
     }
     current_node = child;
     fresh();
@@ -377,6 +358,11 @@ bool game::submit()
 bool game::has_child(const action &act) const
 {
     return current_node->find_child(act) != nullptr;
+}
+
+bool game::has_illegal_history() const noexcept
+{
+    return current_node->has_illegal_history();
 }
 
 bool game::delete_child(const action &act)
@@ -424,6 +410,7 @@ promotion_options game::get_promotion_options() const
 
 std::optional<action> game::suggest_action()
 {
+    if(has_illegal_history()) return std::nullopt;
     if(nonterminal.has_value() && !*nonterminal)
         return std::nullopt;
     const state &s = current_node->get_state();
@@ -455,13 +442,13 @@ bool game::add_child(action act)
         return false;
     }
     auto newstate = current_node->get_state().can_apply(act);
-    if(!newstate || newstate->find_checks(newstate->get_present().second).first().has_value())
+    if(!newstate || (!has_illegal_history() && newstate->find_royal_exposure(false).has_value()))
     {
         return false;
     }
     auto child = gnode<comments_t>::create_child(current_node, std::move(newstate), std::move(act), comments_t{});
     current_node->add_child(std::move(child));
-    nonterminal = true;
+    if(!has_illegal_history()) nonterminal = true;
     return true;
 }
 
@@ -493,16 +480,19 @@ void game::visit_parent()
     fresh();
 }
 
-std::vector<std::tuple<action, std::string>> game::get_child_actions(pgn_options show_flags) const
+std::vector<game::action_summary> game::get_child_actions(pgn_options show_flags) const
 {
-    std::vector<std::tuple<action, std::string>> result;
+    std::vector<action_summary> result;
     auto &children = current_node->get_children();
     state s = current_node->get_state();
     for(const auto &child : children)
     {
         const action &act = child->get_action();
-        std::string txt = act.pgn(s, show_flags);
-        result.push_back({act, txt});
+        const auto flags = child->has_illegal_history()
+            ? show_flags & ~(pgn_options::SHOW_MATE | pgn_options::SHOW_OUTCOME)
+            : show_flags;
+        std::string txt = act.pgn(s, flags);
+        result.push_back({act, std::move(txt), child->has_illegal_history()});
     }
     return result;
 }

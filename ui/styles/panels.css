@@ -430,6 +430,20 @@
     font-weight: 500;
 }
 
+.select-option.illegal-history {
+    color: var(--ui-illegal);
+    background: color-mix(in srgb, var(--ui-illegal) 12%, var(--ui-panel));
+}
+
+.select-option.illegal-history:hover {
+    background: color-mix(in srgb, var(--ui-illegal) 20%, var(--ui-panel));
+}
+
+.select-option.illegal-history.selected {
+    background: color-mix(in srgb, var(--ui-illegal) 28%, var(--ui-panel));
+    box-shadow: inset 3px 0 var(--ui-illegal);
+}
+
 .hint-btn {
     border: 0;
     font-family: inherit;

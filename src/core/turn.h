@@ -26,30 +26,6 @@ inline std::string show_turn(turn_t t)
     return std::to_string(n) + (c ? "b": "w");
 }
 
-enum class match_status_t {PLAYING, WHITE_WINS, BLACK_WINS, STALEMATE};
 enum class mate_type {NONE, CHECKMATE, SOFTMATE, STALEMATE};
-
-
-[[maybe_unused]]
-static std::ostream &operator<<(std::ostream &os, const match_status_t &status)
-{
-   switch (status)
-   {
-       case match_status_t::PLAYING:
-           os << "PLAYING";
-           break;
-       case match_status_t::WHITE_WINS:
-           os << "WHITE_WINS";
-           break;
-       case match_status_t::BLACK_WINS:
-           os << "BLACK_WINS";
-           break;
-       case match_status_t::STALEMATE:
-           os << "STALEMATE";
-           break;
-   }
-   return os;
-}
-
 
 #endif /* TURN_H */

@@ -8,28 +8,31 @@
 #ifndef pgnparser_h
 #define pgnparser_h
 
+#include "pgnerror.h"
 #include "ast.h"
-
-class parse_error : public std::runtime_error {
-public:
-    explicit parse_error(const std::string &message)
-        : std::runtime_error(message) {}
-};
+#include <cstdint>
+#include <stdexcept>
 
 class pgnparser
 {
 private:
     const bool check_turn_number;
-    std::string input;
+    std::shared_ptr<const std::string> source;
+    std::string_view input;
     struct {
-        std::string::iterator current;
+        std::string_view::const_iterator current;
+        std::size_t start, end, previous_end;
         pgnparser_ast::token_t token;
         char piece;
         char file;
         unsigned number;
         turn_t turn;
         std::string_view comment;
-    } buffer;
+    } buffer{};
+    std::optional<parse_error> furthest_error;
+
+    [[noreturn]] void fail(parse_error::error_type_t reason) const;
+    void record_expected(std::vector<std::string> expected);
 public:
     
     pgnparser(std::string msg, bool check_turn_number=true, turn_t start_turn=std::make_pair(1,false));

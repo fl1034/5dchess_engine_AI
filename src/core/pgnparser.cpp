@@ -3,6 +3,7 @@
 #include "vec4.h"
 #include <charconv>
 #include <sstream>
+#include <limits>
 
 //#define DEBUGMSG
 #include "debug.h"
@@ -19,6 +20,19 @@ bool match_opt(const std::optional<T> &simple, const std::optional<T> &full)
 using namespace pgnparser_ast;
 
 
+void pgnparser::fail(parse_error::error_type_t reason) const
+{
+    throw parse_error(std::move(reason), source, {buffer.start, buffer.end});
+}
+
+void pgnparser::record_expected(std::vector<std::string> expected)
+{
+    if(!furthest_error || buffer.start > furthest_error->get_start())
+        furthest_error.emplace(parse_error::unexpected_input{std::move(expected)},
+            source, source_range{buffer.start, buffer.end});
+}
+
+
 std::vector<std::string> views_to_strings(const std::vector<std::string_view> &views)
 {
     std::vector<std::string> result(views.size());
@@ -29,7 +43,8 @@ std::vector<std::string> views_to_strings(const std::vector<std::string_view> &v
     return result;
 }
 
-pgnparser::pgnparser(std::string msg, bool ck, turn_t start_turn) : check_turn_number(ck), input(msg)
+pgnparser::pgnparser(std::string msg, bool ck, turn_t start_turn)
+    : check_turn_number(ck), source(std::make_shared<const std::string>(std::move(msg))), input(*source)
 {
     buffer.current = input.begin();
     buffer.turn = previous_turn(start_turn);
@@ -40,6 +55,9 @@ pgnparser::pgnparser(std::string msg, bool ck, turn_t start_turn) : check_turn_n
 
 void pgnparser::next_token()
 {
+    buffer.previous_end = buffer.end;
+    buffer.start = buffer.current - input.begin();
+    buffer.end = buffer.start;
     
     if(buffer.current == input.end())
     {
@@ -94,11 +112,8 @@ void pgnparser::next_token()
             }
             else
             {
-                std::ostringstream oss;
-                oss << "next_token(): expected castling after O, got ";
-                oss << std::string(input.begin(),buffer.current) << "{<<-this}";
-                oss << std::string(buffer.current,input.end());
-                throw parse_error(oss.str());
+                buffer.end = std::min(input.size(), buffer.start + 1);
+                fail(parse_error::unexpected_input{{"'O-O'", "'O-O-O'"}});
             }
             break;
         case 'a':
@@ -118,44 +133,38 @@ void pgnparser::next_token()
             buffer.token = EQUAL; dprint("token:EQUAL"); buffer.current++; break;
         case '0':
             buffer.current++;
-            if(*buffer.current != '-')
+            if(buffer.current == input.end() || *buffer.current != '-')
             {
                 buffer.token = ZERO;
                 dprint("token:ZERO");
                 break;
             }
-            else
-            {
-                buffer.current++;
-                if(*buffer.current != '1')
-                {
-                    throw parse_error("next_token(): expected '0-1' after '0-': got '0-" + std::to_string(*buffer.current) + "'");
-                }
-                buffer.current++;
-                buffer.token = BLACK_WINS;
-                break;
-            }
-            [[fallthrough]];
+            buffer.current++;
+            if(buffer.current == input.end() || *buffer.current != '1')
+                throw parse_error(parse_error::unexpected_input{{"'1' after '0-'"}}, source,
+                    {static_cast<std::size_t>(buffer.current - input.begin()),
+                     std::min(input.size(), static_cast<std::size_t>(buffer.current - input.begin()) + 1)});
+            buffer.current++;
+            buffer.token = BLACK_WINS;
+            break;
         case '1':
-            if(*(buffer.current+1) == '-')
+            if(input.end() - buffer.current >= 2 && buffer.current[1] == '-')
             {
                 buffer.current += 2;
-                if(*buffer.current != '0')
-                {
-                    throw parse_error("next_token(): expected '1-0' after '1-': got '1-" + std::to_string(*buffer.current) + "'");
-                }
+                if(buffer.current == input.end() || *buffer.current != '0')
+                    throw parse_error(parse_error::unexpected_input{{"'0' after '1-'"}}, source,
+                        {static_cast<std::size_t>(buffer.current - input.begin()),
+                         std::min(input.size(), static_cast<std::size_t>(buffer.current - input.begin()) + 1)});
                 buffer.current++;
                 buffer.token = WHITE_WINS;
                 break;
             }
-            else if(*(buffer.current+1) == '/' && *(buffer.current+2) == '2' && *(buffer.current+3) == '-')
+            else if(input.substr(buffer.start, 4) == "1/2-")
             {
-                const static std::string expected = "1/2-1/2";
-                std::string got(buffer.current, buffer.current + expected.size());
-                if(got != expected)
-                {
-                    throw parse_error("next_token(): expected '1/2-1/2' after '1/2-': got '" + got + "'");
-                }
+                const static std::string_view expected = "1/2-1/2";
+                if(input.substr(buffer.start, expected.size()) != expected)
+                    throw parse_error(parse_error::unexpected_input{{"'1/2-1/2'"}}, source,
+                        {buffer.start, std::min(input.size(), buffer.start + expected.size())});
                 buffer.current += expected.size();
                 buffer.token = DRAW;
                 break;
@@ -179,25 +188,22 @@ void pgnparser::next_token()
             const auto result = std::from_chars(
                 input.data() + begin, input.data() + end, buffer.number);
             if(result.ec == std::errc::result_out_of_range)
-                throw parse_error("next_token(): Integer literal is out of range");
+                throw parse_error(parse_error::integer_out_of_range{{0, std::numeric_limits<unsigned>::max()}},
+                    source, {begin, end});
             if(buffer.current!=input.end()
                && (*buffer.current == 'w' || *buffer.current == 'b')
                && (buffer.current+1 != input.end())
                && (*(buffer.current+1) == '.'))
             {
                 if(buffer.number > static_cast<unsigned>(vec4::T_MAX))
-                    throw parse_error("next_token(): Turn number exceeds the supported range");
+                    throw parse_error(parse_error::turn_out_of_range{{0, vec4::T_MAX}}, source, {begin, end});
                 bool c = *buffer.current == 'b';
                 buffer.current++;
                 turn_t newturn = std::make_pair(buffer.number, c);
                 if(check_turn_number && newturn != next_turn(buffer.turn))
                 {
-                    std::ostringstream oss;
-                    oss << "next_token(): non-consecutive turn number: ";
-                    auto [oldn, oldc] = buffer.turn;
-                    oss << oldn << (oldc ? "b" : "w") << " followed by ";
-                    oss << buffer.number << (c ? "b" : "w") << "\n";
-                    throw parse_error(oss.str());
+                    throw parse_error(parse_error::nonconsecutive_turn{next_turn(buffer.turn), newturn},
+                        source, {begin, end + 2});
                 }
                 dprint("token:TURN", buffer.number, c ? "b" : "w");
                 buffer.token = TURN;
@@ -207,17 +213,13 @@ void pgnparser::next_token()
             else if(buffer.current!=input.end() && *buffer.current == '.')
             {
                  if(buffer.number > static_cast<unsigned>(vec4::T_MAX))
-                     throw parse_error("next_token(): Turn number exceeds the supported range");
+                     throw parse_error(parse_error::turn_out_of_range{{0, vec4::T_MAX}}, source, {begin, end});
                  const bool c = false;
                  turn_t newturn = {static_cast<int>(buffer.number), c};
                  if(check_turn_number && newturn != next_turn(buffer.turn))
                  {
-                     std::ostringstream oss;
-                     oss << "next_token(): non-consecutive turn number: ";
-                     auto [oldn, oldc] = buffer.turn;
-                     oss << oldn << (oldc ? "b" : "w") << " followed by ";
-                     oss << buffer.number << (c ? "b" : "w") << "\n";
-                     throw parse_error(oss.str());
+                    throw parse_error(parse_error::nonconsecutive_turn{next_turn(buffer.turn), newturn},
+                        source, {begin, end + 1});
                  }
                  dprint("token:TURN", buffer.number, c ? "b" : "w");
                  buffer.token = TURN;
@@ -250,18 +252,18 @@ void pgnparser::next_token()
         case '!':
         case '?':
         {
-            std::string::iterator start = buffer.current;
+            auto start = buffer.current;
             buffer.token = EVALUATION_SYM;
             buffer.current++;
-            while(*buffer.current == '?' || *buffer.current == '!')
+            while(buffer.current != input.end() && (*buffer.current == '?' || *buffer.current == '!'))
                 buffer.current++;
-            buffer.comment = std::string_view(start, buffer.current+1);
+            buffer.comment = std::string_view(start, buffer.current);
             dprint("token:EVALUATION_SYM", buffer.comment);
             break;
         }
         case '>':
             buffer.current++;
-            if(*buffer.current == '>')
+            if(buffer.current != input.end() && *buffer.current == '>')
             {
                 buffer.token = BRANCHING_JUMP;
                 buffer.current++;
@@ -279,12 +281,12 @@ void pgnparser::next_token()
             buffer.token = RIGHT_PAREN; dprint("token:RIGHT_PAREN"); buffer.current++; break;
         case '[':
         {
-            std::string::iterator start = buffer.current;
+            auto start = buffer.current;
             while(*buffer.current != ']')
             {
                 buffer.current++;
                 if(buffer.current==input.end())
-                    throw parse_error("next_token(): expect ']' after '[': "+ std::string(start, buffer.current));
+                    throw parse_error(parse_error::unterminated_metadata{}, source, {buffer.start, input.size()});
             }
             buffer.comment = std::string_view(start+1, buffer.current);
             buffer.token = METADATA;
@@ -294,13 +296,13 @@ void pgnparser::next_token()
         }
         case '{':
         {
-            std::string::iterator start = buffer.current;
+            auto start = buffer.current;
             int nest_level = 1;
             while(nest_level > 0)
             {
                 buffer.current++;
                 if(buffer.current==input.end())
-                    throw parse_error("next_token(): comment not closed: "+ std::string(start, buffer.current));
+                    throw parse_error(parse_error::unterminated_comment{}, source, {buffer.start, input.size()});
                 else if(*buffer.current == '{')
                     nest_level++;
                 else if(*buffer.current == '}')
@@ -313,20 +315,20 @@ void pgnparser::next_token()
             break;
         }
         default:
-            if(isspace(*buffer.current))
+            if(isspace(static_cast<unsigned char>(*buffer.current)))
             {
                 buffer.token = WHITE_SPACE;
                 dprint("token:WHITE_SPACE");
-                while(buffer.current != input.end() && isspace(*buffer.current))
+                while(buffer.current != input.end() && isspace(static_cast<unsigned char>(*buffer.current)))
                     buffer.current++;
             }
             else
             {
-                std::ostringstream oss;
-                oss << "next_token(): unknown buffer.token: " << *buffer.current;
-                throw parse_error(oss.str());
+                buffer.end = buffer.start + 1;
+                fail(parse_error::unexpected_character{});
             }
     }
+    buffer.end = buffer.current - input.begin();
 }
 
 
@@ -336,7 +338,6 @@ void pgnparser::next_token()
     dprint("fallback to", std::string(input.begin(),fallback.current), "{<<-here}", std::string(fallback.current, input.end()), "\n[  ...]", __func__, "failed"); \
     return std::nullopt; \
 }
-#define PARSED_MSG std::string(fallback.current, buffer.current)
 
 void pgnparser::test_lexer()
 {
@@ -373,7 +374,7 @@ std::optional<relative_board> pgnparser::parse_relative_board()
         case EQUAL: ldiff = 0; next_token(); break;
         default:
             if(expect_line)
-                throw parse_error("parse_relative_board(): Expect line difference after 'L': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a signed timeline difference", "'='"}});
             else
                 has_line = false;
     }
@@ -385,9 +386,9 @@ std::optional<relative_board> pgnparser::parse_relative_board()
             next_token();
         }
         else if(sign == 0 && buffer.token == POSITIVE_NUMBER)
-            throw parse_error("parse_relative_board(): No number should appear after '=': " + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"'T'", "')'"}});
         else if(sign != 0 && buffer.token != POSITIVE_NUMBER)
-            throw parse_error("parse_relative_board(): Expect number after '+/-': " + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"a positive integer"}});
     }
     if(buffer.token == TIME)
     {
@@ -398,7 +399,7 @@ std::optional<relative_board> pgnparser::parse_relative_board()
             case NEGATIVE: sign = -1; break;
             case EQUAL: tdiff = 0; break;
             default:
-                throw parse_error("parse_relative_board(): Expect turn difference after 'L': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a signed turn difference", "'='"}});
         }
         next_token();
         if(buffer.token == POSITIVE_NUMBER)
@@ -409,15 +410,15 @@ std::optional<relative_board> pgnparser::parse_relative_board()
                 next_token();
             }
             else if(sign == 0 && buffer.token == POSITIVE_NUMBER)
-                throw parse_error("parse_relative_board(): No number should appear after '=': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"'T'", "')'"}});
             else if(sign != 0 && buffer.token != POSITIVE_NUMBER)
-                throw parse_error("parse_relative_board(): Expect number after '+'/'-': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a positive integer"}});
         }
     }
     else if(!has_line)
-        throw parse_error("parse_relative_board(): Relative board without any LT information: " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"a timeline or turn difference"}});
     if(buffer.token != RIGHT_PAREN)
-        throw parse_error("parse_relative_board(): Expect ')': " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"')'"}});
     next_token();
     
     return relative_board{ldiff, tdiff};
@@ -455,7 +456,7 @@ std::optional<absolute_board> pgnparser::parse_absolute_board()
         case ZERO: break;
         default:
             if(expect_line)
-                throw parse_error("parse_absolute_board(): Expect line after 'L': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a timeline number"}});
             else
                 has_line = false;
     }
@@ -477,7 +478,7 @@ std::optional<absolute_board> pgnparser::parse_absolute_board()
         }
         else
         {
-            throw parse_error("parse_absolute_board(): Expect number after '+'/'-': " + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"a nonnegative integer"}});
         }
     }
     if(buffer.token == TIME)
@@ -494,11 +495,14 @@ std::optional<absolute_board> pgnparser::parse_absolute_board()
             next_token();
         }
         else
-            throw parse_error("parse_absolute_board(): Expect number after 'T': " + PARSED_MSG);;
+            fail(parse_error::unexpected_input{{"a turn number"}});
     }
     else if(!has_line)
         PARSE_FAIL;
-    if(buffer.token != RIGHT_PAREN) PARSE_FAIL;
+    if(buffer.token != RIGHT_PAREN) {
+        record_expected({"')'"});
+        PARSE_FAIL;
+    }
     next_token();
     
     return absolute_board{sign, l, t};
@@ -519,7 +523,7 @@ std::optional<char> pgnparser::parse_promotion()
     }
     if(has_equal)
     {
-        throw parse_error("parse_promotion(): Expect promotion piece after '='");
+        fail(parse_error::unexpected_input{{"a promotion piece"}});
     }
     return std::nullopt;
 }
@@ -586,10 +590,16 @@ std::optional<physical_move> pgnparser::parse_physical_move()
             capture = true;
             next_token();
         }
-        if(buffer.token != FILE_CHAR) PARSE_FAIL;
+        if(buffer.token != FILE_CHAR) {
+            record_expected({"a destination file"});
+            PARSE_FAIL;
+        }
         to_file = buffer.file;
         next_token();
-        if(buffer.token != POSITIVE_NUMBER) PARSE_FAIL;
+        if(buffer.token != POSITIVE_NUMBER) {
+            record_expected({"a destination rank"});
+            PARSE_FAIL;
+        }
         to_rank = buffer.number;
         next_token();
     }
@@ -622,7 +632,7 @@ std::optional<std::monostate> pgnparser::parse_timeline_comment()
             if(buffer.token == POSITIVE || buffer.token == NEGATIVE)
                 next_token();
             if(buffer.token != ZERO && buffer.token != POSITIVE_NUMBER)
-                throw parse_error("parse_timeline_comment(): Expect line after '(>L': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a timeline number"}});
             next_token();
             break;
         case PRESENT_MOVED:
@@ -630,14 +640,14 @@ std::optional<std::monostate> pgnparser::parse_timeline_comment()
             if(buffer.token != TIME) PARSE_FAIL;
             next_token();
             if(buffer.token != ZERO && buffer.token != POSITIVE_NUMBER)
-                throw parse_error("parse_timeline_comment(): Expect number after '(>T': " + PARSED_MSG);
+                fail(parse_error::unexpected_input{{"a turn number"}});
             next_token();
             break;
         default:
             PARSE_FAIL;
     }
     if(buffer.token != RIGHT_PAREN)
-        throw parse_error("parse_timeline_comment(): Expect ')': " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"')'"}});
     next_token();
     return std::monostate();
 }
@@ -709,16 +719,16 @@ std::optional<superphysical_move> pgnparser::parse_superphysical_move()
     }
     else
     {
-        throw parse_error("parse_superphysical_move(): Expect destination board/squre after '>'/'>>': " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"a destination board or square"}});
     }
     // if parsing does not fail before this position, we believe this shouldn't be something
     // other than a superphysical move
     if(buffer.token != FILE_CHAR)
-        throw parse_error("parse_superphysical_move(): Expect destination file: " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"a destination file"}});
     to_file = buffer.file;
     next_token();
     if(buffer.token != POSITIVE_NUMBER)
-        throw parse_error("parse_superphysical_move(): Expect destination rank: " + PARSED_MSG);
+        fail(parse_error::unexpected_input{{"a destination rank"}});
     to_rank = buffer.number;
     next_token();
     promote_to = parse_promotion();
@@ -735,14 +745,15 @@ std::optional<superphysical_move> pgnparser::parse_superphysical_move()
 
 std::optional<move> pgnparser::parse_move()
 {
+    const std::size_t start = buffer.start;
     auto pm = parse_physical_move();
     if(pm)
-        return move{*pm};
+        return move{*pm, source_range{start, buffer.previous_end}};
     else
     {
         auto sm = parse_superphysical_move();
         if(sm)
-            return move{*sm};
+            return move{*sm, source_range{start, buffer.previous_end}};
         else
             return std::nullopt;
     }
@@ -793,10 +804,14 @@ std::optional<actions> pgnparser::parse_actions()
     std::vector<std::string_view> comments;
     comments.clear();
     std::optional<move> mv_buffer = parse_move();
-    if(!mv_buffer.has_value()) PARSE_FAIL;
+    if(!mv_buffer.has_value()) {
+        record_expected({"a move"});
+        PARSE_FAIL;
+    }
     moves.push_back(*mv_buffer);
     if(buffer.token != WHITE_SPACE && buffer.token != COMMENT)
-        return actions{moves, views_to_strings(comments)};
+        return actions{moves, views_to_strings(comments),
+            source_range{fallback.start, moves.back().source->end}};
     else
         comments = parse_comments();
     while((mv_buffer = parse_move()))
@@ -808,7 +823,8 @@ std::optional<actions> pgnparser::parse_actions()
         else
             comments = parse_comments();
     }
-    return actions{moves, views_to_strings(comments)};
+    return actions{moves, views_to_strings(comments),
+            source_range{fallback.start, moves.back().source->end}};
 }
 
 /*
@@ -836,9 +852,9 @@ std::optional<gametree> pgnparser::parse_gametree()
         if(!act_buffer.has_value()) PARSE_FAIL;
         gt_buffer = parse_gametree();
         if(!gt_buffer.has_value())
-            throw parse_error("parse_gametree(): Invalid game tree branch: " + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"a game tree branch"}});
         else if(buffer.token != RIGHT_PAREN)
-            throw parse_error("parse_gametree(): Expect ')':" + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"')'"}});
         else
             variations.push_back({*act_buffer, std::make_unique<gametree>(std::move(*gt_buffer))});
         buffer.turn = branch_start_turn; //last branch is over, reset turn number
@@ -851,7 +867,7 @@ std::optional<gametree> pgnparser::parse_gametree()
     {
         gt_buffer = parse_gametree();
         if(!gt_buffer)
-            throw parse_error("parse_gametree(): !!This should not happen!! Invalid game tree continuation: " + PARSED_MSG);
+            fail(parse_error::unexpected_input{{"a game tree continuation"}});
         variations.push_back(std::make_pair(*act_buffer, std::make_unique<gametree>(std::move(*gt_buffer))));
     }
     return gametree{std::move(variations)};
@@ -868,15 +884,21 @@ std::optional<gametree> pgnparser::parse_gametree()
 
 std::optional<game> pgnparser::parse_game()
 {
-    PARSE_START;
     dprint("parse_game()");
     std::map<std::string, std::string> headers;
     std::vector<std::tuple<std::string, token_t, int, int, bool>> boards;
     std::vector<std::string_view> comments;
+    std::vector<pgnparser_ast::board_source> board_sources;
+    std::map<std::string, pgnparser_ast::header_source> header_sources;
     parse_comments();
     while(buffer.token == METADATA)
     {
         const std::string s(buffer.comment);
+        const std::size_t content_start = buffer.start + 1;
+        const auto header_error = [&](parse_error::error_type_t reason,
+            std::size_t start, std::size_t end) -> void {
+            throw parse_error(std::move(reason), source, {content_start + start, content_start + end});
+        };
         const int len = static_cast<int>(s.size());
         bool saw_quote = false;
         for(auto c:s)
@@ -890,119 +912,121 @@ std::optional<game> pgnparser::parse_game()
         if(!saw_quote)
         {
             // parse as <board-fen>
-            auto tup = parse_board_fen_metadata(s);
-            boards.push_back(tup);
+            try {
+                boards.push_back(parse_board_fen_metadata(s));
+                board_sources.push_back({{buffer.start, buffer.end},
+                    {content_start, content_start + std::get<0>(boards.back()).size()}});
+            }
+            catch(const parse_error &error) {
+                header_error(error.get_error_type(), error.get_start(), error.get_end());
+            }
         }
         else
         {
             // parse as <header>
             std::string key, value;
             int now = 0, prev;
-            while(now<len && !isspace(s[now]))
+            while(now<len && !isspace(static_cast<unsigned char>(s[now])))
                 now++;
             if(now == len)
-                throw parse_error("parse_game(): Expect space in header:" + s);
+                header_error(parse_error::unexpected_input{{"whitespace after the header key"}}, now, now);
             key = std::string(s.begin(), s.begin() + now);
-            now++;
+            while(now < len && isspace(static_cast<unsigned char>(s[now])))
+                now++;
             if(now == len || s[now] != '"')
-                throw parse_error("parse_game(): Expect '\"' in header:" + s);
+                header_error(parse_error::unexpected_input{{"an opening quote"}}, now, std::min(now + 1, len));
             now++; prev = now;
             while(now<len && s[now] != '"')
                 now++;
             if(now == len)
-                throw parse_error("parse_game(): '\"' not closed:" + s);
+                header_error(parse_error::unterminated_header_value{}, prev - 1, now);
             value = std::string(s.begin() + prev, s.begin() + now);
             if(now+1 != len)
-                throw parse_error("parse_game(): Too many arguments in header:" + s);
+                header_error(parse_error::unexpected_input{{"end of header"}}, now + 1, len);
             for(auto &c: key) // keys are not case-sensitive, convert to lower cases
-                c = tolower(c);
+                c = tolower(static_cast<unsigned char>(c));
             auto [_, success] = headers.insert({key, value});
             if(!success)
-                throw parse_error("parse_game(): Duplicate header key: " + key);
+                header_error(parse_error::duplicate_header{key}, 0, key.size());
+            header_sources.emplace(key, pgnparser_ast::header_source{{buffer.start, buffer.end},
+                {content_start + prev, content_start + now}});
         }
         next_token();
         append_vectors(comments, parse_comments());
-//        if(buffer.token == END)
-//            PARSE_FAIL;
     }
     append_vectors(comments, parse_comments());
     auto gt_opt = parse_gametree();
-    if(!gt_opt) PARSE_FAIL;
+    if(!gt_opt) {
+        if(furthest_error) throw *furthest_error;
+        fail(parse_error::unexpected_input{{"a game tree"}});
+    }
     parse_comments();
-    if(buffer.token != END)
-        throw parse_error("parse_game(): Unexpected trailing input: " + PARSED_MSG);
-    return game{headers, boards, std::move(*gt_opt), views_to_strings(comments)};
+    if(buffer.token != END) {
+        if(furthest_error && furthest_error->get_start() >= buffer.start)
+            throw *furthest_error;
+        fail(parse_error::unexpected_input{{"end of input"}});
+    }
+    return game{headers, boards, std::move(*gt_opt), views_to_strings(comments), source,
+        std::move(board_sources), std::move(header_sources)};
 }
 
 std::tuple<std::string, pgnparser_ast::token_t, int, int, bool> pgnparser::parse_board_fen_metadata(const std::string &s)
 {
-    using namespace pgnparser_ast;
-    const int len = static_cast<int>(s.size());
-    int now = 0, prev;
-    auto next_colon = [&s, &now, len]() -> void {
-        while(now<len && s[now] != ':')
-            now++;
+    const auto error = [&](parse_error::error_type_t reason,
+        std::size_t start, std::size_t end) -> void {
+        throw parse_error(std::move(reason), std::make_shared<const std::string>(s), {start, end});
     };
-    next_colon();
-    std::string fen(s.begin(), s.begin()+now);
-    token_t sign;
-    int l, t;
-    bool c;
-    now++;
-    switch(s[now])
-    {
-        case '+':
-            sign = POSITIVE;
-            now++;
-            break;
-        case '-':
-            sign = NEGATIVE;
-            now++;
-            break;
+    const auto colon = [&](std::size_t start) {
+        const auto position = s.find(':', start);
+        if(position == std::string::npos)
+            error(parse_error::unexpected_input{{"':'"}}, s.size(), s.size());
+        return position;
+    };
+    const std::size_t fen_end = colon(0);
+    const std::size_t line_start = fen_end + 1;
+    const std::size_t line_end = colon(line_start);
+    const std::size_t time_start = line_end + 1;
+    const std::size_t time_end = colon(time_start);
+    token_t sign = NIL;
+    std::size_t number_start = line_start;
+    if(number_start < line_end && (s[number_start] == '+' || s[number_start] == '-')) {
+        sign = s[number_start] == '-' ? NEGATIVE : POSITIVE;
+        number_start++;
+    }
+    const auto number = [&](std::size_t start, std::size_t end, bool timeline) {
+        std::int64_t value = 0;
+        const auto begin = start;
+        // Preserve acceptance of explicitly positive metadata coordinates.
+        if(start < end && s[start] == '+') start++;
+        const auto result = std::from_chars(s.data() + start, s.data() + end, value);
+        if(result.ec == std::errc::invalid_argument)
+            error(parse_error::unexpected_input{{timeline ? "a timeline number" : "a turn number"}}, begin, end);
+        const auto maximum = timeline ? vec4::L_MAX : vec4::T_MAX;
+        if(result.ec == std::errc::result_out_of_range || value < 0 || value > maximum) {
+            if(timeline)
+                error(parse_error::timeline_out_of_range{{0, maximum}}, begin, end);
+            else
+                error(parse_error::turn_out_of_range{{0, maximum}}, begin, end);
+        }
+        if(result.ptr != s.data() + end)
+            error(parse_error::unexpected_input{{"':'"}}, result.ptr - s.data(), end);
+        return static_cast<int>(value);
+    };
+    const int l = number(number_start, line_end, true);
+    const int t = number(time_start, time_end, false);
+    const std::size_t color = time_end + 1;
+    if(color == s.size())
+        error(parse_error::unexpected_input{{"'w'", "'b'"}}, color, color);
+    bool c = false;
+    switch(s[color]) {
+        case 'w': case 'W': break;
+        case 'b': case 'B': c = true; break;
         default:
-            sign = NIL;
+            error(parse_error::unexpected_input{{"'w'", "'b'"}}, color, color + 1);
     }
-    prev = now;
-    try {
-        next_colon();
-        if(now == len)
-            throw parse_error("parse_game(): Expect line in board string:" + s);
-        l = stoi(std::string(s.begin() + prev, s.begin() + now));
-        now++; prev = now;
-        next_colon();
-        if(now == len)
-            throw parse_error("parse_game(): Expect time in board string:" + s);
-        t = stoi(std::string(s.begin() + prev, s.begin() + now));
-    }
-    catch(const std::invalid_argument &e)
-    {
-        throw parse_error("parse_game(): Expect number after ':': " + s + "\n" + e.what());
-    }
-    catch(const std::out_of_range &e)
-    {
-        throw parse_error("parse_game(): Number out of range in board string: " + s + "\n" + e.what());
-    }
-    if(l < 0 || l > vec4::L_MAX || t < 0 || t > vec4::T_MAX)
-        throw parse_error("parse_game(): Board coordinate out of range: " + s);
-    now++;
-    if(now == len)
-        throw parse_error("parse_game(): Expect color in board string:" + s);
-    switch(s[now])
-    {
-        case 'w':
-        case 'W':
-            c = false;
-            break;
-        case 'b':
-        case 'B':
-            c = true;
-            break;
-        default:
-            throw parse_error(std::string("parse_game(): Unknown color:") + s[now] + " in " + s);
-    }
-    if(now+1 != len)
-        throw parse_error("parse_game(): Too many arguments in board string:" + s);
-    return std::make_tuple(fen, sign, l, t, c);
+    if(color + 1 != s.size())
+        error(parse_error::unexpected_input{{"end of board metadata"}}, color + 1, s.size());
+    return std::make_tuple(s.substr(0, fen_end), sign, l, t, c);
 }
 
 /* ***MATCHER*** */

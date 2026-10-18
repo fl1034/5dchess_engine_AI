@@ -1,18 +1,101 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 #include <string>
+#include <string_view>
 #include <memory>
 #include "game.h"
 #include "pgnparser.h"
 
 using namespace emscripten;
 
+namespace
+{
+// PGN error locations are UTF-8 bytes; JavaScript editor offsets are UTF-16.
+std::size_t utf16_offset(std::string_view text, std::size_t end)
+{
+    std::size_t result = 0;
+    for(std::size_t i = 0; i < end; ++i) {
+        const auto byte = static_cast<unsigned char>(text[i]);
+        if((byte & 0xc0) == 0x80) continue;
+        result += byte >= 0xf0 ? 2 : 1;
+    }
+    return result;
+}
+
+val diagnostic_range(const std::string &input, const std::string &source,
+                     std::size_t start, std::size_t end)
+{
+    if(source != input || start > end || end > input.size()) return val::null();
+    val range = val::object();
+    range.set("start", utf16_offset(input, start));
+    range.set("end", utf16_offset(input, end));
+    return range;
+}
+
+void set_diagnostic(val &result, const char *category, const char *code,
+                    const char *message, val range = val::null(), bool allow = false)
+{
+    val diagnostic = val::object();
+    diagnostic.set("category", category);
+    diagnostic.set("code", code);
+    diagnostic.set("message", message);
+    diagnostic.set("range", range);
+    diagnostic.set("canAllowIllegalHistory", allow);
+    result.set("diagnostic", diagnostic);
+}
+
+const char *error_code(const parse_error::error_type_t &reason)
+{
+    return std::visit(overloads {
+        [](const parse_error::unexpected_character &) { return "unexpected_character"; },
+        [](const parse_error::unexpected_input &) { return "unexpected_input"; },
+        [](const parse_error::unterminated_comment &) { return "unterminated_comment"; },
+        [](const parse_error::unterminated_metadata &) { return "unterminated_metadata"; },
+        [](const parse_error::unterminated_header_value &) { return "unterminated_header_value"; },
+        [](const parse_error::integer_out_of_range &) { return "integer_out_of_range"; },
+        [](const parse_error::turn_out_of_range &) { return "turn_out_of_range"; },
+        [](const parse_error::timeline_out_of_range &) { return "timeline_out_of_range"; },
+        [](const parse_error::nonconsecutive_turn &) { return "nonconsecutive_turn"; },
+        [](const parse_error::duplicate_header &) { return "duplicate_header"; }
+    }, reason);
+}
+
+const char *error_code(const pgn_validation_error::error_type_t &reason)
+{
+    return std::visit(overloads {
+        [](const pgn_validation_error::invalid_move &) { return "invalid_move"; },
+        [](const pgn_validation_error::ambiguous_move &) { return "ambiguous_move"; },
+        [](const pgn_validation_error::illegal_promotion &) { return "illegal_promotion"; },
+        [](const pgn_validation_error::illegal_move &) { return "illegal_move"; },
+        [](const pgn_validation_error::present_not_advanced &) { return "present_not_advanced"; },
+        [](const pgn_validation_error::royal_exposed &) { return "royal_exposed"; },
+        [](const pgn_validation_error::invalid_size &) { return "invalid_size"; },
+        [](const pgn_validation_error::unknown_variant &) { return "unknown_variant"; },
+        [](const pgn_validation_error::invalid_timeline &) { return "invalid_timeline"; },
+        [](const pgn_validation_error::invalid_promotions &) { return "invalid_promotions"; },
+        [](const pgn_validation_error::missing_setup &) { return "missing_setup"; }
+    }, reason);
+}
+
+const char *error_code(const board_fen_error::error_type_t &reason)
+{
+    return std::visit(overloads {
+        [](const board_fen_error::rank_too_short &) { return "rank_too_short"; },
+        [](const board_fen_error::rank_too_long &) { return "rank_too_long"; },
+        [](const board_fen_error::too_few_ranks &) { return "too_few_ranks"; },
+        [](const board_fen_error::too_many_ranks &) { return "too_many_ranks"; },
+        [](const board_fen_error::invalid_piece &) { return "invalid_piece"; },
+        [](const board_fen_error::invalid_unmoved_marker &) { return "invalid_unmoved_marker"; }
+    }, reason);
+}
+} /* anonymous namespace */
+
 // Safe wrapper that returns JavaScript object with success/error
-val create_game_from_pgn(const std::string &pgn)
+val create_game_from_pgn(const std::string &pgn, bool allow_illegal_history)
 {
     val result = val::object();
     try {
-        auto game_ptr = std::make_shared<game>(game::from_pgn(pgn));
+        auto game_ptr = std::make_shared<game>(game::from_pgn(pgn, {allow_illegal_history}));
         result.set("success", true);
         result.set("game", val(game_ptr));
         return result;
@@ -22,6 +105,30 @@ val create_game_from_pgn(const std::string &pgn)
         result.set("error", "ParseError");
         result.set("message", e.what());
         result.set("type", "parse_error");
+        set_diagnostic(result, "syntax", error_code(e.get_error_type()), e.what(),
+            diagnostic_range(pgn, e.get_source(), e.get_start(), e.get_end()));
+        return result;
+    }
+    catch(const pgn_validation_error &e) {
+        result.set("success", false);
+        result.set("error", "PgnValidationError");
+        result.set("message", e.what());
+        result.set("type", "pgn_validation_error");
+        const auto *location = e.get_location();
+        set_diagnostic(result, "validation", error_code(e.get_error_type()), e.what(),
+            location ? diagnostic_range(pgn, *location->source, location->range.start, location->range.end)
+                     : val::null(),
+            std::holds_alternative<pgn_validation_error::royal_exposed>(e.get_error_type()));
+        return result;
+    }
+    catch(const board_fen_error &e) {
+        result.set("success", false);
+        result.set("error", "InvalidArgumentError");
+        result.set("message", e.what());
+        result.set("type", "invalid_argument");
+        const auto &range = e.get_pgn_range();
+        set_diagnostic(result, "validation", error_code(e.get_error_type()), e.what(),
+            range ? diagnostic_range(pgn, *e.get_pgn_source(), range->start, range->end) : val::null());
         return result;
     }
     catch(const std::invalid_argument &e) {
@@ -29,6 +136,7 @@ val create_game_from_pgn(const std::string &pgn)
         result.set("error", "InvalidArgumentError");
         result.set("message", e.what());
         result.set("type", "invalid_argument");
+        set_diagnostic(result, "runtime", "invalid_argument", e.what());
         return result;
     }
     catch(const std::runtime_error &e) {
@@ -36,6 +144,7 @@ val create_game_from_pgn(const std::string &pgn)
         result.set("error", "RuntimeError");
         result.set("message", e.what());
         result.set("type", "runtime_error");
+        set_diagnostic(result, "runtime", "runtime_error", e.what());
         return result;
     }
     catch(const std::exception &e) {
@@ -43,6 +152,7 @@ val create_game_from_pgn(const std::string &pgn)
         result.set("error", "Exception");
         result.set("message", e.what());
         result.set("type", "generic_exception");
+        set_diagnostic(result, "runtime", "exception", e.what());
         return result;
     }
     catch(...) {
@@ -50,6 +160,7 @@ val create_game_from_pgn(const std::string &pgn)
         result.set("error", "UnknownError");
         result.set("message", "Unknown exception occurred");
         result.set("type", "unknown");
+        set_diagnostic(result, "runtime", "unknown", "Unknown exception occurred");
         return result;
     }
 }
@@ -166,10 +277,11 @@ val child_actions_to_js(const game &g, pgn_options show_flags)
     auto child_actions = g.get_child_actions(show_flags);
     for(size_t i = 0; i < child_actions.size(); ++i)
     {
-        const auto &[act, pgn] = child_actions[i];
+        const auto &[act, pgn, is_illegal] = child_actions[i];
         val move_info = val::object();
         move_info.set("action", convert_action_to_js(act));
         move_info.set("pgn", pgn);
+        move_info.set("is_illegal", is_illegal);
         result.set(i, move_info);
     }
     return result;
@@ -181,12 +293,16 @@ val child_actions_to_js(const game &g, pgn_options show_flags)
 
 EMSCRIPTEN_BINDINGS(engine) {
     // Factory function for creating games
+    function("from_pgn", optional_override([](const std::string &pgn) {
+        return create_game_from_pgn(pgn, false);
+    }));
     function("from_pgn", &create_game_from_pgn);
 
     // Class: game
     class_<game>("game")
         .smart_ptr<std::shared_ptr<game>>("game")
         .property("metadata", &game::metadata)
+        .function("has_illegal_history", &game::has_illegal_history)
         .function("get_metadata", optional_override([](const game &self) {
             return convert_metadata_to_js(self.metadata);
         }))
@@ -276,20 +392,24 @@ EMSCRIPTEN_BINDINGS(engine) {
             return convert_vector_vec4_to_js(vec);
         }))
         .function("get_match_status", optional_override([](const game &self) {
-            match_status_t status = self.get_match_status();
+            game::match_status_t status = self.get_match_status();
             switch(status)
             {
-                case match_status_t::PLAYING:
+                case game::match_status_t::PLAYING:
                     if(self.get_unmoved_state().get_present().second)
                         return std::string("Black's Move");
                     else
                         return std::string("White's Move");
-                case match_status_t::WHITE_WINS:
+                case game::match_status_t::WHITE_WINS:
                     return std::string("White Wins");
-                case match_status_t::BLACK_WINS:
+                case game::match_status_t::BLACK_WINS:
                     return std::string("Black Wins");
-                case match_status_t::STALEMATE:
+                case game::match_status_t::STALEMATE:
                     return std::string("Stalemate");
+                case game::match_status_t::ILLEGAL_HISTORY:
+                    return self.get_unmoved_state().get_present().second
+                        ? std::string("Black's Move (Illegal History)")
+                        : std::string("White's Move (Illegal History)");
                 default:
                     return std::string("Unknown Status");
             }

@@ -75,7 +75,9 @@ int main(int argc, char *argv[])
             {
                 try
                 {
-                    game g = game::from_pgn(pgns[index]);
+                    // Database games can contain unresolved checks. This is an
+                    // import smoke test, not an assertion of legal history.
+                    game g = game::from_pgn(pgns[index], {.allow_illegal_history = true});
                 }
                 catch(const std::exception &error)
                 {

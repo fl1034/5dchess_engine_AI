@@ -9,9 +9,9 @@ please refer to [action-generation.md](action-generation.md).
 - [`magic.h`](../../src/core/magic.h) and `magic.cpp`: magic bitboards for sliding pieces, accounting for blockers.
 - [`multiverse.h`](../../src/core/multiverse.h) and `multiverse.cpp`: physical and superphysical piece movement; [`move_geometry.h`](../../src/core/move_geometry.h) supplies shared time/timeline directions.
 - [`state.h`](../../src/core/state.h) and `state.cpp`: player context, movable pieces, and checking moves; [`check_position.h`](../../src/core/check_position.h) and `check_position.cpp` provide dedicated check scans over borrowed board views.
-- [`pawn_movement.cpp`](../../test/pawn_movement.cpp): pawn and brawn regression tests.
+- [`test_movegen.cpp`](../../test/test_movegen.cpp): pawn, brawn, and castling regression tests.
 
-Run the `pawn_movement` test executable with `-l` to print each test group,
+Run the `test_movegen` test executable with `-l` to print each test group,
 position FEN, expected move count, and passing result.
 
 ## Public API

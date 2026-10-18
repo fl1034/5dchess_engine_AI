@@ -202,8 +202,11 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             PROJECT_VERSION_STRING="${PROJECT_VERSION}"
         )
         
-        # Enable WebAssembly native exception handling
-        target_compile_options(engine_wasm PRIVATE -fwasm-exceptions)
+        # Core parser/validation catch blocks must run too (e.g. to attach
+        # enclosing PGN ranges to FEN errors), not only the binding's catches.
+        foreach(WASM_TARGET 5dchess_core 5dchess_client engine_wasm)
+            target_compile_options(${WASM_TARGET} PRIVATE -fwasm-exceptions)
+        endforeach()
 
         set(EMSCRIPTEN_LINK_FLAGS 
             "-lembind --bind -fwasm-exceptions \

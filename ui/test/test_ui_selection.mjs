@@ -244,6 +244,7 @@ test('worker echoes selection identifiers and distinguishes refreshes from chang
     await Promise.resolve();
     let previewActive = false;
     self.game = {
+        has_illegal_history: () => false,
         gen_move_if_playable: () => [to], apply_move() {},
         discard_preview() { previewActive = false; },
         preview_move() { previewActive = true; return true; },

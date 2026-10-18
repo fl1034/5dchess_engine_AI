@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <stdexcept>
 #include "piece.h"
 #include "utils.h"
 
@@ -30,6 +31,15 @@ static_assert(sizeof(promotion_options) == 1);
 promotion_options piece_to_promotion_option(piece_t piece);
 bool can_promote_to(promotion_options options, piece_t piece);
 piece_t default_promote_to(promotion_options options);
+
+class invalid_promotions : public std::invalid_argument
+{
+public:
+    enum class reason { invalid_piece, mixed_wildcard };
+    const reason cause;
+    const char piece;
+    explicit invalid_promotions(reason cause, char piece = '\0');
+};
 
 promotion_options parse_promotions(std::string_view value);
 std::string format_promotions(promotion_options options);

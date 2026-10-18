@@ -5,6 +5,7 @@ import { compactViewport } from './mobile.js';
 import { getExportFilename } from './filename.js';
 import { createKeyboardShortcuts } from './keyboard.js';
 import { readCommentText } from './comment.js';
+import { createImportDiagnostics } from './import-diagnostics.js';
 
 export const UI = (() => {
     /* ================= SVG Icons ================= */
@@ -200,6 +201,11 @@ export const UI = (() => {
             const option = document.createElement('button');
             option.type = 'button';
             option.className = 'select-option';
+            option.classList.toggle('illegal-history', Boolean(opt.is_illegal));
+            if (opt.is_illegal) {
+                option.title = 'Contains illegal history';
+                option.setAttribute('aria-label', `${opt.pgn} — contains illegal history`);
+            }
             option.dataset.branchOption = String(idx);
             option.classList.toggle('selected', idx === selectedIndex);
             option.setAttribute('aria-pressed', String(idx === selectedIndex));
@@ -345,6 +351,7 @@ export const UI = (() => {
     function closePopup() {
         const entry = popupStack.pop();
         if (!entry) return;
+        if (entry.popupName === 'popupImport') importDiagnostics.cancelPending();
         document.getElementById(entry.popupName).classList.remove('show');
         if (entry.button) entry.button.classList.remove('active');
         const previous = popupStack[popupStack.length - 1];
@@ -408,13 +415,21 @@ export const UI = (() => {
         showPopup(event.currentTarget, 'popupImport');
     };
 
+    let importCancelCallback = null;
+    const importDiagnostics = createImportDiagnostics({
+        textarea: document.getElementById('importTextarea'),
+        overlay: document.getElementById('importHighlight'),
+        mirror: document.getElementById('importMirror'),
+        row: document.getElementById('importDiagnostic'),
+        location: document.getElementById('importDiagnosticLocation'),
+        message: document.getElementById('importDiagnosticMessage'),
+        heading: document.getElementById('importDiagnosticHeading'),
+        cancel: id => importCancelCallback?.(id),
+    });
     document.getElementById('loadButton').onclick = () => {
-        const data = document.getElementById('importTextarea').value;
-        if (importCallback) {
-            importCallback(data);
-        }
-        closePopup();
-    }
+        const request = importDiagnostics.begin();
+        importCallback?.(request.pgn, request.requestId);
+    };
 
     // Load from File button - opens file picker and loads selected file
     document.getElementById('loadFromFileButton').onclick = () => {
@@ -436,6 +451,7 @@ export const UI = (() => {
             reader.onload = (event) => {
                 const content = event.target.result;
                 document.getElementById('importTextarea').value = content;
+                importDiagnostics.edit();
             };
             reader.onerror = () => {
                 alert('Failed to read file.');
@@ -471,6 +487,7 @@ export const UI = (() => {
         reader.onload = (event) => {
             const content = event.target.result;
             importTextarea.value = content;
+            importDiagnostics.edit();
         };
         reader.onerror = () => {
             alert('Failed to read file.');
@@ -1101,7 +1118,7 @@ export const UI = (() => {
     const selectControls = {
         /**
          * Set the options in the select container
-         * @param {Array<{pgn: string, deleted?: boolean}>} newOptions - Continuation rows
+         * @param {Array<{pgn: string, deleted?: boolean, is_illegal?: boolean}>} newOptions - Continuation rows
          */
         setChangeCallback(callback) { selectionCallback = callback; },
         setOptions(newOptions, { selection, preserveFocus = false, scrollToBottom = false } = {}) {
@@ -1258,6 +1275,13 @@ export const UI = (() => {
          * Set the callback function for when import load button is pressed
          * @param {Function} callback - Function that receives the imported data
          */
+        receiveImportResult(result) { return importDiagnostics.receive(result); },
+        completeImport(requestId) {
+            if (!importDiagnostics.complete(requestId)) return;
+            if (popupStack.at(-1)?.popupName === 'popupImport') closePopup();
+        },
+        setImportCancelCallback(callback) { importCancelCallback = callback; },
+
         setImportCallback(callback) {
             importCallback = callback;
         },
@@ -1296,6 +1320,13 @@ export const UI = (() => {
 
         setCanvasNavigationCallback(callback) {
             canvasNavigationCallback = callback;
+        },
+
+        setAllowSubmitWithChecks(checked, locked) {
+            allowSubmitCheckbox.checked = checked;
+            allowSubmitCheckbox.disabled = locked;
+            allowSubmitCheckbox.title = locked
+                ? 'Return to a position with legal history to turn this off.' : '';
         },
 
         setHintAvailable(available) {
@@ -1368,11 +1399,15 @@ export const UI = (() => {
         },
 
         /**
-         * Get the current settings (Mate and Short Notation)
-         * @returns {Object} Object with exportMate and exportShortNotation boolean values
+         * Get the settings needed by the worker at startup.
+         * @returns {Object} Export options, notation preference and illegal-history permission
          */
         getSettings() {
-            return { ...getExportSettings(), useShortMoveNotation: shortMoveNotationCheckbox.checked };
+            return {
+                ...getExportSettings(),
+                useShortMoveNotation: shortMoveNotationCheckbox.checked,
+                allowSubmitWithChecks: allowSubmitCheckbox.checked,
+            };
         }
     };
 })();

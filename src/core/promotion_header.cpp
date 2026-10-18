@@ -46,6 +46,12 @@ piece_t default_promote_to(promotion_options options)
     return NO_PIECE;
 }
 
+invalid_promotions::invalid_promotions(reason cause, char piece)
+    : std::invalid_argument(cause == reason::invalid_piece
+        ? "Invalid promotion piece: " + std::string(1, piece) + "."
+        : "'*' cannot be combined with promotion pieces."), cause(cause), piece(piece)
+{}
+
 promotion_options parse_promotions(std::string_view value)
 {
     promotion_options result = promotion_options::NONE;
@@ -64,8 +70,7 @@ promotion_options parse_promotions(std::string_view value)
         const promotion_options option = piece_to_promotion_option(static_cast<piece_t>(c));
         if(option == promotion_options::NONE)
         {
-            throw std::runtime_error(
-                "parse_promotions(): Invalid promotion piece: " + std::string(1, c));
+            throw invalid_promotions(invalid_promotions::reason::invalid_piece, c);
         }
         result = result | option;
     }
@@ -73,8 +78,7 @@ promotion_options parse_promotions(std::string_view value)
     {
         if(result != promotion_options::NONE)
         {
-            throw std::runtime_error(
-                "parse_promotions(): '*' cannot be combined with promotion pieces");
+            throw invalid_promotions(invalid_promotions::reason::mixed_wildcard);
         }
         return promotion_options::ALL;
     }

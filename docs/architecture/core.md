@@ -37,20 +37,21 @@ I try to follow the terminology described in <https://github.com/adri326/5dchess
 
 + A `state` object (defined in `src/core/state.h`) stores a `multiverse` directly by value and some additional information such as who is playing. The purpose for that is to distinguish between whether an action is being submitted or not.
 
-+ A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of `std::shared_ptr<const board>` snapshots. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), constructed with `timeline_layout::odd()` or `timeline_layout::even()`. Its private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
++ A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of `std::shared_ptr<const board>` snapshots. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), selected with the inline constexpr objects `timeline_layout::odd` or `timeline_layout::even`. Layout values support constexpr equality; the private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
 
 + A `board` object (defined in `src/core/board.h`) stores piece and color information in bitboards, together with an unmoved-piece mask.
 
 Construct a universe with an explicit layout, for example:
 
 ```cpp
-multiverse m(timeline_layout::odd(), {{0, 1, false, "k3/4/4/K*3"}}, 4, 4);
+multiverse m(timeline_layout::odd, {{0, 1, false, "k3/4/4/K*3"}}, 4, 4);
 state copied(m);             // Copies timeline storage; existing boards stay shared.
 state moved(std::move(m));   // Transfers timeline storage without allocation.
 ```
 
-`state(const multiverse &)` may throw while copying. `state(multiverse &&)`,
-state move construction, and state swap are nonthrowing. The variant factory
+`state(multiverse, promotions)` accepts the universe by value and moves it into
+storage. Passing an lvalue may throw while copying the argument; the constructor
+body, state move construction, and state swap are nonthrowing. The variant factory
 `create_multiverse_from_variant_setup()` returns a multiverse by value, so a
 factory result moves directly into a state. Constructing the universe itself
 still allocates and validates input and may throw.
@@ -69,13 +70,8 @@ accepts `std::shared_ptr<const board>`; callers must not mutate a published boar
 through a retained mutable alias. Constructing it with
 `std::make_shared<const board>(draft)` publishes a separate immutable copy.
 
-The `board` FEN constructor parses square contents directly into its bitboards
-and unmoved mask. Unspecified squares, including padding outside the declared
-dimensions, start as walls. Explicit `*` markers populate the unmoved mask after
-placing the corresponding pieces; ordinary `set_piece()` edits continue to
-clear that square's unmoved flag. Board construction does not depend on PGN
-parsing: `pgnparser` extracts FEN strings and timeline/turn metadata, while the
-board constructor interprets the square notation.
+The `board` FEN constructor and its handling of dimensions and unmoved markers
+are described in [Parsing and printing](parsing.md#board-fen).
 
 `board::to_string()` formats the bitboards directly as an 8 × 8 text grid,
 using `. ` for empty squares, `##` for walls, and piece letters followed by a
@@ -138,31 +134,8 @@ be greater than 3. See `src/misc/vec4.h` for the current definitions.
 
 ## Internal 5DFEN wall extension
 
-This implementation uses `#` in a FEN rank to represent one `WALL_PIECE` square.
-This is a project-specific extension, not part of the Branched 5DPGN standard.
-Both the C++ board parser and the analyzer's JavaScript FEN parser accept it.
-Each `#` advances the file position by one; consecutive walls are printed as
-individual `#` characters. Digits compress empty squares only, and `*` is not
-valid after a wall.
-
-`board::get_fen(width, height)` prints
-exactly the declared rectangle, from the highest rank to the lowest. Walls
-inside that rectangle must be printed, including entire ranks of walls. Squares
-outside the rectangle are omitted regardless of their contents. Standalone
-boards do not store dimensions: the printer defaults to 8 × 8, and multiverse
-serialization passes its stored dimensions explicitly. The bitboard printer's
-`SHOW_UMOVE` template option preserves unmoved markers; its default omits them.
-
-Short input ranks currently retain their existing behavior: unspecified
-trailing squares become walls. Printing normalizes those squares to explicit
-`#` characters. Rejecting short ranks is deferred. Game and PGN serialization
-use the same size-aware printer, so interior walls and fully walled ranks
-survive export and reloading.
-
-The WebAssembly binding sends FEN strings for current and phantom boards. The
-worker builds `board.parsed` using the JavaScript FEN parser; there is no separate
-binding-generated square array. The renderer recognizes `#` as unavailable
-board space and retains the board-border fill at those squares.
+See [Board FEN](parsing.md#board-fen) for the `#` wall extension, size-aware
+serialization, and FEN diagnostics.
 
 Moves & Actions
 =============
@@ -181,6 +154,16 @@ Check Detection
 Check detection is not automatically triggered when applying moves or submitting.
 
 For general check detection, use `state::find_checks(attacker)`. It generates every move by `attacker` that captures an enemy royal piece in the current state.
+
+Use `state::find_royal_exposure(true)` to validate royal safety in an initial
+setup, or `find_royal_exposure(false)` after submitting an action. The initial
+setup check scans both attacker colors; action validation scans
+the new side to move. Both use existing endpoints, including inactive timelines,
+and return a witnessing capture when a royal is exposed. They do not validate
+history or invoke Hypercuboid search.
+
+See [PGN loading policies](parsing.md#loading-policies) for strict state loading,
+main-line selection, and unchecked construction.
 
 ```cpp
 const state &base = /* a state */;
@@ -262,6 +245,5 @@ The hypercuboid algorithm is implemented in `src/core/hypercuboid.cpp`. It is us
 
 Parsing and Printing
 =========
-The program supports parsing from branched 5dpgn format, whose specification is described in [Branched 5DPGN](../branched-5dpgn.md). The syntax tree is declared in `src/core/ast.h` and the parsing algorithm is implemented in `src/core/pgnparser.h`.
-
-Recall that a full_move in this program only stores the coordinates where it comes from and goes to. Its `to_string()` output is context-free. `lan(state)` and `pgn(state, options)` use the game state for piece and timeline information; the notation implementation lives in `src/core/action.cpp`.
+See [Parsing and printing](parsing.md) for the AST, PGN loading, source locations,
+error types, FEN handling, and notation output.

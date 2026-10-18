@@ -196,8 +196,8 @@ def display(hl=[]):
     size_x, size_y = g.get_board_size()
     children = list(enumerate(g.get_child_actions()))
     global next_options, no_more_hint
-    select_values = {str(n):s for (n,(_,s)) in children}
-    next_options = {str(n):a for (n,(a,_)) in children}
+    select_values = {str(n):summary.pgn for n, summary in children}
+    next_options = {str(n):summary.act for n, summary in children}
     def show_status(ms):
         if ms == engine.match_status_t.PLAYING:
             if present_c:

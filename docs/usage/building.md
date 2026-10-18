@@ -42,7 +42,7 @@ Native regression test executables are grouped by functionality:
 | Executable | Coverage |
 |---|---|
 | `test_action` | Actions, semimoves, move application, and promotions |
-| `pawn_movement` | Pawn and brawn movement, captures, en passant, and promotion on the opponent's back rank, including timeline moves |
+| `test_movegen` | Pawn and brawn movement, captures, en passant, promotion, and castling on small boards and with interior rooks, including move application and physical attack restrictions |
 | `test_game` | Multiverse ownership and layout, indexed game trees, child operations, hashing, and temporary move previews |
 | `test_check_position` | Check views and phantom checks |
 | `test_hcutils` | Hypercuboid geometry and graph matching |
@@ -176,3 +176,18 @@ If you prefer [darkhttpd](https://github.com/emikulic/darkhttpd):
 ```sh
 darkhttpd ui/
 ```
+
+### Correcting PGN imports
+
+If a PGN cannot be loaded, the import dialog stays open and shows the full error
+below the input. Hover over the underlined yellow location to highlight the
+problem; click or tap it to pin or unpin the highlight. Keyboard focus also
+previews it. Locations use an exclusive end, and missing input has a caret marker.
+Invalid Board/Variant, Size, Timeline, and Promotions values point to the relevant
+header value. A missing initial setup has a message without a location.
+
+Editing removes the highlight but keeps the message marked **From previous
+load**. Its old location is disabled until the next Load attempt. Loading valid
+PGN closes the dialog; a failed load leaves the current game intact. Errors about
+exposed royal pieces explain how to enable **Allow submit with checks** in
+Settings when you want to inspect illegal history.

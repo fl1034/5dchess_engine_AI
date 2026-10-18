@@ -27,7 +27,7 @@ const std::string ultra_wide = R"(
 
 int main()
 {
-    state s(*pgnparser(ultra_wide).parse_game());
+    state s = state::from_pgn<true>(ultra_wide);
     auto [w, ss] = HC_info::build_HC(s);
     random_HC_ordering order(w.get_universe());
 

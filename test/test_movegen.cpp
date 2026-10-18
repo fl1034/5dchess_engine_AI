@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <set>
 #include <string>
@@ -9,6 +10,7 @@
 #include <vector>
 #include "core/check_position.h"
 #include "core/multiverse.h"
+#include "core/hypercuboid.h"
 
 namespace {
 using square = std::tuple<int, int, int, int>; // x, y, t, l
@@ -32,12 +34,12 @@ void log_case(const std::string &name, const std::vector<boards_info_t> &boards,
 square at(vec4 p) { return {p.x(), p.y(), p.t(), p.l()}; }
 
 // Preserve explicit unmoved markers; board::set_piece clears that flag.
-std::string fen_of(const squares &b)
+std::string fen_of(const squares &b, int width = 8, int height = 8)
 {
     std::string fen;
-    for (int y = 7; y >= 0; --y) {
+    for (int y = height - 1; y >= 0; --y) {
         int blanks = 0;
-        for (int x = 0; x < 8; ++x) {
+        for (int x = 0; x < width; ++x) {
             const piece_t piece = b[ppos(x,y)];
             if (piece == NO_PIECE) { ++blanks; continue; }
             if (blanks) { fen += char('0'+blanks); blanks = 0; }
@@ -95,7 +97,7 @@ void expect(const std::string &name, const std::vector<boards_info_t> &boards,
             bool black, vec4 source, const moves &expected)
 {
     log_case(name,boards,expected.size());
-    const multiverse m(timeline_layout::odd(),boards);
+    const multiverse m(timeline_layout::odd,boards);
     moves actual;
     bool duplicate = false;
     auto collect = [&](auto generator) {
@@ -202,7 +204,7 @@ void captures(bool black, bool brawn, bool unmoved)
     for (int rl = -1; rl <= 1; ++rl) {
         if ((dx != 0)+(ry != 0)+(dt != 0)+(rl != 0) != 2) continue;
         const vec4 d(dx,ry,dt,rl), q = p+d;
-        const multiverse m(timeline_layout::odd(),original);
+        const multiverse m(timeline_layout::odd,original);
         if (!m.inbound(q,black)) continue;
         const bool capture = allowed.contains(at(d));
         for (piece_t target : {enemy,friendly}) {
@@ -230,7 +232,7 @@ void captures(bool black, bool brawn, bool unmoved)
         }
         auto king_boards = original;
         place(king_boards,black,q,black ? KING_W : KING_B);
-        const state s(multiverse(timeline_layout::odd(),king_boards));
+        const state s(multiverse(timeline_layout::odd,king_boards));
         const check_position view(s,-2,2);
         log_case(name+"king attack "+std::to_string(index),king_boards,capture ? 1 : 0);
         const auto checks = view.checks(black);
@@ -309,7 +311,7 @@ void promotion(bool black, bool brawn)
                 }
                 for (auto rules : {promotion_options::QUEEN, promotion_options::KNIGHT,
                                    promotion_options::NONE}) {
-                    const state before(multiverse(timeline_layout::odd(),boards),rules);
+                    const state before(multiverse(timeline_layout::odd,boards),rules);
                     const full_move move(p,q);
                     const bool promotes = !home && d.y() != 0 && (physical || brawn)
                         && rules != promotion_options::NONE;
@@ -377,8 +379,24 @@ void en_passant(bool black, bool brawn)
             expected.insert(at(destination));
             expect("en passant a "+victim,boards,black,p,expected);
 
+            auto boundary = boards;
+            std::erase_if(boundary,[&](const boards_info_t &info) {
+                return std::get<0>(info) == p.l()
+                    && turn_t{std::get<1>(info),std::get<2>(info)}
+                        < turn_t{previous_t,!black};
+            });
+            expect("en passant at history boundary for "+victim,
+                   boundary,black,p,expected);
+            std::erase_if(boundary,[&](const boards_info_t &info) {
+                return std::get<0>(info) == p.l()
+                    && turn_t{std::get<1>(info),std::get<2>(info)}
+                        == turn_t{previous_t,!black};
+            });
+            expect("no preceding board for "+victim,
+                   boundary,black,p,quiet(p,black,false));
+
             log_case("apply en passant a "+victim,boards,1);
-            state s(multiverse(timeline_layout::odd(),boards));
+            state s(multiverse(timeline_layout::odd,boards));
             const bool applied = s.apply_move(full_move(p,destination));
             const auto [t,c] = s.get_timeline_end(0);
             const board *result = s.get_board_ptr(0,t,c);
@@ -395,11 +413,150 @@ void en_passant(bool black, bool brawn)
             place(blocked,black,destination,black ? KNIGHT_B : KNIGHT_W);
             expect("invalid history: blocked en passant landing when capturing a "+victim,
                    blocked,black,p,quiet(p,black,false));
-            place(boards,black,p+vec4(dx,2*dy,-1,0),enemy);
+            auto friendly_history = boards;
+            place(friendly_history,!black,previous_home,
+                  static_cast<piece_t>(switch_color(enemy) | 0x80));
+            expect("friendly unmoved history for "+victim,
+                   friendly_history,black,p,quiet(p,black,false));
+            place(boards,!black,previous_home,enemy);
             expect("no double-step history for "+victim,boards,black,p,quiet(p,black,false));
-            place(boards,black,p+vec4(dx,2*dy,-1,0),NO_PIECE);
+            place(boards,!black,previous_home,NO_PIECE);
             expect("absent double-step history for "+victim,boards,black,p,quiet(p,black,false));
         }
+    }
+}
+state castling_position(const squares &pieces, int width, int height, bool black)
+{
+    return state(multiverse(timeline_layout::odd,
+        {{0,1,black,fen_of(pieces,width,height)}}, width,height));
+}
+
+void check_castling(const state &before, vec4 p, int direction, bool allowed)
+{
+    const bool black = before.get_present().second;
+    const auto [width,height] = before.get_board_size();
+    const board &source = *before.get_board_ptr(0,1,black);
+    bitboard_t castles = 0;
+    for(vec4 q : before.gen_piece_move(p))
+    {
+        assert(q.tl() == p.tl());
+        if(q.y() == p.y() && (q.x() - p.x()) * direction > 1)
+            castles |= pmask(q.xy());
+    }
+    const int destination_x = p.x() + 2 * direction;
+    assert(castles == (allowed ? pmask(ppos(destination_x,p.y())) : 0));
+    if(logging)
+        log_case(direction > 0 ? "right castling" : "left castling",
+                 {{0,1,black,source.get_fen<true>(width,height)}}, allowed ? 1 : 0);
+    if(!allowed)
+    {
+        if(logging) std::cout << "Test passed\n";
+        return;
+    }
+
+    const full_move move(p,vec4(destination_x,p.y(),1,0));
+    // Locate the first piece on this side independently of castling_rooks().
+    int rook_x = p.x() + direction;
+    while(source.get_piece(ppos(rook_x,p.y())) == NO_PIECE) rook_x += direction;
+    assert(rook_x >= 0 && rook_x < width);
+    const piece_t rook = black ? ROOK_B : ROOK_W;
+    const piece_t king = black ? KING_B : KING_W;
+    assert(source.get_piece(ppos(rook_x,p.y())) == rook);
+    board expected = source;
+    expected.set_piece(p.xy(),NO_PIECE);
+    expected.set_piece(ppos(rook_x,p.y()),NO_PIECE);
+    expected.set_piece(ppos(p.x()+direction,p.y()),rook);
+    expected.set_piece(move.to.xy(),king);
+
+    state after = before;
+    assert(after.apply_move(move));
+    const auto [t,c] = after.get_timeline_end(0);
+    assert(after.get_board_ptr(0,t,c)->get_fen<true>(width,height)
+        == expected.get_fen<true>(width,height));
+
+    auto [info,space] = HC_info::build_HC(before);
+    bool found = false;
+    for(index_t axis = 0; axis < info.dimension(); ++axis)
+        for(index_t coordinate : info.get_universe()[axis])
+        {
+            const auto cached = info.get_move_boards(axis,coordinate);
+            if(!cached || cached->move != move) continue;
+            assert(!cached->departure);
+            assert(cached->result->get_fen<true>(width,height)
+                == expected.get_fen<true>(width,height));
+            found = true;
+        }
+    assert(found);
+    if(logging) std::cout << "Test passed\n";
+}
+
+void castling_placements()
+{
+    for(bool black : {false,true})
+        for(int width = 2; width <= 8; ++width)
+            for(int rank : {0,1})
+                for(int king_x = 0; king_x < width; ++king_x)
+                    for(int rook_x = 0; rook_x < width; ++rook_x)
+                    {
+                        if(king_x == rook_x) continue;
+                        const int y = black ? 3-rank : rank;
+                        squares pieces{};
+                        pieces[ppos(king_x,y)] = black ? KING_UB : KING_UW;
+                        pieces[ppos(rook_x,y)] = black ? ROOK_UB : ROOK_UW;
+                        const state before = castling_position(pieces,width,4,black);
+                        const vec4 p(king_x,y,1,0);
+                        const int direction = rook_x > king_x ? 1 : -1;
+                        check_castling(before,p,direction,abs(rook_x-king_x) >= 2);
+                        check_castling(before,p,-direction,false);
+                    }
+}
+
+void castling_restrictions()
+{
+    for(bool black : {false,true})
+    {
+        const int y = black ? 6 : 1;
+        const vec4 p(3,y,1,0);
+        squares pieces{};
+        pieces[p.xy()] = black ? KING_UB : KING_UW;
+        pieces[ppos(7,y)] = black ? ROOK_UB : ROOK_UW;
+        const auto friendly = [&](piece_t piece) { return black ? to_black(piece) : piece; };
+        const auto enemy = [&](piece_t piece) { return black ? piece : to_black(piece); };
+        for(int file : {3,4,5})
+        {
+            auto attacked = pieces;
+            attacked[ppos(file,black ? 0 : 7)] = enemy(ROOK_W);
+            check_castling(castling_position(attacked,8,8,black),p,1,false);
+        }
+        for(piece_t blocker : {friendly(KNIGHT_W),enemy(KNIGHT_W)})
+        {
+            auto blocked = pieces;
+            blocked[ppos(6,y)] = blocker;
+            check_castling(castling_position(blocked,8,8,black),p,1,false);
+        }
+        auto moved_king = pieces;
+        moved_king[p.xy()] = friendly(KING_W);
+        check_castling(castling_position(moved_king,8,8,black),p,1,false);
+        for(piece_t rook : {friendly(ROOK_W),enemy(ROOK_UW)})
+        {
+            auto ineligible = pieces;
+            ineligible[ppos(7,y)] = rook;
+            check_castling(castling_position(ineligible,8,8,black),p,1,false);
+        }
+        auto nearest = pieces;
+        nearest[ppos(5,y)] = friendly(ROOK_UW);
+        nearest[ppos(0,y)] = friendly(ROOK_UW);
+        const state multiple = castling_position(nearest,8,8,black);
+        check_castling(multiple,p,1,true);
+        check_castling(multiple,p,-1,true);
+
+        squares vertical{};
+        vertical[p.xy()] = friendly(KING_UW);
+        for(int rank : {y-1,y+1}) vertical[ppos(p.x(),rank)] = friendly(ROOK_UW);
+        const state above_below = castling_position(vertical,8,8,black);
+        assert(above_below.get_board_ptr(0,1,black)->castling_rooks(p.xy(),black) == 0);
+        check_castling(above_below,p,1,false);
+        check_castling(above_below,p,-1,false);
     }
 }
 } /* anonymous namespace */
@@ -431,6 +588,10 @@ int main(int argc, char **argv)
             en_passant(black,brawn);
         }
     }
+    test_group = "castling placements";
+    castling_placements();
+    test_group = "castling restrictions";
+    castling_restrictions();
     if (logging && failures == 0) std::cout << "\nAll tests passed\n";
     return failures ? 1 : 0;
 }

@@ -1,14 +1,26 @@
 #include "board.h"
 #include <algorithm>
+#include <cctype>
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 #include "magic.h"
 
 board::board(std::string fen, int size_x, int size_y) : bbs{}, umove_mask{0}
 {
+    if(size_x < 1 || size_x > BOARD_LENGTH || size_y < 1 || size_y > BOARD_LENGTH)
+        throw std::invalid_argument("Board dimensions must be between 1 and 8");
+
+    using error = board_fen_error;
+    if(std::all_of(fen.begin(), fen.end(), [](unsigned char c) { return std::isspace(c); }))
+        throw board_fen_error(
+            error::too_few_ranks{{static_cast<std::size_t>(size_y), 0}},
+            fen, fen.size(), fen.size());
+
     bbs[WHITE] = bbs[BLACK] = ~bitboard_t{0};
+    std::size_t rank_start = 0;
     char c;
     int x = 0, y = size_y - 1;
     for(size_t i = 0; i < fen.length(); i++)
@@ -18,9 +30,9 @@ board::board(std::string fen, int size_x, int size_y) : bbs{}, umove_mask{0}
         {
             if(x >= size_x) // check overflow
             {
-                std::stringstream sstm;
-                sstm << "Bad FEN, x=" << x << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
+                throw board_fen_error(
+                    error::rank_too_long{{static_cast<std::size_t>(size_x), static_cast<std::size_t>(x + 1)}},
+                    fen, i, i + 2);
             }
             switch(c)
             {
@@ -36,38 +48,41 @@ board::board(std::string fen, int size_x, int size_y) : bbs{}, umove_mask{0}
                     umove_mask |= pmask(ppos(x,y));
                     break;
                 default:
-                    std::stringstream sstm;
-                    sstm << "Bad FEN: undefined behavior: * after [" << c << "] in \n" << fen << std::endl;
-                    throw std::runtime_error(sstm.str());
+                    throw board_fen_error(error::invalid_unmoved_marker{}, fen, i, i + 2);
             }
             i++; //so that this loop increment i by 2, skipping c and the following *
             x++;
         }
         else if(c == '/')
         {
+            if(x < size_x)
+                throw board_fen_error(
+                    error::rank_too_short{{static_cast<std::size_t>(size_x), static_cast<std::size_t>(x)}},
+                    fen, rank_start, i);
             y--;
             if(y < 0)
             {
-                std::stringstream sstm;
-                sstm << "Bad FEN, y=" << y << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
+                throw board_fen_error(error::too_many_ranks{{static_cast<std::size_t>(size_y),
+                        static_cast<std::size_t>(std::count(fen.begin(), fen.end(), '/')) + 1}},
+                    fen, i, i + 1);
             }
             x = 0;
+            rank_start = i + 1;
         }
-        else if(isspace(c))
+        else if(std::isspace(static_cast<unsigned char>(c)))
         {
             //pass
         }
         else
         {
             int shift = 1;
-            if(isdigit(c))
+            if(std::isdigit(static_cast<unsigned char>(c)))
                 shift = c - '0';
             if(x + shift > size_x) // check overflow
             {
-                std::stringstream sstm;
-                sstm << "Bad FEN, x=" << x + shift << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
+                throw board_fen_error(
+                    error::rank_too_long{{static_cast<std::size_t>(size_x), static_cast<std::size_t>(x + shift)}},
+                    fen, i, i + 1);
             }
             switch(c)
             {
@@ -118,15 +133,23 @@ board::board(std::string fen, int size_x, int size_y) : bbs{}, umove_mask{0}
                 case 's':
                 case 'y':
                 case 'c':
-                    this->set_piece(ppos(x,y), (piece_t)c); x++;
+                    this->set_piece(ppos(x,y), static_cast<piece_t>(c)); x++;
                     break;
+                case '*':
+                    throw board_fen_error(error::invalid_unmoved_marker{}, fen, i, i + 1);
                 default:
-                    std::stringstream sstm;
-                    sstm << "Bad FEN, unknown piece [" << c << "] in \n" << fen << std::endl;
-                    throw std::runtime_error(sstm.str());
+                    throw board_fen_error(error::invalid_piece{}, fen, i, i + 1);
             }
         }
     }
+    if(x < size_x)
+        throw board_fen_error(
+            error::rank_too_short{{static_cast<std::size_t>(size_x), static_cast<std::size_t>(x)}},
+            fen, rank_start, fen.size());
+    if(y > 0)
+        throw board_fen_error(
+            error::too_few_ranks{{static_cast<std::size_t>(size_y), static_cast<std::size_t>(size_y - y)}},
+            fen, fen.size(), fen.size());
 }
 
 
@@ -359,6 +382,15 @@ std::string board::get_fen(int size_x, int size_y) const
     result.erase(result.begin());
     result.pop_back(); // remove the extra '/'
     return result;
+}
+
+bitboard_t board::castling_rooks(int pos, bool color) const noexcept
+{
+    const bitboard_t z = pmask(pos);
+    const bitboard_t vertical_blockers = shift_north(z) | shift_south(z);
+    const bitboard_t friendly = color ? black() : white();
+    return rook_attack(pos, occupied() | vertical_blockers)
+        & friendly & rook() & umove() & ~vertical_blockers;
 }
 
 bitboard_t board::attacks_to(int pos) const noexcept

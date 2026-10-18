@@ -131,35 +131,14 @@ bool parse_at_arguments(
     return true;
 }
 
-void apply_action(state &current, const pgnparser_ast::actions &act)
+void apply_action(state &current, const pgnparser_ast::actions &act,
+    const std::shared_ptr<const std::string> &source)
 {
     for(const auto &mv : act.moves)
-    {
-        auto [fm, promotion, candidates] = current.parse_move(mv);
-        if(!fm)
-        {
-            std::ostringstream message;
-            if(candidates.empty()) message << "Invalid move: " << mv;
-            else message << "Ambiguous move: " << mv << "; candidates: "
-                         << range_to_string(candidates, "", "");
-            throw std::runtime_error(message.str());
-        }
-        const bool applied = promotion
-            ? current.apply_move(ext_move(*fm, to_white(*promotion)))
-            : current.apply_move(*fm);
-        if(!applied)
-        {
-            std::ostringstream message;
-            message << "Illegal move: " << mv << " (parsed as: " << *fm << ')';
-            throw std::runtime_error(message.str());
-        }
-    }
+        current.apply_move_ast(mv, source);
     if(!current.submit())
-    {
-        std::ostringstream message;
-        message << "Cannot submit after parsing these moves: " << act;
-        throw std::runtime_error(message.str());
-    }
+        throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
+            pgn_validation_error::make_subject(act, source));
 }
 
 std::size_t mainline_action_count(const pgnparser_ast::gametree &root)
@@ -189,16 +168,17 @@ std::optional<parsed_position> read_position(
     try
     {
         auto parsed = pgnparser(pgn).parse_game();
-        if(!parsed) throw parse_error("no game found");
+        if(!parsed) throw parse_error(parse_error::unexpected_input{{"a game"}},
+            std::make_shared<const std::string>(pgn), {0, pgn.size()});
         pgnparser_ast::game game = std::move(*parsed);
         if(!selection)
         {
             const std::size_t actions = mainline_action_count(game.gt);
-            return parsed_position{std::make_unique<state>(game), actions};
+            return parsed_position{std::make_unique<state>(state::from_ast(game)), actions};
         }
         pgnparser_ast::gametree mainline = std::move(game.gt);
         game.gt = pgnparser_ast::gametree{};
-        auto current = std::make_unique<state>(game);
+        auto current = std::make_unique<state>(state::from_ast(game));
         std::size_t actions = 0;
         if(selection->actions == 0)
             return parsed_position{std::move(current), actions};
@@ -212,7 +192,7 @@ std::optional<parsed_position> read_position(
                     node->variations_or_outcome);
             if(variations.empty()) break;
             const auto &[action, next] = variations.back();
-            apply_action(*current, action);
+            apply_action(*current, action, game.source_text);
             ++actions;
             if(actions == selection->actions)
                 return parsed_position{std::move(current), actions};
@@ -232,6 +212,11 @@ std::optional<parsed_position> read_position(
     {
         std::cerr << "Parse Error: " << error.what() << '\n';
         exit_code = 2;
+    }
+    catch(const std::invalid_argument &error)
+    {
+        std::cerr << "Invalid argument: " << error.what() << '\n';
+        exit_code = 1;
     }
     catch(const std::runtime_error &error)
     {

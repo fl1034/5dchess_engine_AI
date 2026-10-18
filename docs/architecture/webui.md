@@ -560,3 +560,53 @@ adjacent controls are enabled. Isolated crescents keep their pointed tips.
 Navigation icons have no background, including on hover. Disabled icons and
 Submit use lighter neutral gray, while enabled Submit retains its primary fill.
 The arcs are decorative, ignore pointer events, and are hidden in compact mode.
+
+### Inspecting illegal history in the analyzer
+
+By default, importing PGN rejects setups or actions that leave the mover's royal
+pieces exposed. Enable **Allow submit with checks** in Settings to load these
+games or submit such an action manually. Other move and turn-completion rules
+still apply.
+
+Continuations with illegal history are highlighted in muted red. With the option
+off, pressing Next on one shows a message and leaves the current position intact.
+Enable the option manually to enter it. The status then includes **(Illegal
+History)** and Hint is disabled, including for descendants whose own moves are
+safe. The checkbox stays checked and locked while viewing illegal history.
+Return to a legal ancestor, or load a game with legal history, to unlock it;
+turn it off manually when finished. This permission is not saved across reloads.
+
+### Import diagnostics
+
+`import-diagnostics.js` owns import request IDs, retained diagnostics and temporary
+or pinned highlights. The worker returns `load_result` without replacing the
+open game. The main thread accepts results only for the active input snapshot,
+then sends `commit_load`; `load_committed` clears diagnostics and closes the
+import dialog. Editing or closing cancels prepared candidates through
+`cancel_load`, and a newer request disposes of any previous candidate. Startup
+loads omit request IDs and commit directly.
+
+The decoration layer is behind the native textarea and ignores pointer events.
+It shares typography and wrapping with the textarea; its viewport uses the
+textarea's client dimensions to exclude native scrollbars, and its content
+translation follows native scrolling. `ResizeObserver` synchronizes dimensions.
+The import dialog reserves three lines for diagnostics, capped at 40% of its content
+height on short viewports. Long messages scroll within that region, so error
+length and validation state do not resize the editor or move the Load buttons.
+The region stays reserved before the first result and after diagnostics clear.
+
+A failed load shows an error icon followed by **Error at line …, … [Click to
+Locate]:**, with inclusive column coordinates. The explanation appears below
+this state line, and the editor receives an error-colored outline. Errors without
+a source range show **Error:** without a highlight control. Hover or keyboard
+focus anywhere on the full state line previews the range, and clicking anywhere
+on it toggles the pinned state. Pinning changes the background of **[Click to
+Locate]** without changing font weight or text width.
+Missing-input diagnostics preview a caret instead.
+
+Editing keeps the state line and explanation wording unchanged. It turns the
+state line gray, clears the editor's error state, and disables the old location
+and highlight until another result supplies a current location. During a retry,
+the retained error has the same inactive presentation. Before any error exists,
+validation shows **Checking import…**. The heading uses a live region.
+Successful commit clears the diagnostic before closing the dialog.

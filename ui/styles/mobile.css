@@ -73,8 +73,9 @@
 #mobileSheetHeader[hidden] ~ .mobile-sheet-content { padding-top: 12px; }
 .mobile-sheet-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 12px 10px; }
 #mobileSheet .select-container { overflow: visible; padding: 0; opacity: 1; }
-#mobileSheet .select-option { overflow-wrap: anywhere; min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; color: inherit; }
-#mobileSheet .select-option.selected { background: var(--ui-soft); border-color: var(--ui-primary); }
+#mobileSheet .select-option { overflow-wrap: anywhere; min-height: 44px; margin-top: 4px; border: 1px solid var(--ui-border); border-radius: 8px; }
+#mobileSheet .select-option.selected:not(.illegal-history) { background: var(--ui-soft); border-color: var(--ui-primary); }
+#mobileSheet .select-option.illegal-history.selected { border-color: var(--ui-illegal); }
 #mobileSheet .hint-btn { min-height: 44px; background: var(--ui-soft); color: var(--ui-primary); border-radius: 8px; }
 #mobileSheet:has(.hud-text:focus) { background: var(--ui-panel-editing); }
 #mobileSheet .hud-content { height: auto; padding: 0; }

@@ -17,6 +17,7 @@
 #include <vector>
 #include "core/hash.h"
 #include "game.h"
+#include "board.h"
 
 namespace multiverse_tests
 {
@@ -40,8 +41,11 @@ const std::string empty = "8/8/8/8/8/8/8/8";
 
 void test_layout()
 {
-    const auto odd = timeline_layout::odd();
-    const auto even = timeline_layout::even();
+    constexpr auto odd = timeline_layout::odd;
+    constexpr auto even = timeline_layout::even;
+    static_assert(odd == timeline_layout::odd);
+    static_assert(even == timeline_layout::even);
+    static_assert(odd != even);
     assert(!odd.is_even() && even.is_even());
     assert((odd.initial_range() == std::pair{0, 0}));
     assert((even.initial_range() == std::pair{-1, 0}));
@@ -94,7 +98,7 @@ void test_activation(timeline_layout layout)
 
 void test_value_ownership()
 {
-    const multiverse original(timeline_layout::odd(), {{0, 1, false, "k3/4/4/K*3"}}, 4, 4);
+    const multiverse original(timeline_layout::odd, {{0, 1, false, "k3/4/4/K*3"}}, 4, 4);
     state copied(original, promotion_options::NONE);
     assert(copied.get_board_ptr(0, 1, false) == original.get_board_ptr(0, 1, false));
     state independent = copied;
@@ -111,7 +115,7 @@ void test_value_ownership()
     assert(moved.get_board_ptr(0, 1, false) == shared);
     assert(moved.get_promotion_options() == promotion_options::NONE);
 
-    state other(multiverse(timeline_layout::even(),
+    state other(multiverse(timeline_layout::even,
                           {{-1, 2, true, empty}, {0, 2, true, empty}}));
     const auto other_boards = other.get_boards();
     swap(moved, other);
@@ -135,8 +139,8 @@ void test_value_ownership()
 int run()
 {
     test_layout();
-    test_activation(timeline_layout::odd());
-    test_activation(timeline_layout::even());
+    test_activation(timeline_layout::odd);
+    test_activation(timeline_layout::even);
     test_value_ownership();
     return 0;
 }
@@ -260,7 +264,7 @@ void test_owned_payload_and_formatting(const state &initial, const action &act, 
 
 int run() try
 {
-    state initial(*pgnparser("[Variant \"Standard\"]").parse_game());
+    state initial = state::from_pgn<true>("[Variant \"Standard\"]");
     auto [info, space] = HC_info::build_HC(initial);
     std::vector<action> actions;
     for(const auto &moves : info.search(std::move(space)))
@@ -338,11 +342,11 @@ void test_multiverses()
         {0, 1, true, empty}, {0, 2, false, empty},
         {1, 2, false, empty}
     };
-    multiverse original(timeline_layout::odd(), boards);
+    multiverse original(timeline_layout::odd, boards);
     const auto original_hash = hash_multiverse(original);
     assert(hash_multiverse(multiverse(original)) == original_hash);
     std::reverse(boards.begin(), boards.end());
-    const multiverse reordered(timeline_layout::odd(), boards);
+    const multiverse reordered(timeline_layout::odd, boards);
     assert(hash_multiverse(reordered) == original_hash);
 
     // Equal endpoint boards do not make different histories duplicates.
@@ -350,27 +354,27 @@ void test_multiverses()
     for(auto &[line, time, color, fen] : changed_boards)
         if(line == 0 && time == 1 && color)
             fen = "8/8/8/8/8/8/8/R7";
-    const multiverse changed(timeline_layout::odd(), changed_boards);
+    const multiverse changed(timeline_layout::odd, changed_boards);
     assert(hash_board(*changed.get_board(0, 2, false)) ==
            hash_board(*reordered.get_board(0, 2, false)));
     assert(hash_multiverse(changed) != original_hash);
     assert(hash_multiverse(original) == original_hash);
 
-    const multiverse shifted(timeline_layout::odd(), {{0, 3, false, empty}});
-    const multiverse earlier(timeline_layout::odd(), {{0, 2, false, empty}});
-    const multiverse other_color(timeline_layout::odd(), {{0, 2, true, empty}});
+    const multiverse shifted(timeline_layout::odd, {{0, 3, false, empty}});
+    const multiverse earlier(timeline_layout::odd, {{0, 2, false, empty}});
+    const multiverse other_color(timeline_layout::odd, {{0, 2, true, empty}});
     assert(hash_multiverse(shifted) != hash_multiverse(earlier));
     assert(hash_multiverse(other_color) != hash_multiverse(earlier));
 
-    const multiverse odd(timeline_layout::odd(), boards);
-    const multiverse even(timeline_layout::even(), boards);
+    const multiverse odd(timeline_layout::odd, boards);
+    const multiverse even(timeline_layout::even, boards);
     assert(hash_multiverse(odd) != hash_multiverse(even));
 
     // A 4x4 board and an 8x8 board with matching walls have equal contents,
     // irrespective of nominal dimensions.
-    const multiverse small(timeline_layout::odd(), {{0, 1, false, "3k/4/4/K3"}}, 4, 4);
-    const multiverse square(timeline_layout::odd(),
-        {{0, 1, false, "0/0/0/0/3k/4/4/K3"}});
+    const multiverse small(timeline_layout::odd, {{0, 1, false, "3k/4/4/K3"}}, 4, 4);
+    const multiverse square(timeline_layout::odd,
+        {{0, 1, false, "########/########/########/########/3k####/4####/4####/K3####"}});
     assert(hash_board(*square.get_board(0, 1, false)) ==
            hash_board(*small.get_board(0, 1, false)));
     assert(hash_multiverse(square) == hash_multiverse(small));
@@ -380,12 +384,12 @@ void test_multiverses()
     extended.append_board(0, std::make_shared<board>(empty));
     assert(hash_multiverse(extended) != hash_multiverse(earlier));
 
-    multiverse inactive(timeline_layout::odd(), {{0, 2, false, empty},
+    multiverse inactive(timeline_layout::odd, {{0, 2, false, empty},
                              {1, 2, false, empty},
                              {2, 2, false, empty}});
     assert(inactive.get_active_range().second == 1);
     const auto inactive_hash = hash_multiverse(inactive);
-    const multiverse changed_inactive(timeline_layout::odd(), {
+    const multiverse changed_inactive(timeline_layout::odd, {
         {0, 2, false, empty}, {1, 2, false, empty},
         {2, 2, false, "7r/8/8/8/8/8/8/8"}
     });
@@ -405,7 +409,7 @@ void test_states()
     assert(hash_state(position) == hash_state(annotated.get_current_state()));
     assert(hash_state(position) == hash_state(state(position)));
 
-    multiverse universe(timeline_layout::odd(), {{0, 1, false, "8/8/8/8/8/8/8/8"}});
+    multiverse universe(timeline_layout::odd, {{0, 1, false, "8/8/8/8/8/8/8/8"}});
     const state queen(universe, promotion_options::QUEEN);
     const state knight(universe, promotion_options::KNIGHT);
     assert(hash_state(queen) != hash_state(knight));
@@ -617,14 +621,14 @@ int run()
     const auto e4 = std::get<0>(game::from_pgn(header + "1. e4").get_historical_actions().front());
     const auto nf3 = std::get<0>(game::from_pgn(header + "1. Nf3").get_historical_actions().front());
     const auto d4 = std::get<0>(game::from_pgn(header + "1. d4").get_historical_actions().front());
-    assert(std::get<0>(children[0]) == e4);
-    assert(std::get<0>(children[1]) == nf3);
-    assert(std::get<0>(children[2]) == d4);
+    assert(children[0].act == e4);
+    assert(children[1].act == nf3);
+    assert(children[2].act == d4);
     assert(!g.add_child(nf3));
     assert(g.visit_child(nf3));
     assert(g.get_comments() == std::vector<std::string>{"new branch"});
     assert(g.get_child_actions().size() == 1);
-    assert(g.visit_child(std::get<0>(g.get_child_actions().front())));
+    assert(g.visit_child(g.get_child_actions().front().act));
     assert(g.get_comments() == std::vector<std::string>{"new reply"});
     assert(g.get_child_actions().empty());
     const auto exported = g.show_pgn();
@@ -681,7 +685,7 @@ int run()
     {
         final = game::from_pgn(header + "(1. Nf3 / Nf6) 1. Nf3 / e7e3");
     }
-    catch(const std::runtime_error &) { rejected = true; }
+    catch(const pgn_validation_error &) { rejected = true; }
     assert(rejected);
     assert(final.show_pgn() == before_failed_load);
     return 0;
@@ -760,8 +764,287 @@ int run()
 }
 } /* namespace deletion_tests */
 
+namespace fen_tests
+{
+namespace
+{
+void test_fen_error_messages_and_ranges()
+{
+    using error = board_fen_error;
+    const board_fen_error short_rank(error::rank_too_short{{8, 7}}, "8/1dDDdD1/8", 2, 9);
+    assert(std::holds_alternative<error::rank_too_short>(short_rank.get_error_type()));
+    assert(short_rank.get_fen() == "8/1dDDdD1/8");
+    assert(short_rank.get_start() == 2 && short_rank.get_end() == 9);
+    assert(short_rank.get_range() == "1dDDdD1");
+    const auto &shape = std::get<error::rank_too_short>(short_rank.get_error_type());
+    assert(shape.expected == 8 && shape.actual == 7);
+    assert(std::string(short_rank.what()) == "FEN rank has 7 squares; expected 8.");
+
+    const board_fen_error long_rank(error::rank_too_long{{8, 9}}, "9", 0, 1);
+    assert(std::string(long_rank.what()) == "FEN rank has 9 squares; expected 8.");
+    const board_fen_error missing(error::too_few_ranks{{8, 1}}, "8", 1, 1);
+    assert(missing.get_range().empty());
+    assert(std::string(missing.what()) == "FEN rank count is 1; expected 8.");
+    const board_fen_error extra(error::too_many_ranks{{1, 2}}, "1/1", 2, 3);
+    assert(std::string(extra.what()) == "FEN rank count is 2; expected 1.");
+
+    const board_fen_error piece(error::invalid_piece{}, "1z6", 1, 2);
+    assert(std::string(piece.what()) == "Invalid FEN piece: \"z\".");
+    const board_fen_error marker(error::invalid_unmoved_marker{}, "N*7", 0, 2);
+    assert(std::string(marker.what()) == "Invalid unmoved marker in FEN: \"N*\". "
+        "Only K, R, P, W, k, r, p, and w may be followed by '*'.");
+
+    for(const auto &[start, end] : {std::pair<std::size_t, std::size_t>{2, 1}, {0, 4}, {4, 4}})
+    {
+        bool rejected = false;
+        try { board_fen_error diagnostic(error::invalid_piece{}, "1z1", start, end); }
+        catch(const std::invalid_argument &) { rejected = true; }
+        assert(rejected);
+    }
+}
+
+void test_fen_error_ownership()
+{
+    using error = board_fen_error;
+    for(const auto &fen : {std::string("N*"), std::string(128, '1') + "N*"})
+    {
+        auto copy = [&fen] {
+            const board_fen_error original(error::invalid_unmoved_marker{}, fen, fen.size() - 2, fen.size());
+            return board_fen_error(original);
+        }();
+        assert(copy.get_range() == "N*");
+        assert(copy.get_range().data() == copy.get_fen().data() + copy.get_start());
+        const std::string message = copy.what();
+        board_fen_error moved(std::move(copy));
+        assert(moved.get_fen() == fen && moved.get_range() == "N*");
+        assert(moved.get_range().data() == moved.get_fen().data() + moved.get_start());
+        assert(moved.what() == message);
+
+        board_fen_error assigned(error::invalid_piece{}, "z", 0, 1);
+        assigned = moved;
+        assert(assigned.get_range().data() == assigned.get_fen().data() + assigned.get_start());
+        moved = std::move(assigned);
+        assert(moved.get_range() == "N*" && moved.what() == message);
+        assert(moved.get_range().data() == moved.get_fen().data() + moved.get_start());
+    }
+
+    bool caught = false;
+    try { throw board_fen_error(error::invalid_piece{}, "z", 0, 1); }
+    catch(const std::invalid_argument &error) {
+        caught = true;
+        assert(std::string(error.what()) == "Invalid FEN piece: \"z\".");
+    }
+    assert(caught);
+}
+
+void test_constructor_diagnostics()
+{
+    using error = board_fen_error;
+    struct example_t {
+        std::string fen;
+        error::error_type_t reason;
+        std::size_t start, end;
+    };
+    const example_t examples[] = {
+        {"4/3/4", error::rank_too_short{{4, 3}}, 2, 3},
+        {"4/4/3", error::rank_too_short{{4, 3}}, 4, 5},
+        {"4//4", error::rank_too_short{{4, 0}}, 2, 2},
+        {"4/4/", error::rank_too_short{{4, 0}}, 4, 4},
+        {"3/Z/4", error::rank_too_short{{4, 3}}, 0, 1},
+        {"4/5/4", error::rank_too_long{{4, 5}}, 2, 3},
+        {"4/K*3Q/4", error::rank_too_long{{4, 5}}, 5, 6},
+        {"4/4K*/4", error::rank_too_long{{4, 5}}, 3, 5},
+        {"4/4", error::too_few_ranks{{3, 2}}, 3, 3},
+        {"", error::too_few_ranks{{3, 0}}, 0, 0},
+        {" \t", error::too_few_ranks{{3, 0}}, 2, 2},
+        {"4/4/4/4", error::too_many_ranks{{3, 4}}, 5, 6},
+        {"4/4/4/", error::too_many_ranks{{3, 4}}, 5, 6},
+        {"4/4/4/4/4", error::too_many_ranks{{3, 5}}, 5, 6},
+        {"4/1z2/4", error::invalid_piece{}, 3, 4},
+        {"4/N*3/4", error::invalid_unmoved_marker{}, 2, 4},
+        {"4/#*3/4", error::invalid_unmoved_marker{}, 2, 4},
+        {"4/4*/4", error::invalid_unmoved_marker{}, 2, 4},
+        {"4/K**3/4", error::invalid_unmoved_marker{}, 4, 5},
+    };
+    for(const auto &example : examples)
+    {
+        bool rejected = false;
+        try { board position(example.fen, 4, 3); }
+        catch(const board_fen_error &error) {
+            rejected = true;
+            std::visit([&]<typename T>(const T &expected) {
+                const auto *actual = std::get_if<T>(&error.get_error_type());
+                assert(actual);
+                if constexpr(std::is_base_of_v<board_fen_error::invalid_shape, T>) {
+                    assert(actual->expected == expected.expected);
+                    assert(actual->actual == expected.actual);
+                }
+            }, example.reason);
+            assert(error.get_fen() == example.fen);
+            assert(error.get_start() == example.start && error.get_end() == example.end);
+            assert(error.get_range() == example.fen.substr(example.start, example.end - example.start));
+        }
+        assert(rejected);
+    }
+}
+
+void test_constructor_and_edit_flags()
+{
+    const std::string fen = "K*R*P*W*k*r*p*w*/QBNUSYCD/qbnusycd/1#2#3";
+    board position(fen, 8, 4);
+    assert(position.get_fen<true>(8, 4) == fen);
+    assert(position.get_fen(8, 4) == "KRPWkrpw/QBNUSYCD/qbnusycd/1#2#3");
+    bitboard_t unmoved = 0;
+    for(int x = 0; x < BOARD_LENGTH; ++x)
+        unmoved |= pmask(ppos(x, 3));
+    assert(position.umove() == unmoved);
+    for(int y = 4; y < BOARD_LENGTH; ++y)
+        for(int x = 0; x < BOARD_LENGTH; ++x)
+            assert(position.get_piece(ppos(x,y)) == WALL_PIECE);
+
+    position.set_piece(ppos(1, 3), ROOK_W);
+    assert(position.umove() == (unmoved & ~pmask(ppos(1, 3))));
+    const auto edited = position.replace_piece(ppos(6, 3), NO_PIECE);
+    assert(edited->umove() == (position.umove() & ~pmask(ppos(6, 3))));
+    assert(position.get_piece(ppos(6, 3)) == PAWN_B);
+
+    // Preserve whitespace and zero-width digits in otherwise complete input.
+    assert(board(" 1 0 # 2 / 4 / #### ", 4, 3).get_fen(4, 3) == "1#2/4/####");
+    for(const auto *invalid : {"N*", "#*", "1*", "Z", "9", "4/4/4/4", "4/4/3K*Q"})
+    {
+        bool rejected = false;
+        try { board position(invalid, 4, 3); }
+        catch(const board_fen_error &) { rejected = true; }
+        assert(rejected);
+    }
+}
+
+void test_text_output()
+{
+    const board position("k*1#1/####/R*1K*#", 4, 3);
+    const std::string wall_row = "################\n";
+    const std::string expected = wall_row + wall_row + wall_row + wall_row + wall_row
+        + "k . ##. ########\n"
+        + wall_row
+        + "R . K ##########\n";
+    assert(position.to_string() == expected);
+}
+
+void test_walls_and_unmoved_pieces()
+{
+    const std::string fen = "k1#1/####/R*1K*#";
+    const board position(fen, 4, 3);
+    assert(position.get_fen<true>(4, 3) == fen);
+    assert(position.get_fen(4, 3) == "k1#1/####/R1K#");
+    const board restored(position.get_fen<true>(4, 3), 4, 3);
+    for(int pos = 0; pos < BOARD_SIZE; ++pos)
+        assert(position.get_piece(pos) == restored.get_piece(pos));
+    assert(position.umove() == restored.umove());
+    assert(position.wall() == restored.wall());
+
+    assert(board("k###/4/K###", 4, 3).get_fen(4, 3) == "k###/4/K###");
+
+    const board empty("4/4/4", 4, 3);
+    const auto edited = empty.replace_piece(ppos(1, 1), WALL_PIECE);
+    assert(edited->get_fen(4, 3) == "4/1#2/4");
+    assert(empty.get_fen(4, 3) == "4/4/4");
+}
+
+void test_dimensions()
+{
+    for(int height = 1; height <= BOARD_LENGTH; ++height)
+        for(int width = 1; width <= BOARD_LENGTH; ++width)
+        {
+            std::string fen;
+            for(int row = 0; row < height; ++row)
+            {
+                if(row) fen += '/';
+                fen += std::string(width, '#');
+            }
+            const board position(fen, width, height);
+            assert(position.get_fen(width, height) == fen);
+        }
+
+    board clipped("k3/4/3K", 4, 3);
+    clipped.set_piece(ppos(7, 7), QUEEN_W);
+    assert(clipped.get_fen(4, 3) == "k3/4/3K");
+    for(const auto &[width, height] : {std::pair{0, 8}, {9, 8}, {8, 0}, {8, 9}})
+    {
+        bool rejected = false;
+        try { clipped.get_fen(width, height); }
+        catch(const std::invalid_argument &) { rejected = true; }
+        assert(rejected);
+    }
+}
+
+void test_game_round_trip()
+{
+    auto original = game::from_pgn("[Board \"Custom\"] [Size \"4x3\"] [k1#1/####/R*1K*#:0:1:w]");
+    assert(std::get<3>(original.get_current_boards().front()) == "k1#1/####/R1K#");
+    const auto exported = original.show_pgn();
+    assert(exported.find("k1#1/####/R*1K*#") != std::string::npos);
+    const auto restored = game::from_pgn(exported);
+    assert(original.get_current_boards() == restored.get_current_boards());
+    assert(original.get_current_state().get_board(0, 1, false)->umove()
+           == restored.get_current_state().get_board(0, 1, false)->umove());
+}
+} /* anonymous namespace */
+
+int run()
+{
+    test_fen_error_messages_and_ranges();
+    test_fen_error_ownership();
+    test_constructor_diagnostics();
+    test_constructor_and_edit_flags();
+    test_text_output();
+    test_walls_and_unmoved_pieces();
+    test_dimensions();
+    test_game_round_trip();
+    return 0;
+}
+} /* namespace fen_tests */
+
+namespace import_diagnostic_tests
+{
+void run()
+{
+    const auto message = [](const std::string &pgn) -> std::string {
+        try { game::from_pgn(pgn); }
+        catch(const pgn_validation_error &error) { return error.what(); }
+        throw std::logic_error("Expected a failed PGN import");
+    };
+    const std::string standard = "[Board \"Standard - Turn Zero\"]\n";
+    assert(message(standard + "1. (0T3)Wb2b2?! {comment}")
+        == "Invalid move: (0T3)Wb2b2?!");
+    assert(message(standard + "(1. (0T3)Wb2b2) 1. e4")
+        == "Invalid move: (0T3)Wb2b2");
+
+    const std::string knights = "[Board \"Custom\"]\n[7k/8/8/8/8/8/3N3N/K7:0:1:w]\n";
+    const auto ambiguous = message(knights + "1. Nf3");
+    assert(ambiguous == "Ambiguous move: Nf3; possible candidates: (0T1)Nd2f3, (0T1)Nh2f3 (totally 2)"
+        || ambiguous == "Ambiguous move: Nf3; possible candidates: (0T1)Nh2f3, (0T1)Nd2f3 (totally 2)");
+    // Each displayed candidate resolves the ambiguity and can be imported.
+    game::from_pgn(knights + "1. (0T1)Nd2f3");
+    game::from_pgn(knights + "1. (0T1)Nh2f3");
+
+    const std::string three_knights = "[Board \"Custom\"]\n[7k/8/8/8/3N4/8/3N3N/K7:0:1:w]\n";
+    const auto multiple = message(three_knights + "1. Nf3");
+    assert(multiple.starts_with("Ambiguous move: Nf3; possible candidates: "));
+    assert(multiple.ends_with(", ... (totally 3)"));
+
+    const std::string promotion = "[Board \"Custom\"]\n[2r4k/1P1P4/8/8/8/8/8/K7:0:1:w]\n";
+    const auto underpromotion = message(promotion + "1. xc8=N");
+    assert(underpromotion == "Ambiguous move: xc8=N; possible candidates: (0T1)b7xc8=N, (0T1)d7xc8=N (totally 2)"
+        || underpromotion == "Ambiguous move: xc8=N; possible candidates: (0T1)d7xc8=N, (0T1)b7xc8=N (totally 2)");
+}
+} /* namespace import_diagnostic_tests */
+
 int main()
 {
+    import_diagnostic_tests::run();
+    std::cerr << "Running FEN tests\n";
+    if(const int result = fen_tests::run(); result != 0)
+        return result;
     std::cerr << "Running multiverse tests\n";
     if(const int result = multiverse_tests::run(); result != 0)
         return result;

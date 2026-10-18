@@ -8,9 +8,14 @@
 #ifndef board_h
 #define board_h
 
+#include "pgnerror.h"
 #include <iostream>
 #include <array>
 #include <string>
+#include <stdexcept>
+#include <cstddef>
+#include <variant>
+#include <string_view>
 #include "piece.h"
 #include "bitboard.h"
 
@@ -108,6 +113,9 @@ public:
     bitboard_t attacks_to(int pos) const noexcept;
 	// pieces hositile to `color` that attacks a given square
     bool is_under_attack(int pos, int color) const noexcept;
+
+    // Unobstructed unmoved friendly rooks on the king's rank.
+    bitboard_t castling_rooks(int pos, bool color) const noexcept;
 };
 
 

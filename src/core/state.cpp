@@ -4,33 +4,34 @@
 #include <cassert>
 #include <functional>
 #include "utils.h"
-#include "variants.h"
 #include "pgnparser.h"
+#include "pgn_loading.h"
 #include "hypercuboid.h"
 
 //#define DEBUGMSG
 #include "debug.h"
 
 
-state::state(const multiverse &mtv, promotion_options promotion_rules)
-    : m(mtv), promotions(promotion_rules)
-{
-    std::tie(present, player) = m.get_present();
-}
-
-state::state(multiverse &&mtv, promotion_options promotion_rules) noexcept
+state::state(multiverse mtv, promotion_options promotion_rules) noexcept
     : m(std::move(mtv)), promotions(promotion_rules)
 {
     std::tie(present, player) = m.get_present();
 }
 
-state::state(const pgnparser_ast::game &g)
-    : state(g, derive_variant_setup(g)) {}
-
-state::state(const pgnparser_ast::game &g, const variant_setup_t &setup)
-    : m(create_multiverse_from_variant_setup(setup)), promotions(setup.promotions)
+template<bool UNSAFE>
+state state::from_pgn(const std::string &pgn)
 {
-    std::tie(present, player) = m.get_present();
+    const auto parsed = pgnparser(pgn).parse_game();
+    if(!parsed) throw std::runtime_error("Bad input, parse failed");
+    return from_ast<UNSAFE>(*parsed);
+}
+
+template<bool UNSAFE>
+state state::from_ast(const pgnparser_ast::game &g)
+{
+    auto [initial, error] = pgn_loading::load_initial_position<UNSAFE>(g);
+    if(error)
+        throw *error;
     // parse moves
     const pgnparser_ast::gametree *gt = &g.gt;
     while(true)
@@ -49,83 +50,24 @@ state::state(const pgnparser_ast::game &g, const variant_setup_t &setup)
         const auto &[act, last_gt] = *(variations.end() - 1);
         //std::cout << act;
         for(const auto &mv: act.moves)
-        {
-            auto [fm_opt, pt_opt, candidates] = parse_move(mv);
-            if(!fm_opt.has_value())
-            {
-                if(candidates.empty())
-                {
-                    std::ostringstream oss;
-                    dprint(to_string());
-                    oss << "state(): Invalid move: " << mv;
-                    throw std::runtime_error(oss.str());
-                }
-                else
-                {
-                    std::ostringstream oss;
-                    dprint(to_string());
-                    oss << "state(): Ambiguous move: " << mv << "; candidates: ";
-                    oss << range_to_string(candidates, "", "");
-                    throw std::runtime_error(oss.str());
-                }
-            }
-            else
-            {
-                full_move fm = fm_opt.value();
-                bool flag;
-                if(pt_opt.has_value())
-                {
-                    piece_t pt = to_white(*pt_opt);
-                    flag = apply_move<false>(ext_move(fm, pt));
-                }
-                else
-                {
-                    flag = apply_move<false>(fm);
-                }
-                if(!flag)
-                {
-                    std::ostringstream oss;
-                    oss << "state(): Illegal move: " << mv << " (parsed as: " << fm << ")";
-                    throw std::runtime_error(oss.str());
-                }
-            }
-        }
-        if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome))
-        {
-            const auto &last_variations = std::get<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome);
-            if(!last_variations.empty())
-            {
-                bool flag = submit();
-                if(!flag)
-                {
-                    std::ostringstream oss;
-                    oss << "state(): Cannot submit after parsing these moves: " << act;
-                    throw std::runtime_error(oss.str());
-                }
-            }
-            else
-            {
-                bool flag = submit();
-                if(!flag)
-                {
-                    std::cerr << "[WARNING]state(): Cannot submit after parsing these moves: " << act;
-                }
-            }
-        }
-        else
-        {
-            assert(std::holds_alternative<pgnparser_ast::token_t>(last_gt->variations_or_outcome));
-            bool flag = submit();
-            if(!flag)
-            {
-                std::ostringstream oss;
-                oss << "state(): Cannot submit after parsing these moves: " << act;
-                throw std::runtime_error(oss.str());
-            }
+            initial.apply_move_ast(mv, g.source_text);
+        if(!initial.submit())
+            throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
+                pgn_validation_error::make_subject(act, g.source_text));
+        if constexpr (!UNSAFE) {
+            if(auto exposure = initial.find_royal_exposure(false))
+                throw pgn_validation_error(*exposure,
+                    pgn_validation_error::make_subject(act, g.source_text));
         }
         gt = last_gt.get();
     }
+    return initial;
 }
+
+template state state::from_pgn<false>(const std::string &pgn);
+template state state::from_pgn<true>(const std::string &pgn);
+template state state::from_ast<false>(const pgnparser_ast::game &g);
+template state state::from_ast<true>(const pgnparser_ast::game &g);
 
 int state::new_line() const noexcept
 {
@@ -208,10 +150,8 @@ bool state::apply_move(ext_move mv)
         {
             return false;
         }
-#ifndef NDEBUG
         auto te = m.get_timeline_end(p.l());
         assert(std::make_pair(p.t(), player) == te && "moves must be made on an active board");
-#endif
         auto mvs = player ? m.gen_moves<true>(p) : m.gen_moves<false>(p);
         //auto it = mvbbs.find(q.tl());
         const auto &res = mvs.find([&q](const auto &pair){
@@ -272,10 +212,11 @@ bool state::apply_move(ext_move mv)
         else if((b_ptr->king()&z) && abs(d.x()) > 1)
         {
             dprint(" ... castling");
-            int rook_x1 = d.x() < 0 ? 0 : (size_x - 1); //rook's original x coordinate
+            const bitboard_t side = d.x() < 0 ? z - 1 : ~(z - 1);
+            const int rook_from = bb_get_pos(b_ptr->castling_rooks(p.xy(), player) & side);
             int rook_x2 = q.x() + (d.x() < 0 ? 1 : -1); //rook's new x coordinate
             m.append_board(p.l(),b_ptr
-                            ->move_piece(ppos(rook_x1, p.y()), ppos(rook_x2,q.y()))
+                            ->move_piece(rook_from, ppos(rook_x2,q.y()))
                             ->move_piece(p.xy(), q.xy()));
         }
         // normal move
@@ -426,6 +367,42 @@ bool state::has_phantom_check() const
 {
     return check_position::for_phantom(*this).first_check(!player).has_value();
 }
+
+std::optional<pgn_validation_error::royal_exposed> state::find_royal_exposure(
+    bool is_from_initial_setup
+) const
+{
+    const check_position checks(*this);
+    // After submit(), player is the opponent of the player who just moved.
+    bool attacker = is_from_initial_setup ? false : player;
+    auto capture = checks.first_check(attacker);
+    if(is_from_initial_setup && !capture) {
+        attacker = true;
+        capture = checks.first_check(attacker);
+    }
+    if(!capture) return std::nullopt;
+
+    // The attacker may differ from the stored player, so the ordinary move
+    // printer's player-dependent board lookup cannot be used here.
+    const auto from = capture->from, to = capture->to;
+    std::ostringstream notation;
+    notation << pretty_lt(from.tl())
+        << static_cast<char>(to_white(piece_name(get_piece(from, attacker))))
+        << static_cast<char>('a' + from.x()) << static_cast<char>('1' + from.y());
+    if(from.tl() != to.tl()) {
+        const bool branching = turn_t{to.t(), attacker} < get_timeline_end(to.l());
+        notation << (branching ? ">>x" : ">x") << pretty_lt(to.tl());
+    }
+    else notation << 'x';
+    notation << static_cast<char>('a' + to.x()) << static_cast<char>('1' + to.y());
+    return pgn_validation_error::royal_exposed{
+        .is_from_initial_setup = is_from_initial_setup,
+        .capture = *capture,
+        .notation = notation.str(),
+    };
+}
+
+
 
 state state::phantom() const
 {
@@ -798,6 +775,38 @@ std::string state::show_fen() const
         oss << ":" << t << ":" << (c?"b":"w") << "]\n";
     }
     return oss.str();
+}
+
+ext_move state::apply_move_ast(const pgnparser_ast::move &move,
+    const std::shared_ptr<const std::string> &source_text)
+{
+    using error = pgn_validation_error;
+    const auto subject = [&] { return error::make_subject(move, source_text); };
+    auto [fm, promotion, candidates] = parse_move(move);
+    if(!fm) {
+        if(candidates.empty())
+            throw error(error::invalid_move{}, subject());
+        const auto requested = std::visit([](const auto &mv) {
+            return mv.promote_to;
+        }, move.data);
+        const piece_t promote_to = requested ? static_cast<piece_t>(*requested)
+            : default_promote_to(promotions);
+        error::ambiguous_move reason;
+        reason.candidates.reserve(candidates.size());
+        for(const auto &candidate : candidates) {
+            const ext_move interpreted(candidate, promote_to);
+            reason.candidates.push_back({normalize_promotion(interpreted).value_or(interpreted),
+                candidate.pgn(*this, promote_to)});
+        }
+        throw error(std::move(reason), subject());
+    }
+    const piece_t requested = promotion.value_or(NO_PIECE);
+    const auto normalized = normalize_promotion(ext_move(*fm, requested));
+    if(!normalized)
+        throw error(error::illegal_promotion{requested, promotions}, subject());
+    if(!apply_move<false>(*normalized))
+        throw error(error::illegal_move{*normalized}, subject());
+    return *normalized;
 }
 
 state::parse_pgn_res state::parse_move(const pgnparser_ast::move &move) const

@@ -37,17 +37,9 @@ indexed. Each action has exactly one child in both containers.
 `gnode::add_child` returns null on duplicate insertion and preserves the existing
 child; `game::add_child` returns false for the same case.
 
-PGN loading resolves duplicate canonical actions with **last occurrence wins**.
-The incoming subtree is fully constructed and validated before the loader uses
-`find_child`, `delete_child`, and `add_child` to replace the earlier branch.
-Replacement discards the earlier comments and all descendants, and appends the
-survivor at the later occurrence's position. Other siblings retain their order.
-This applies recursively, including actions whose independently ordered moves
-canonicalize to the same sequence. No merging is performed.
-
-The recursive loader returns the last surviving endpoint to select after import,
-avoiding navigation pointers into replaced subtrees. Failed loading leaves the
-caller's existing game intact.
+PGN loading constructs history with last-occurrence replacement of duplicate
+actions. See [Game history construction](parsing.md#game-history-construction)
+for replacement order, subtree validation, and endpoint selection.
 
 ## Moves within a turn
 
@@ -84,7 +76,66 @@ from the real state. Previewing and discarding preserve existing redo history.
 
 The client exposes boards, playable pieces, move destinations, checks, phantom boards, match status, and promotion options. Interfaces use these queries to display positions and offer interactions without implementing the game rules themselves.
 
-`game::from_pgn()` loads metadata, comments, and variations from [Branched 5DPGN](../branched-5dpgn.md), resolving and validating moves through the core. `show_pgn()` exports the game, with options controlling notation, inclusion of the complete game tree, and metadata. Comments are attached to history nodes; game headers are stored in `metadata`.
+[Parsing and printing](parsing.md) describes `game::from_pgn()` and `show_pgn()`,
+including loading policies, validation diagnostics, and export options. Comments
+are attached to history nodes; game headers are stored in `metadata`.
+
+## Illegal history
+
+`game::from_pgn()` defaults to strict loading. The
+[loading policies](parsing.md#loading-policies) describe how
+`game::load_options::allow_illegal_history` permits importing exposed royals
+without changing the policy for subsequent manual editing.
+
+Each `gnode` stores `has_illegal_history()`. The root is classified from its
+setup. A child is flagged when its parent is flagged or its submitted position
+fails royal safety. Descendants inherit the flag even when subsequent actions resolve the
+royal exposure. Flags are immutable after creation and preserved by
+cloning; ancestors and siblings are unaffected. Low-level `gnode::create_root`
+and `create_child` accept an optional flag, defaulting to false for trusted legal
+callers. These factories do not repeat legality checks. The `game` insertion and
+loading paths classify positions before passing that flag.
+
+Manual `game::submit()` remains permissive about unresolved checks and records
+the flag independently of any UI checkbox. Reusing a child retains its flag.
+`game::add_child()` checks royal safety for unflagged parents; on a flagged branch
+it checks move applicability and propagates the flag without another safety scan.
+Neither path marks temporary drafts or previews as submitted illegal history.
+
+`game::has_illegal_history()` describes the selected submitted node.
+`get_child_actions()` returns `game::action_summary` records with `act`, `pgn`,
+and `is_illegal`; the flag describes the destination node, including inherited
+illegal history. Python exposes those same named fields; WebAssembly uses
+`action` for the action field and preserves `pgn` and `is_illegal`.
+`visit_child()` remains an existing-only navigation primitive without a UI
+permission policy. Returning to an unflagged ancestor restores normal analysis.
+
+For flagged nodes, `suggest_action()` returns `nullopt` immediately and
+`get_match_status()` returns `match_status_t::ILLEGAL_HISTORY`, without invoking
+Hypercuboid. PGN tree/path export and continuation labels suppress computed mate
+symbols and outcomes for flagged nodes, and flagged children cannot serve as
+legal-continuation witnesses for their parents. Mate classification of legal
+ancestors remains available. Result tokens are omitted before continuations,
+including illegal continuations after checkmate, to keep exported PGN reloadable.
+Moves, comments, variations, and user-supplied metadata remain preserved.
+
+### Binding and UI integration
+
+Python exposes `game.from_pgn(pgn, allow_illegal_history=False)`, both history
+queries, and `match_status_t.ILLEGAL_HISTORY`. WebAssembly supports both
+`from_pgn(pgn)` (strict) and `from_pgn(pgn, allow_illegal_history)`, with the
+existing `{success, game, message}` result convention. It exposes both history
+queries and formats the flagged match status as `White's Move (Illegal History)`
+or `Black's Move (Illegal History)` from the selected node's mover.
+
+The JavaScript UI must supply its checkbox value when loading. Before Next it
+must inspect the destination flag and, when the checkbox is off, show a message
+and leave the position unchanged. When viewing flagged history, the checkbox
+must stay checked and disabled. Returning to legal history unlocks it without
+changing its checked value. Only the user enables or disables the option; there
+is no saved preference or automatic enabling. This permission policy belongs to
+the UI and is not enforced by the C++ navigation methods. Existing manual-submit
+check guards remain applicable. Failed loading must preserve the old game.
 
 ## Deleting continuations
 

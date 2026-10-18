@@ -135,7 +135,13 @@ function onWorkerMessage(e) {
         console.log('Version', msg.version);
     }
     else if (msg.type === 'alert') {
-        alert('[WORKER] ' + msg.message);
+        alert(msg.message);
+    }
+    else if (msg.type === 'load_result') {
+        if (UI.receiveImportResult(msg)) worker.postMessage({ type: 'commit_load', requestId: msg.requestId });
+    }
+    else if (msg.type === 'load_committed') {
+        UI.completeImport(msg.requestId);
     }
     else if (msg.type === 'data') {
         let data = msg.data;
@@ -156,6 +162,7 @@ function onWorkerMessage(e) {
     else if (msg.type === 'update_buttons')
     {
         UI.setHintAvailable(msg.hint);
+        UI.setAllowSubmitWithChecks(msg.allowSubmitWithChecks, msg.allowSubmitWithChecksLocked);
         for(let key of ['undo', 'redo', 'prev', 'next', 'submit'])
         {
             if(msg[key] && (key !== 'next' || UI.select.getSelectedIndex() >= 0))
@@ -261,11 +268,13 @@ UI.setCanvasNavigationCallback((action, options) => {
     else window.chessBoardCanvas.navigateBoard(action, options);
 });
 
-UI.setImportCallback((data) => {
+UI.setImportCallback((data, requestId) => {
     deselect();
     focusOnNextData = true;
-    worker.postMessage({type: 'load', pgn: data});
+    worker.postMessage({type: 'load', pgn: data, requestId});
 });
+
+UI.setImportCancelCallback(requestId => worker.postMessage({ type: 'cancel_load', requestId }));
 
 UI.setExportCallback((requestId) => {
     worker.postMessage({type: 'export', requestId});

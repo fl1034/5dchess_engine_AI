@@ -56,7 +56,7 @@ fine_node<> *goto_next_nodal(fine_node<> *node)
 
 int main()
 {
-    state s(*pgnparser(str).parse_game());
+    state s = state::from_pgn<true>(str);
 
     // A terminal check retains a witness branch and reuses it on later checks.
     auto checked_root = fine_node<>::make_root(s);

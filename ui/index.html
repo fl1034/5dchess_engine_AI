@@ -244,7 +244,18 @@
     <div class="popup-window popup-standard" id="popupImport">
         <div class="popup-title">Import Data</div>
         <div class="popup-content popup-content-flex">
-            <textarea class="popup-textarea popup-textarea-flex" id="importTextarea" placeholder="Paste your data here or drag and drop a file..."></textarea>
+            <div class="pgn-input">
+                <div class="pgn-overlay" id="importHighlight" aria-hidden="true" hidden><div class="pgn-mirror" id="importMirror"></div></div>
+                <textarea class="popup-textarea" id="importTextarea" aria-label="PGN input" aria-describedby="importDiagnostic" spellcheck="false" placeholder="Paste your data here or drag and drop a file..."></textarea>
+            </div>
+            <div class="import-diagnostic" id="importDiagnostic" data-state="empty">
+                <button type="button" class="diagnostic-heading diagnostic-location" id="importDiagnosticLocation" aria-controls="importHighlight" aria-pressed="false" hidden>
+                    <svg class="diagnostic-error-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 5h2v6h-2zm0 8h2v2h-2z"/></svg>
+                    <span id="importDiagnosticHeading" role="status" aria-atomic="true"></span>
+                    <span class="diagnostic-locate-hint">[Click to Locate]:</span>
+                </button>
+                <div id="importDiagnosticMessage"></div>
+            </div>
             <div class="popup-button-group">
                 <button class="popup-button" id="loadFromFileButton">Open File...</button>
                 <button class="popup-button" id="loadButton">Load</button>
@@ -332,7 +343,7 @@
                     <input type="checkbox" id="allowSubmitWithChecks">
                     <span>Allow submit with checks</span>
                 </label>
-                <p class="popup-control-description">When checked, submitting legal moves will be allowed even if the current board has checks.</p>
+                <p class="popup-control-description">Allow submitting moves that leave your royal pieces attacked, and loading or viewing illegal history. Hint is unavailable in illegal history. Return to legal history to unlock this setting and turn it off.</p>
                 <label class="popup-control">
                     <input type="checkbox" id="useShortMoveNotation" checked>
                     <span>Use shortened notation for moves</span>

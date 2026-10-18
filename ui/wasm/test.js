@@ -11,7 +11,81 @@ async function runTest() {
     const engine_wasm = await createModule();
     console.log('Module loaded!');
 
-    const walls = engine_wasm.from_pgn(`[Mode "5D"]
+    const illegalSetup = `[Board "Custom"]
+[Size "8x8"]
+[Timeline "odd"]
+[7k/8/8/8/8/8/8/K7:0:1:w]
+[7k/3r4/8/8/3K4/8/8/8:1:1:b]`;
+    if (engine_wasm.from_pgn(illegalSetup, false).success) throw new Error('Strict loading accepted illegal setup');
+    const setupFailure = engine_wasm.from_pgn(illegalSetup, false).diagnostic;
+    if (setupFailure.code !== 'royal_exposed' || !setupFailure.canAllowIllegalHistory
+        || illegalSetup.slice(setupFailure.range.start, setupFailure.range.end) !== '[7k/3r4/8/8/3K4/8/8/8:1:1:b]') {
+      throw new Error('Illegal setup diagnostic lost its board range or permission hint');
+    }
+    const unicode = '[Event "😀 café"]\n[Board "Standard - Turn Zero"]\n1. e2e5';
+    const moveFailure = engine_wasm.from_pgn(unicode).diagnostic;
+    if (moveFailure.code !== 'invalid_move' || unicode.slice(moveFailure.range.start, moveFailure.range.end) !== 'e2e5'
+        || moveFailure.canAllowIllegalHistory) throw new Error('Validation range is not UTF-16');
+    const syntaxInput = '[Event "😀"]\n[Board "Standard - Turn Zero"]\n1. e4 {';
+    const syntaxFailure = engine_wasm.from_pgn(syntaxInput).diagnostic;
+    if (syntaxFailure.category !== 'syntax' || syntaxFailure.code !== 'unterminated_comment'
+        || syntaxInput.slice(syntaxFailure.range.start, syntaxFailure.range.end) !== '{') {
+      throw new Error('Syntax diagnostic lost its Unicode source range');
+    }
+    const boardSyntax = '[Event "😀"]\n[7k/8/8/8/8/8/8/K7:0:1:q]';
+    const boardFailure = engine_wasm.from_pgn(boardSyntax).diagnostic;
+    if (boardFailure.category !== 'syntax' || boardSyntax.slice(boardFailure.range.start, boardFailure.range.end) !== 'q') {
+      throw new Error('Board metadata syntax error was not rebased into the full PGN');
+    }
+    const eofInput = '[Event "😀"]\n[Board "Standard - Turn Zero"]\n1. e4 /';
+    const eofFailure = engine_wasm.from_pgn(eofInput).diagnostic;
+    if (eofFailure.range.start !== eofInput.length || eofFailure.range.end !== eofInput.length) {
+      throw new Error('Missing-input diagnostic did not retain its empty UTF-16 EOF range');
+    }
+    for (const [header, value, code] of [
+      ['BoArD', 'Unknown variant', 'unknown_variant'],
+      ['Variant', '', 'unknown_variant'],
+      ['Size', 'bad', 'invalid_size'],
+      ['Size', 'ax8', 'invalid_size'],
+      ['Size', '99999999999999999999x8', 'invalid_size'],
+      ['Timeline', 'sideways', 'invalid_timeline'],
+      ['Promotions', '*Q', 'invalid_promotions'],
+    ]) {
+      const input = `[Event "😀 café"]\n[${header} "${value}"]`;
+      const diagnostic = engine_wasm.from_pgn(input, true).diagnostic;
+      const start = input.lastIndexOf('"', input.length - 3) + 1;
+      if (diagnostic.category !== 'validation' || diagnostic.code !== code
+          || diagnostic.range.start !== start || diagnostic.range.end !== start + value.length
+          || diagnostic.canAllowIllegalHistory) {
+        throw new Error(`Incorrect header diagnostic: ${JSON.stringify(diagnostic)}`);
+      }
+    }
+    const missingSetup = engine_wasm.from_pgn('[Event "No setup"]').diagnostic;
+    if (missingSetup.code !== 'missing_setup' || missingSetup.range !== null || missingSetup.canAllowIllegalHistory) {
+      throw new Error('Missing setup diagnostic invented a header range or permission');
+    }
+    const permissive = engine_wasm.from_pgn(illegalSetup, true);
+    if (!permissive.success) throw new Error(permissive.message);
+    if (!permissive.game.has_illegal_history() || permissive.game.suggest_action() !== null
+        || permissive.game.get_match_status() !== "White's Move (Illegal History)") {
+      throw new Error('Illegal root status or Hint is incorrect');
+    }
+    permissive.game.delete();
+    const history = engine_wasm.from_pgn('[Board "Standard - Turn Zero"] 1. f3 / e5 2. g4 / Qh4 3. a3 / a6', true);
+    if (!history.success) throw new Error(history.message);
+    history.game.visit_parent();
+    const inherited = history.game.get_child_actions()[0];
+    if (!inherited.is_illegal || !Array.isArray(inherited.action) || typeof inherited.pgn !== 'string') {
+      throw new Error('Child summary failed to expose inherited illegal history');
+    }
+    history.game.visit_parent();
+    const unsafe = history.game.get_child_actions()[0];
+    if (history.game.has_illegal_history() || !unsafe.is_illegal) throw new Error('Unsafe continuation was not flagged');
+    if (!history.game.visit_child(unsafe.action)) throw new Error('Summary action is not navigable');
+    history.game.delete();
+    console.log('Illegal-history loading, status, Hint and summaries passed');
+
+    const dragonPgn = `[Mode "5D"]
 [Result "0-1"]
 [Date "2023.05.13"]
 [Time "19:08:21 (+02:00)"]
@@ -21,7 +95,18 @@ async function runTest() {
 [Event "Custom Variant tourney match 2"]
 [Game "1"]
 [Board "custom"]
-[r*dbqk*bdr*/p*p*p*p*p*p*p*p*/1dDDdD1/222/222/1DddDd1/P*P*P*P*P*P*P*P*/R*DBQK*BDR*:0:1:w]`);
+[r*dbqk*bdr*/p*p*p*p*p*p*p*p*/1dDDdD1/222/222/1DddDd1/P*P*P*P*P*P*P*P*/R*DBQK*BDR*:0:1:w]`;
+    const invalid = engine_wasm.from_pgn(dragonPgn);
+    if (invalid.success || invalid.type !== 'invalid_argument'
+        || invalid.message !== 'FEN rank has 7 squares; expected 8.') {
+      throw new Error('An incomplete rank must produce a FEN error');
+    }
+    if (invalid.diagnostic.code !== 'rank_too_short'
+        || dragonPgn.slice(invalid.diagnostic.range.start, invalid.diagnostic.range.end) !== '1dDDdD1') {
+      throw new Error('FEN diagnostic lost its enclosing PGN range');
+    }
+    const walls = engine_wasm.from_pgn(dragonPgn.replace('1dDDdD1/222/222/1DddDd1',
+      '1dDDdD1#/6##/6##/1DddDd1#'));
     if (!walls.success) throw new Error(walls.message);
     const wallBoard = walls.game.get_current_boards()[0];
     if ('parsed' in wallBoard) throw new Error('Board display must be reconstructed from FEN');

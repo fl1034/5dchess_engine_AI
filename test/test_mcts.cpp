@@ -156,7 +156,7 @@ std::optional<move_score_table> capture_check_weights_table(
 
 state standard_position()
 {
-    return state(*pgnparser("[Board \"Standard - Turn Zero\"]\n").parse_game());
+    return state::from_pgn<true>("[Board \"Standard - Turn Zero\"]\n");
 }
 
 void test_rollout()
@@ -180,7 +180,7 @@ void test_rollout()
         std::tuple{false, "K7/1q6/2k5/8/8/8/8/8", -1.0f},
         std::tuple{true, "k7/2Q5/2K5/8/8/8/8/8", 0.0f}})
     {
-        multiverse boards(timeline_layout::odd(), {{0, 1, player, fen}});
+        multiverse boards(timeline_layout::odd, {{0, 1, player, fen}});
         state s(boards);
         rollout_default_policy policy({}, {}, 1, 42);
         auto result = policy.evaluate(s, {}, obs);
@@ -202,7 +202,7 @@ void test_rollout()
 
 void test_weighted_action_selection()
 {
-    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/1p2/KR2"}});
+    multiverse boards(timeline_layout::odd, {{0, 1, false, "3k####/4####/1p2####/KR2####/########/########/########/########"}});
     const state position(boards);
 
     move_evaluation_weights weights{};
@@ -309,7 +309,7 @@ void test_completion()
 
 void test_capture_ordering()
 {
-    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/1p2/KR2"}});
+    multiverse boards(timeline_layout::odd, {{0, 1, false, "3k####/4####/1p2####/KR2####/########/########/########/########"}});
     const state position(boards);
     auto root = uct_tree_policy<scored_HC_ordering>::node_t::make_root(position);
     observer obs;
@@ -325,7 +325,7 @@ void test_capture_ordering()
 void test_capture_check_progressive_widening()
 {
     // Rxb2 captures without check; Rd1 checks without capture.
-    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/Kp2/1R2"}});
+    multiverse boards(timeline_layout::odd, {{0, 1, false, "3k####/4####/Kp2####/1R2####/########/########/########/########"}});
     const state position(boards);
     observer obs;
     using policy_t = progressive_widening_tree_policy<scored_HC_ordering>;
@@ -361,7 +361,7 @@ void test_capture_check_progressive_widening()
 void test_score_table_and_generic_policies()
 {
     // Rxd2 both captures the pawn and checks the king on d4.
-    multiverse boards(timeline_layout::odd(), {{0, 1, false, "3k/4/3p/K2R"}});
+    multiverse boards(timeline_layout::odd, {{0, 1, false, "3k####/4####/3p####/K2R####/########/########/########/########"}});
     const state position(boards);
     auto [info, space] = HC_info::build_HC(position);
     (void)space;
@@ -426,13 +426,13 @@ void test_score_table_and_generic_policies()
 
 void test_multiple_semimoves()
 {
-    state position(*pgnparser(R"(
+    state position = state::from_pgn<true>(R"(
 [Mode "5D"]
 [Board "Very Small - Open"]
 1. Bb2+ / Nxb2
 2. N>>xd3 / (1T1)Bc3+
 3. Bb2
-)").parse_game());
+)");
     auto root = uct_tree_policy<>::node_t::make_root(position);
     observer obs;
     uct_tree_policy<> policy(42);
@@ -508,7 +508,7 @@ void test_promotion_paths()
                       promotion_options::NONE})
     {
         const full_move move(black ? "(0T1)a2a1" : "(0T1)a7a8");
-        multiverse boards(timeline_layout::odd(), {{0, 1, black, black
+        multiverse boards(timeline_layout::odd, {{0, 1, black, black
             ? "k7/8/8/8/8/8/p7/7K" : "7k/P7/8/8/8/8/8/K7"}});
         state before(boards, rules);
         state expected = before;
@@ -591,9 +591,9 @@ struct observer {};
 
 state standard_position()
 {
-    return state(*pgnparser(R"(
+    return state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
-)").parse_game());
+)");
 }
 
 void test_feature_layout()
@@ -653,11 +653,11 @@ void test_weights_and_perspective()
     assert(std::abs(evaluation.evaluate(white_to_move) - std::tanh(1.0f)) < 1e-6f);
     assert(evaluation.get_weights() == weights);
 
-    const state black_to_move(*pgnparser(R"(
+    const state black_to_move = state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
 
 1. e4
-)").parse_game());
+)");
     assert(std::abs(evaluation.evaluate(black_to_move) + std::tanh(1.0f)) < 1e-6f);
 }
 
@@ -695,7 +695,7 @@ void test_rollout_policy_preserves_input()
 
 void test_stalemate_rollout_termination()
 {
-    multiverse multiverse(timeline_layout::odd(), {
+    multiverse multiverse(timeline_layout::odd, {
         {0, 1, true, "k7/2Q5/2K5/8/8/8/8/8"}
     });
     observer obs;
@@ -708,7 +708,7 @@ void test_stalemate_rollout_termination()
 
 void test_winner_rollout_termination()
 {
-    multiverse white_win_multiverse(timeline_layout::odd(), {
+    multiverse white_win_multiverse(timeline_layout::odd, {
         {0, 1, true, "k7/1Q6/2K5/8/8/8/8/8"}
     });
     observer obs;
@@ -718,7 +718,7 @@ void test_winner_rollout_termination()
     assert(white_win->data.end == rollout_details::termination::WHITE_WINS);
     assert(white_win->data.num_actions == 0);
 
-    multiverse black_win_multiverse(timeline_layout::odd(), {
+    multiverse black_win_multiverse(timeline_layout::odd, {
         {0, 1, false, "K7/1q6/2k5/8/8/8/8/8"}
     });
     const auto black_win = policy.evaluate(state(black_win_multiverse), {}, obs);

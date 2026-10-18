@@ -381,6 +381,43 @@ class RatioContracts(ContractCase):
 class BindingContracts(ContractCase):
     """Real public engine objects: legal/illegal moves, history, and PGN."""
 
+    def test_setup_header_failures_are_value_errors(self):
+        rules = self.bindings()
+        for pgn, message in [
+            ('[Board "Unknown"]', 'Unknown variant'),
+            ('[Size "ax8"]', 'Invalid Size value'),
+            ('[Timeline "sideways"]', 'Invalid Timeline value'),
+            ('[Promotions "*Q"]', 'Invalid Promotions value'),
+            ('[Event "No setup"]', 'Missing initial setup'),
+        ]:
+            with self.subTest(pgn=pgn):
+                for allow in (False, True):
+                    with self.assertRaisesRegex(ValueError, message):
+                        rules.game.from_pgn(pgn, allow_illegal_history=allow)
+
+    def test_illegal_history_requires_opt_in_and_survives_navigation(self):
+        rules = self.bindings()
+        pgn = STANDARD_GAME + '\n1. f3 / e5 2. g4 / Qh4 3. a3 / a6'
+        with self.assertRaisesRegex(ValueError, 'Illegal action'):
+            rules.game.from_pgn(pgn)
+        game = rules.game.from_pgn(pgn, allow_illegal_history=True)
+        self.assertTrue(game.has_illegal_history())
+        self.assertIsNone(game.suggest_action())
+        self.assertEqual(game.get_match_status(), rules.match_status_t.ILLEGAL_HISTORY)
+        exported = game.show_pgn(rules.SHOW_MATE | rules.SHOW_OUTCOME)
+        restored = rules.game.from_pgn(exported, allow_illegal_history=True)
+        self.assertTrue(restored.has_illegal_history())
+        self.assertEqual(game.get_current_fen(), restored.get_current_fen())
+        game.visit_parent()
+        game.visit_parent()
+        self.assertFalse(game.has_illegal_history())
+        summary = game.get_child_actions()[0]
+        action = summary.act
+        self.assertTrue(summary.is_illegal)
+        self.assertEqual(game.get_match_status(), rules.match_status_t.BLACK_WINS)
+        self.assertTrue(game.visit_child(action))
+        self.assertTrue(game.has_illegal_history())
+
     def test_metadata_edits_are_live_and_assignment_preserves_views(self):
         rules = self.bindings()
         game = rules.game.from_pgn(STANDARD_GAME)
@@ -444,9 +481,9 @@ class BindingContracts(ContractCase):
         game.visit_parent()
         children = game.get_child_actions()
         self.assertEqual(len(children), 1)
-        self.assertTrue(game.has_child(children[0][0]))
-        self.assertFalse(game.add_child(children[0][0]))
-        self.assertTrue(game.visit_child(children[0][0]))
+        self.assertTrue(game.has_child(children[0].act))
+        self.assertFalse(game.add_child(children[0].act))
+        self.assertTrue(game.visit_child(children[0].act))
         self.assertEqual(game.get_comments(), ["replacement"])
         exported = game.show_pgn(rules.SHOW_CAPTURE | rules.SHOW_PROMOTION)
         self.assertNotIn("discarded", exported)
@@ -487,12 +524,13 @@ class BindingContracts(ContractCase):
         default = game.get_child_actions()
         full = game.get_child_actions(flags)
         short = game.get_child_actions(flags | rules.SHOW_SHORT)
-        self.assertEqual([text for _, text in default], [text for _, text in full])
-        self.assertEqual([text for _, text in short], ['e4'])
-        self.assertNotEqual(full[0][1], short[0][1])
-        self.assertEqual(full[0][0], short[0][0])
+        self.assertTrue(all(not summary.is_illegal for summary in default))
+        self.assertEqual([summary.pgn for summary in default], [summary.pgn for summary in full])
+        self.assertEqual([summary.pgn for summary in short], ['e4'])
+        self.assertNotEqual(full[0].pgn, short[0].pgn)
+        self.assertEqual(full[0].act, short[0].act)
         self.assertEqual(game.get_current_hash(), position)
-        game.visit_child(short[0][0])
+        game.visit_child(short[0].act)
         self.assertNotEqual(game.get_current_hash(), position)
 
     def test_suggestions_stay_private_and_hint_insertion_preserves_draft_and_redo(self):
@@ -602,8 +640,8 @@ class BindingContracts(ContractCase):
         self.assertEqual(game.get_current_fen(), initial)
         children = game.get_child_actions()
         self.assertEqual(len(children), 1)
-        self.assertEqual(len(children[0][0].get_moves()), 1)
-        game.visit_child(children[0][0])
+        self.assertEqual(len(children[0].act.get_moves()), 1)
+        game.visit_child(children[0].act)
         self.assertEqual(game.get_current_fen(), submitted)
         game.set_comments(["Public API round trip"])
         self.assertIn("Public API round trip", game.get_comments())

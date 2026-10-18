@@ -195,7 +195,7 @@ int run_rollout(int argc, const char *argv[])
     std::optional<state> parsed_state;
     try
     {
-        parsed_state.emplace(*pgnparser(pgn).parse_game());
+        parsed_state.emplace(state::from_pgn(pgn));
     }
     catch(const std::exception &error)
     {

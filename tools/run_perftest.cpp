@@ -58,7 +58,7 @@ int run_perftest(int argc, const char *argv[])
     g.gt = pgnparser_ast::gametree{};
     pgnparser_ast::gametree *gt = &gt_root;
 
-    state current_state = state(g);
+    state current_state = state::from_ast(g);
     turn_t turn = {1,false};
     while (true)
     {
@@ -93,45 +93,7 @@ int run_perftest(int argc, const char *argv[])
                 {
                     const auto &[act, last_gt] = *(variations.end() - 1);
                     for(const auto &mv: act.moves)
-                    {
-                        auto [fm_opt, pt_opt, candidates] = current_state.parse_move(mv);
-                        if(!fm_opt.has_value())
-                        {
-                            if(candidates.empty())
-                            {
-                                std::ostringstream oss;
-                                oss << "state(): Invalid move: " << mv;
-                                throw std::runtime_error(oss.str());
-                            }
-                            else
-                            {
-                                std::ostringstream oss;
-                                oss << "state(): Ambiguous move: " << mv << "; candidates: ";
-                                oss << range_to_string(candidates, "", "");
-                                throw std::runtime_error(oss.str());
-                            }
-                        }
-                        else
-                        {
-                            full_move fm = fm_opt.value();
-                            bool flag;
-                            if(pt_opt.has_value())
-                            {
-                                piece_t pt = to_white(*pt_opt);
-                                flag = current_state.apply_move<false>(ext_move(fm, pt));
-                            }
-                            else
-                            {
-                                flag = current_state.apply_move<false>(fm);
-                            }
-                            if(!flag)
-                            {
-                                std::ostringstream oss;
-                                oss << "state(): Illegal move: " << mv << " (parsed as: " << fm << ")";
-                                throw std::runtime_error(oss.str());
-                            }
-                        }
-                    }
+                        current_state.apply_move_ast(mv, g.source_text);
                     if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome))
                     {
                         const auto &last_variations = std::get<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome);
@@ -140,9 +102,8 @@ int run_perftest(int argc, const char *argv[])
                             bool flag = current_state.submit();
                             if(!flag)
                             {
-                                std::ostringstream oss;
-                                oss << "state(): Cannot submit after parsing these moves: " << act;
-                                throw std::runtime_error(oss.str());
+                                throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
+                                    pgn_validation_error::make_subject(act, g.source_text));
                             }
                         }
                         else
@@ -150,7 +111,9 @@ int run_perftest(int argc, const char *argv[])
                             bool flag = current_state.submit();
                             if(!flag)
                             {
-                                std::cerr << "[WARNING]state(): Cannot submit after parsing these moves: " << act;
+                                const pgn_validation_error error(pgn_validation_error::present_not_advanced{},
+                                    pgn_validation_error::make_subject(act, g.source_text));
+                                std::cerr << "[WARNING] " << error.what();
                             }
                         }
                     }
@@ -161,9 +124,8 @@ int run_perftest(int argc, const char *argv[])
                         bool flag = current_state.submit();
                         if(!flag)
                         {
-                            std::ostringstream oss;
-                            oss << "state(): Cannot submit after parsing these moves: " << act;
-                            throw std::runtime_error(oss.str());
+                            throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
+                                pgn_validation_error::make_subject(act, g.source_text));
                         }
                     }
                     gt = last_gt.get();

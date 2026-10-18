@@ -9,11 +9,17 @@
 #include <string>
 #include <string_view>
 #include <map>
+#include <cstddef>
 #include "turn.h"
 
-
-
 namespace pgnparser_ast {
+
+// Byte offsets into game::source_text, with an exclusive end.
+struct source_range {
+    std::size_t start;
+    std::size_t end;
+};
+
 typedef enum {
     NIL,
     WHITE_SPACE, COMMENT, METADATA,
@@ -69,11 +75,13 @@ struct superphysical_move {
 };
 struct move {
     std::variant<physical_move, superphysical_move> data;
+    std::optional<source_range> source = std::nullopt;
     friend std::ostream &operator<<(std::ostream &os, const move &mv);
 };
 struct actions {
     std::vector<move> moves;
     std::vector<std::string> comments;
+    std::optional<source_range> source = std::nullopt;
     friend std::ostream &operator<<(std::ostream &os, const actions &ac);
 };
 struct gametree {
@@ -82,13 +90,27 @@ struct gametree {
     std::variant<variations_t, token_t> variations_or_outcome;
     friend std::ostream &operator<<(std::ostream &os, const gametree &gt);
 };
+struct board_source {
+    source_range declaration;
+    source_range fen;
+};
+struct header_source {
+    source_range declaration;
+    source_range value;
+};
 struct game {
     std::map<std::string, std::string> headers;
     std::vector<std::tuple<std::string, token_t, int, int, bool>> boards;
     gametree gt;
     std::vector<std::string> comments;
+    std::shared_ptr<const std::string> source_text = nullptr;
+    // Parallel to boards when parsed from text; absent for programmatic ASTs.
+    std::vector<board_source> board_sources = {};
+    // Lowercase keys, matching headers; absent for programmatic ASTs.
+    std::map<std::string, header_source> header_sources = {};
     friend std::ostream &operator<<(std::ostream &os, const game &g);
 };
 
 } /* namespace pgnparser_ast */
+
 #endif // AST_H

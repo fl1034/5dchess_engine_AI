@@ -12,9 +12,9 @@ constexpr const char *empty_board = "8/8/8/8/8/8/8/8";
 
 void test_standard_material()
 {
-    const state s(*pgnparser(R"(
+    const state s = state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
-)").parse_game());
+)");
 
     using data_t = material_data<int>;
     const auto sum = count_material_sum<timelines_status::MANDATORY>(s);
@@ -36,12 +36,12 @@ void test_standard_material()
 
 void test_material_difference_after_capture()
 {
-    const state s(*pgnparser(R"(
+    const state s = state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
 
 1. e4 / d5
 2. exd5
-)").parse_game());
+)");
 
     using data_t = material_data<int>;
     const auto sum = count_material_sum<timelines_status::MANDATORY>(s);
@@ -57,7 +57,7 @@ void test_material_difference_after_capture()
 
 void test_initial_odd_multiverse()
 {
-    multiverse multiverse(timeline_layout::odd(), {{0, 1, false, empty_board}});
+    multiverse multiverse(timeline_layout::odd, {{0, 1, false, empty_board}});
     const state s(multiverse);
     const auto data = count_timelines(s);
 
@@ -78,7 +78,7 @@ void test_initial_odd_multiverse()
 
 void test_white_to_move_with_inactive_timeline()
 {
-    multiverse multiverse(timeline_layout::odd(), {
+    multiverse multiverse(timeline_layout::odd, {
         {-1, 2, false, empty_board},
         { 0, 1, false, empty_board},
         { 1, 1, false, empty_board},
@@ -106,7 +106,7 @@ void test_white_to_move_with_inactive_timeline()
 
 void test_black_to_move_with_timeline_advantage()
 {
-    multiverse multiverse(timeline_layout::even(), {
+    multiverse multiverse(timeline_layout::even, {
         {-2, 2,  true, empty_board},
         {-1, 1,  true, empty_board},
         { 0, 1,  true, empty_board},
@@ -135,9 +135,9 @@ void test_black_to_move_with_timeline_advantage()
 
 void test_standard_move_space_volume()
 {
-    const state s(*pgnparser(R"(
+    const state s = state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
-)").parse_game());
+)");
     const move_space_data data = count_move_space(s);
     const float expected = std::log(21.0f); // null coordinate + 20 moves
 
@@ -147,11 +147,11 @@ void test_standard_move_space_volume()
 
 void test_branching_move_space_volume()
 {
-    const state s(*pgnparser(R"(
+    const state s = state::from_pgn<true>(R"(
 [Board "Standard - Turn Zero"]
 
 1. Nf3
-)").parse_game());
+)");
     const move_space_data data = count_move_space(s);
 
     assert(std::isfinite(data.log_universe_volume));

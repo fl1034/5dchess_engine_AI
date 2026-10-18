@@ -17,6 +17,7 @@ class gnode {
     std::optional<state> s;
     action act;
     T info;
+    bool illegal_history;
     // for ownership and display order
     std::vector<std::unique_ptr<gnode>> children;
     struct child_action_less {
@@ -28,8 +29,10 @@ class gnode {
     // for lookup
     std::set<gnode *, child_action_less> child_index;
 
-    gnode(gnode<T> *parent, std::optional<state> s, action act, T info)
-        : parent(parent), s(std::move(s)), act(std::move(act)), info(std::move(info)), children() {}
+    gnode(gnode<T> *parent, std::optional<state> s, action act, T info,
+          bool illegal_history = false)
+        : parent(parent), s(std::move(s)), act(std::move(act)), info(std::move(info)),
+          illegal_history(illegal_history || (parent && parent->has_illegal_history())), children() {}
 
     std::string render_pgn_turn(
         const std::function<std::string(const T &)> &show,
@@ -40,20 +43,23 @@ class gnode {
         bool has_continuation
     );
 public:
-    static std::unique_ptr<gnode<T>> create_root(state s, T info)
+    // Callers classify royal safety once at insertion; trusted legal search can
+    // use the default without rescanning. Descendants always inherit the flag.
+    static std::unique_ptr<gnode<T>> create_root(state s, T info, bool illegal_history = false)
     {
-        return std::unique_ptr<gnode<T>>(new gnode<T>(nullptr, std::move(s), action{}, std::move(info)));
+        return std::unique_ptr<gnode<T>>(new gnode<T>(nullptr, std::move(s), action{}, std::move(info), illegal_history));
     }
     
-    static std::unique_ptr<gnode<T>> create_child(gnode<T> *parent, std::optional<state> s, action act, T info)
+    static std::unique_ptr<gnode<T>> create_child(gnode<T> *parent, std::optional<state> s, action act, T info,
+                                               bool illegal_history = false)
     {
-        return std::unique_ptr<gnode<T>>(new gnode<T>(parent, std::move(s), std::move(act), std::move(info)));
+        return std::unique_ptr<gnode<T>>(new gnode<T>(parent, std::move(s), std::move(act), std::move(info), illegal_history));
     }
 
     std::unique_ptr<gnode<T>> clone(gnode<T> *new_parent = nullptr) const
     {
         auto node = std::unique_ptr<gnode<T>>(
-            new gnode<T>(new_parent, s, act, info)
+            new gnode<T>(new_parent, s, act, info, illegal_history)
         );
         node->children.reserve(children.size());
         for (const auto &child : children) {
@@ -66,6 +72,7 @@ public:
     state get_state();
     const state &get_stored_state() const { return s.value(); }
     const action &get_action() const { return act; }
+    bool has_illegal_history() const noexcept { return illegal_history; }
     T &get_info() { return info; }
     const T &get_info() const { return info; }
     void set_info(const T &x) { info = x; }

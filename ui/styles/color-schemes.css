@@ -6,6 +6,9 @@
    interaction colors and translucent desktop surfaces follow automatically. */
 :root {
     color-scheme: light;
+    --md-sys-color-error: #ba1a1a;
+    --ui-error: var(--md-sys-color-error);
+    --ui-illegal: #883b3b;
     --ui-primary: #555555;
     --ui-on-primary: #ffffff;
     --ui-panel: #fafafa;
@@ -191,6 +194,7 @@
    Ice-blue and violet frames lift both board turns above the ink-blue grid. */
 :root.dark {
     color-scheme: dark;
+    --ui-illegal: #e5a09a;
     --md-sys-color-primary: #a4c9fe;
     --md-sys-color-on-primary: #00315c;
     --md-sys-color-primary-container: #1f4876;

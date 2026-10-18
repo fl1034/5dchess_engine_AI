@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <optional>
+#include <ostream>
 #include "state.h"
 #include "gametree.h"
 
@@ -26,12 +27,21 @@ class game
     mutable std::optional<bool> nonterminal;
     void fresh();
 public:
+    enum class match_status_t {PLAYING, WHITE_WINS, BLACK_WINS, STALEMATE, ILLEGAL_HISTORY};
+
+    struct load_options {
+        bool allow_illegal_history = false;
+    };
+
     /* Metadata edits do not change the loaded game’s rules or position. During PGN export, headers 
     describing game configuration are generated from the actual configuration and override conflicting 
     metadata values. */
     std::map<std::string, std::string> metadata;
     
-    static game from_pgn(std::string str);
+    static game from_pgn(std::string str, load_options options = {false});
+
+    // Flags describe submitted history, not temporary draft moves or previews.
+    bool has_illegal_history() const noexcept;
     
     const state &get_current_state() const;
     const state &get_unmoved_state() const;
@@ -72,7 +82,13 @@ public:
     void set_comments(const comments_t &c) const;
     bool has_parent() const;
     void visit_parent();
-    std::vector<std::tuple<action, std::string>> get_child_actions(
+    struct action_summary {
+        action act;
+        std::string pgn;
+        // Includes illegal history inherited from earlier actions or the setup.
+        bool is_illegal;
+    };
+    std::vector<action_summary> get_child_actions(
         pgn_options show_flags = pgn_options::SHOW_CAPTURE | pgn_options::SHOW_PROMOTION) const;
     std::vector<std::tuple<action, std::string>> get_historical_actions() const;
     // Navigate only to an existing child; return false without mutation if absent.
@@ -85,6 +101,30 @@ public:
     );
 };
 
+
+[[maybe_unused]]
+static std::ostream &operator<<(std::ostream &os, const game::match_status_t &status)
+{
+   switch (status)
+   {
+       case game::match_status_t::PLAYING:
+           os << "PLAYING";
+           break;
+       case game::match_status_t::WHITE_WINS:
+           os << "WHITE_WINS";
+           break;
+       case game::match_status_t::BLACK_WINS:
+           os << "BLACK_WINS";
+           break;
+       case game::match_status_t::STALEMATE:
+           os << "STALEMATE";
+           break;
+       case game::match_status_t::ILLEGAL_HISTORY:
+           os << "ILLEGAL_HISTORY";
+           break;
+   }
+   return os;
+}
 
 
 #endif // GAME_H

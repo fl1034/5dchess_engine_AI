@@ -1,4 +1,4 @@
-import { PendingBranches } from './branch-deletion.js';
+import { PendingBranches, actionKey } from './branch-deletion.js';
 import createModule from '../wasm/engine.js';
 import { parse_FEN } from './parse.js';
 import { hashAction, hashActionList } from './hash.js';
@@ -22,6 +22,7 @@ createModule().then((engine) => {
     let positionId = 0;
     let confirmationId = 0;
     let confirmation = null;
+    let pendingLoad = null;
 
     function children() {
         let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
@@ -49,6 +50,13 @@ createModule().then((engine) => {
         let submitted = null;
         if (data.type === 'next' && (!data.action || pendingBranches.has(data.action)
             || !self.game.has_child(data.action))) return false;
+        if (data.type === 'next' && !self.settings.allowSubmitWithChecks) {
+            const destination = children().find(child => actionKey(child.action) === actionKey(data.action));
+            if (destination?.is_illegal) {
+                self.postMessage({ type: 'alert', message: 'This continuation contains illegal history. Enable “Allow submit with checks” in Settings to view it.' });
+                return false;
+            }
+        }
         if (data.type === 'prev' && !self.game.has_parent()) return false;
         if (data.type === 'submit') {
             submitted = self.game.get_submit_action();
@@ -94,22 +102,40 @@ createModule().then((engine) => {
 
     self.postMessage({ type: 'ready' });
 
-    function loadGame(pgn) {
-        let g0 = self.engine.from_pgn(pgn);
-        if (!g0.success) {
-            self.postMessage({ type: 'alert', message: g0.message });
+    function replaceGame(next) {
+        if (self.game) self.game.delete();
+        self.game = next;
+        pendingBranches.clear();
+        previewMove = previewId = null;
+        positionId++;
+        confirmation = null;
+    }
+
+    function loadGame(pgn, requestId) {
+        if (pendingLoad) pendingLoad.game.delete();
+        pendingLoad = null;
+        const result = self.engine.from_pgn(pgn, self.settings.allowSubmitWithChecks);
+        if (requestId !== undefined && requestId !== null) {
+            if (result.success) pendingLoad = { requestId, game: result.game };
+            self.postMessage({ type: 'load_result', requestId, success: result.success,
+                diagnostic: result.diagnostic, message: result.message });
             return false;
-        } else {
-            if (self.game) {
-                self.game.delete();
-            }
-            self.game = g0.game;
-            pendingBranches.clear();
-            previewMove = previewId = null;
-            positionId++;
-            confirmation = null;
-            return true;
         }
+        // Startup loads have no import editor to receive diagnostics.
+        if (!result.success) {
+            self.postMessage({ type: 'alert', message: result.message });
+            return false;
+        }
+        replaceGame(result.game);
+        return true;
+    }
+
+    function refreshLoadedGame() {
+        prepareHint();
+        updateSelect();
+        updateButtons();
+        updateHudStatus();
+        viewGame(true);
     }
 
     function viewGame(positionChanged = false) {
@@ -285,6 +311,8 @@ createModule().then((engine) => {
         }
         self.postMessage({
             type: 'update_buttons',
+            allowSubmitWithChecks: self.settings.allowSubmitWithChecks,
+            allowSubmitWithChecksLocked: self.game.has_illegal_history(),
             hint: pendingHint !== null,
             undo: self.game.can_undo(),
             redo: self.game.can_redo(),
@@ -307,7 +335,7 @@ createModule().then((engine) => {
             return;
         }
         // Get match status and comments
-        const matchStatus = pendingHint !== null
+        const matchStatus = !self.game.has_illegal_history() && pendingHint !== null
             ? nodeMoveStatus
             : self.game.get_match_status();
         const comments = self.game.get_comments();
@@ -341,6 +369,22 @@ createModule().then((engine) => {
 
     self.onmessage = (e) => {
         let data = e.data;
+        if (data.type === 'cancel_load') {
+            if (pendingLoad && pendingLoad.requestId === data.requestId) {
+                pendingLoad.game.delete();
+                pendingLoad = null;
+            }
+            return;
+        }
+        if (data.type === 'commit_load') {
+            if (!pendingLoad || pendingLoad.requestId !== data.requestId) return;
+            const next = pendingLoad.game;
+            pendingLoad = null;
+            replaceGame(next);
+            refreshLoadedGame();
+            self.postMessage({ type: 'load_committed', requestId: data.requestId });
+            return;
+        }
         if (data.type === 'cancel_deletions') {
             if (confirmation?.id === data.id) confirmation = null;
             return;
@@ -373,12 +417,8 @@ createModule().then((engine) => {
             previewMove = previewId = null;
         }
         if (data.type === 'load') {
-            if (!loadGame(data.pgn)) return;
-            prepareHint();
-            updateSelect();
-            updateButtons();
-            updateHudStatus();
-            viewGame(true);
+            if (!loadGame(data.pgn, data.requestId)) return;
+            refreshLoadedGame();
         } else if (data.type === 'view') {
             viewGame();
         } else if (data.type === 'apply_move') {
@@ -444,14 +484,18 @@ createModule().then((engine) => {
             }
             updateButtons();
         } else if (data.type === 'update_settings') {
-            // Merge incoming settings
+            // Illegal history can only be entered with explicit permission.
+            // Keep it enabled until navigation returns to a legal ancestor.
+            if (self.game?.has_illegal_history() && data.settings?.allowSubmitWithChecks === false) {
+                data = { ...data, settings: { ...data.settings, allowSubmitWithChecks: true } };
+            }
             self.settings = Object.assign(
                 self.settings || {},
                 data.settings || {},
             );
             if (data.settings?.useShortMoveNotation !== undefined && self.game) updateSelect(true);
             // Update UI state if needed
-            if (previewId == null) updateButtons();
+            updateButtons();
         } else if (data.type === 'export') {
             let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
             if (self.settings.exportMate) {

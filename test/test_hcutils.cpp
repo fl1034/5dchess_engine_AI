@@ -186,7 +186,7 @@ void test_search_branch_order()
 2. Nf3 / Nc6
 )").parse_game();
     assert(parsed);
-    const state s(*parsed);
+    const state s = state::from_ast<true>(*parsed);
     for(bool stable : {false, true})
     {
         auto [info, space] = HC_info::build_HC(s);

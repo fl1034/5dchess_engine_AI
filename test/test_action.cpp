@@ -39,12 +39,12 @@ int run()
 [Board "custom"]
 [nbrk/3p*/P*3/KRBN:0:1:w]
 )").parse_game();
-    const state s(*game);
+    const state s = state::from_ast<true>(*game);
     assert(full_move("(0T1)a2a4").lan(s, KNIGHT_W) == "(0T1)a2a4N");
     assert(full_move("(0T1)b1b2").lan(s, ROOK_W) == "(0T1)b1b2");
 
     const auto standard_game = pgnparser("[Board \"Standard\"]").parse_game();
-    const state standard(*standard_game);
+    const state standard = state::from_ast<true>(*standard_game);
     const action e4 = action::from_vector({ext_move("(0T1)e2e4")}, standard);
     const action e4_with_irrelevant_promotion = action::from_vector(
         {ext_move(full_move("(0T1)e2e4"), QUEEN_W)}, standard);
@@ -97,9 +97,8 @@ int run()
     assert(en_passant.pgn(en_passant_position, QUEEN_W,
                           pgn_options::SHOW_CAPTURE).find('x') != std::string::npos);
 
-    const state small_castling(*pgnparser(
-        "[Size \"4x4\"]\n[Board \"custom\"]\n[3k/4/4/1K1R:0:1:w]\n")
-        .parse_game());
+    const state small_castling = state::from_pgn<true>(
+        "[Size \"4x4\"]\n[Board \"custom\"]\n[3k/4/4/1K1R:0:1:w]\n");
     const full_move castle("(0T1)b1d1");
     assert(castle.captured_piece(small_castling) == NO_PIECE);
     assert(static_cast<bool>(castle.move_type(small_castling)
@@ -113,7 +112,7 @@ int run()
 [Board "custom"]
 [3k/4/4/R2K:0:1:w]
 )").parse_game();
-    const state checking_position(*checking_game);
+    const state checking_position = state::from_ast<true>(*checking_game);
     const full_move checking_move("(0T1)a1a4");
     state after_check = checking_position;
     assert(after_check.apply_move(checking_move));
@@ -130,7 +129,7 @@ int run()
     // opponent's present, even while a multi-move action is unfinished.
     for (bool mover : {false,true}) {
         const std::string fen = mover ? "r2k/4/4/3K" : "3k/4/4/R2K";
-        const state multi(multiverse(timeline_layout::odd(), {
+        const state multi(multiverse(timeline_layout::odd, {
             {0,1,mover,fen}, {1,3,mover,fen}, {2,1,mover,fen}
         },4,4));
         for (int l : {1,2}) {
@@ -171,9 +170,9 @@ namespace semimove_tests
 {
 int run()
 {
-    const state s(*pgnparser(R"(
+    const state s = state::from_pgn<true>(R"(
 [Board "Standard"]
-)").parse_game());
+)");
 
     const semimove physical = physical_move{full_move("(0T1)g1f3")};
     assert(physical.lan(s) == "(0T1)g1@Nf3");
@@ -261,7 +260,7 @@ int run()
         const std::string fen = black
             ? (brawn ? "k7/8/8/8/8/8/w7/7K" : "k7/8/8/8/8/8/p7/7K")
             : (brawn ? "7k/W7/8/8/8/8/8/K7" : "7k/P7/8/8/8/8/8/K7");
-        multiverse boards(timeline_layout::odd(), {{0, 1, black, fen}});
+        multiverse boards(timeline_layout::odd, {{0, 1, black, fen}});
         const state before(boards, rules);
         const full_move promotion(black ? "(0T1)a2a1" : "(0T1)a7a8");
         compare_overloads(before, promotion);
@@ -359,7 +358,7 @@ int run()
         {
             (void)parse_promotions(invalid);
         }
-        catch(const std::runtime_error &)
+        catch(const invalid_promotions &)
         {
             threw = true;
         }
@@ -418,7 +417,7 @@ int run()
 )";
     const auto parsed = pgnparser(before_promotion).parse_game();
     assert(parsed.has_value());
-    const state promotion_state(*parsed);
+    const state promotion_state = state::from_ast<true>(*parsed);
     const auto [fm, pt, candidates] = promotion_state.parse_move("h8=Q");
     assert(fm.has_value());
     const action implicit_queen = action::from_vector({ext_move(*fm, promotion_state)}, promotion_state);
@@ -428,7 +427,7 @@ int run()
     assert(implicit_queen.get_moves()[0].promote_to == QUEEN_W);
     std::string multiple_promotions = before_promotion;
     multiple_promotions.replace(multiple_promotions.find("\"Q\""), 3, "\"QR\"");
-    const state promotion_order_state(*pgnparser(multiple_promotions).parse_game());
+    const state promotion_order_state = state::from_pgn<true>(multiple_promotions);
     const auto rook = action::from_vector({ext_move(*fm, ROOK_W)}, promotion_order_state);
     const auto queen = action::from_vector({ext_move(*fm, QUEEN_W)}, promotion_order_state);
     assert((rook < queen) != (queen < rook));
@@ -445,7 +444,7 @@ int run()
 )";
     const auto no_promotion_parsed = pgnparser(no_promotion_before).parse_game();
     assert(no_promotion_parsed.has_value());
-    const state no_promotion_state(*no_promotion_parsed);
+    const state no_promotion_state = state::from_ast<true>(*no_promotion_parsed);
     assert(no_promotion_state.get_promotion_options() == promotion_options::NONE);
     const auto [no_fm, no_pt, no_candidates] = no_promotion_state.parse_move("h8");
     assert(no_fm.has_value());

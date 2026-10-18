@@ -141,7 +141,7 @@ int replay_log(int argc, const char *argv[])
     const std::string pgn = text.substr(marker_pos + marker.size());
 
     started = clock_type::now();
-    state s(*pgnparser(pgn).parse_game());
+    state s = state::from_pgn(pgn);
     std::cout << "parse " << seconds_since(started) << " s\n" << std::flush;
 
     started = clock_type::now();

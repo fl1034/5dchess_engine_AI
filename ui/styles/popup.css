@@ -527,3 +527,49 @@
 }
 .popup-control select { border: 1px solid var(--ui-outline); }
 .popup-window input { accent-color: var(--ui-primary); }
+
+/* One shared text geometry for the native editor and its decoration layer. */
+.pgn-input { position: relative; flex: 1; min-height: 120px; background: var(--ui-panel); border-radius: 6px; }
+#importTextarea, .pgn-mirror {
+    font-family: monospace; font-size: 13px; line-height: 1.5;
+    font-weight: normal; font-style: normal; font-variant-ligatures: none;
+    letter-spacing: normal; text-align: left; text-indent: 0;
+    tab-size: 4; unicode-bidi: plaintext; direction: ltr; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    padding: 12px; box-sizing: border-box;
+}
+#importTextarea { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; resize: none; background: transparent; }
+.pgn-overlay { position: absolute; top: 1px; left: 1px; overflow: hidden; pointer-events: none; }
+.pgn-mirror { margin: 0; width: 100%; min-height: 100%; color: transparent; }
+.pgn-error-mark { color: transparent; background: #ffd54f66; padding: 0; }
+.pgn-error-caret { position: relative; }
+.pgn-error-caret::after { content: ''; position: absolute; left: 0; top: 0; height: 1.3em; border-left: 2px solid #b08800; }
+/* Reserve three lines at every validation state; long diagnostics scroll here. */
+.import-diagnostic {
+    flex: 0 0 4.5em; min-height: 0; max-height: 40%; overflow: auto; scrollbar-gutter: stable;
+    font-size: 13px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.diagnostic-heading { color: var(--ui-error); }
+.diagnostic-error-icon { display: none; width: 1.15em; height: 1.15em; vertical-align: -.2em; margin-right: 4px; }
+.import-diagnostic[data-has-error="true"] .diagnostic-error-icon { display: inline-block; }
+.import-diagnostic[data-state="edited"] .diagnostic-heading,
+.import-diagnostic[data-state="loading"] .diagnostic-heading { color: var(--ui-muted); }
+#importTextarea[aria-invalid="true"] { border-color: var(--ui-error); }
+#importTextarea:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -3px; }
+#importTextarea[aria-invalid="true"]:focus-visible { outline-color: var(--ui-error); }
+.diagnostic-location {
+    display: block; width: 100%; background: none; border: 0;
+    padding: 0; margin: 0; font: inherit; text-align: left; cursor: pointer;
+}
+.diagnostic-location:hover:not(:disabled) { background: var(--ui-hover); }
+.diagnostic-location[aria-pressed="true"] .diagnostic-locate-hint { background: var(--ui-primary-soft); color: var(--ui-illegal); }
+.diagnostic-locate-hint { text-decoration: underline; }
+.import-diagnostic[data-has-range="false"] .diagnostic-locate-hint { display: none; }
+.diagnostic-location:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.diagnostic-location:disabled { cursor: default; }
+.diagnostic-location:disabled .diagnostic-locate-hint { text-decoration: none; }
+.diagnostic-location[hidden], .pgn-overlay[hidden] { display: none; }
+.compact-layout .import-diagnostic { font-size: 14px; }
+#popupImport .pgn-input { min-height: 0; }
+#popupImport .popup-button-group { flex-shrink: 0; }
+.compact-layout #importTextarea, .compact-layout .pgn-mirror { font-size: 16px; }
+.compact-layout #importTextarea { background: transparent; }

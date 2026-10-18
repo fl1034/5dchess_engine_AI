@@ -2,11 +2,10 @@
 #define VARIANTS_H
 
 #include <map>
-#include <memory>
 #include <string>
 #include <tuple>
 #include <vector>
-#include "pgnparser.h"
+#include "ast.h"
 #include "promotion_header.h"
 #include "multiverse.h"
 
@@ -21,6 +20,5 @@ struct variant_setup_t
 
 extern const std::map<std::string, variant_setup_t> default_variants;
 
-variant_setup_t derive_variant_setup(const pgnparser_ast::game &g);
 multiverse create_multiverse_from_variant_setup(const variant_setup_t &variant_setup);
 #endif // VARIANTS_H

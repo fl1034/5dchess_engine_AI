@@ -276,9 +276,9 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
             else if((source_board.king()&z) && abs(d.x()) > 1)
             {
                 dprint(" ... castling");
-                int rook_x1 = d.x() < 0 ? 0 : (size_x - 1); //rook's original x coordinate
+                const bitboard_t side = d.x() < 0 ? z - 1 : ~(z - 1);
                 int rook_x2 = q.x() + (d.x() < 0 ? 1 : -1); //rook's new x coordinate
-                const int rook_from = ppos(rook_x1, p.y());
+                const int rook_from = bb_get_pos(source_board.castling_rooks(p.xy(), player) & side);
                 const int rook_to = ppos(rook_x2, q.y());
                 piece_t rook = newboard.get_piece(rook_from);
                 newboard.set_piece(rook_to, rook);
