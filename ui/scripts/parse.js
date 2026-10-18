@@ -1,9 +1,9 @@
 export function parse_FEN(fen, size_x, size_y) 
 {
     const rows = fen.split('/');
-    if (rows.length !== size_x) 
+    if (rows.length !== size_y)
     {
-        throw new Error(`Invalid FEN format: input must have exactly ${size_x} rows.`);
+        throw new Error(`Invalid FEN format: input must have exactly ${size_y} rows.`);
     }
 
     return rows.map(row => {
@@ -14,7 +14,7 @@ export function parse_FEN(fen, size_x, size_y)
         {
         	if(isNaN(char))
             {
-                if ("BCDKNPSQRUWYbcdknpsqruwy".includes(char)) 
+                if ("#BCDKNPSQRUWYbcdknpsqruwy".includes(char))
                 {
                     parsedRow.push(char);
             	}
@@ -29,9 +29,9 @@ export function parse_FEN(fen, size_x, size_y)
                 parsedRow.push(...Array(emptySquares).fill('1'));
             }
         }
-        if (parsedRow.length != size_y)
+        if (parsedRow.length != size_x)
         {
-            throw new Error(`Invalid FEN format: each row must have exactly ${size_y} squares. `+row);
+            throw new Error(`Invalid FEN format: each row must have exactly ${size_x} squares. `+row);
         }
         return parsedRow;
     });

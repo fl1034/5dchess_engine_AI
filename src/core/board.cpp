@@ -8,18 +8,127 @@
 
 board::board(std::string fen, int size_x, int size_y) : bbs{}, umove_mask{0}
 {
-    array_board arrb(fen, size_x, size_y);
-    for(int i = 0; i < BOARD_SIZE; i++)
+    bbs[WHITE] = bbs[BLACK] = ~bitboard_t{0};
+    char c;
+    int x = 0, y = size_y - 1;
+    for(size_t i = 0; i < fen.length(); i++)
     {
-        piece_t p0 = arrb.get_piece(i);
-        piece_t p = piece_name(p0);
-        set_piece(i, p);
-        if(piece_umove_flag(p0))
+        c = fen[i];
+        if(i+1 < fen.length() && fen[i+1] == '*')
         {
-            umove_mask |= pmask(i);
+            if(x >= size_x) // check overflow
+            {
+                std::stringstream sstm;
+                sstm << "Bad FEN, x=" << x << " overflows in \n" << fen << std::endl;
+                throw std::runtime_error(sstm.str());
+            }
+            switch(c)
+            {
+                case 'K':
+                case 'R':
+                case 'P':
+                case 'W':
+                case 'k':
+                case 'r':
+                case 'p':
+                case 'w':
+                    set_piece(ppos(x,y), static_cast<piece_t>(c));
+                    umove_mask |= pmask(ppos(x,y));
+                    break;
+                default:
+                    std::stringstream sstm;
+                    sstm << "Bad FEN: undefined behavior: * after [" << c << "] in \n" << fen << std::endl;
+                    throw std::runtime_error(sstm.str());
+            }
+            i++; //so that this loop increment i by 2, skipping c and the following *
+            x++;
+        }
+        else if(c == '/')
+        {
+            y--;
+            if(y < 0)
+            {
+                std::stringstream sstm;
+                sstm << "Bad FEN, y=" << y << " overflows in \n" << fen << std::endl;
+                throw std::runtime_error(sstm.str());
+            }
+            x = 0;
+        }
+        else if(isspace(c))
+        {
+            //pass
+        }
+        else
+        {
+            int shift = 1;
+            if(isdigit(c))
+                shift = c - '0';
+            if(x + shift > size_x) // check overflow
+            {
+                std::stringstream sstm;
+                sstm << "Bad FEN, x=" << x + shift << " overflows in \n" << fen << std::endl;
+                throw std::runtime_error(sstm.str());
+            }
+            switch(c)
+            {
+                case '#':
+                    this->set_piece(ppos(x,y), WALL_PIECE); x++;
+                    break;
+                case '9':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '8':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '7':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '6':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '5':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '4':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '3':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '2':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '1':
+                    this->set_piece(ppos(x,y), NO_PIECE); x++; [[fallthrough]];
+                case '0':
+                    break;
+                case 'K':
+                case 'Q':
+                case 'B':
+                case 'N':
+                case 'R':
+                case 'P':
+                case 'U':
+                case 'D':
+                case 'W':
+                case 'S':
+                case 'Y':
+                case 'C':
+                case 'k':
+                case 'q':
+                case 'b':
+                case 'n':
+                case 'r':
+                case 'p':
+                case 'u':
+                case 'd':
+                case 'w':
+                case 's':
+                case 'y':
+                case 'c':
+                    this->set_piece(ppos(x,y), (piece_t)c); x++;
+                    break;
+                default:
+                    std::stringstream sstm;
+                    sstm << "Bad FEN, unknown piece [" << c << "] in \n" << fen << std::endl;
+                    throw std::runtime_error(sstm.str());
+            }
         }
     }
 }
+
 
 piece_t board::get_piece(int pos) const
 {
@@ -185,28 +294,38 @@ std::shared_ptr<const board> board::move_piece(int from, int to) const
     return b_ptr;
 }
 
-array_board board::to_array_board() const
-{
-    array_board arrb;
-    for(int i = 0; i < BOARD_SIZE; i++)
-    {
-        arrb.set_piece(i, get_piece(i));
-    }
-    return arrb;
-}
-
 std::string board::to_string() const
 {
-    return to_array_board().to_string();
+    std::string result;
+    for(int y = BOARD_LENGTH - 1; y >= 0; --y)
+    {
+        for(int x = 0; x < BOARD_LENGTH; ++x)
+        {
+            const piece_t p = get_piece(ppos(x,y));
+            if(p == NO_PIECE)
+                result += ". ";
+            else if(p == WALL_PIECE)
+                result += "##";
+            else
+            {
+                result += static_cast<char>(p);
+                result += ' ';
+            }
+        }
+        result += '\n';
+    }
+    return result;
 }
 
 template<bool SHOW_UMOVE>
-std::string board::get_fen() const
+std::string board::get_fen(int size_x, int size_y) const
 {
+    if(size_x < 1 || size_x > BOARD_LENGTH || size_y < 1 || size_y > BOARD_LENGTH)
+        throw std::invalid_argument("get_fen(): Board dimensions must be between 1 and 8");
     std::string result = "/";
-    for (int y = BOARD_LENGTH - 1; y >= 0; y--)
+    for (int y = size_y - 1; y >= 0; y--)
     {
-        for (int x = 0; x < BOARD_LENGTH; x++)
+        for (int x = 0; x < size_x; x++)
         {
             switch(this->get_piece(ppos(x,y)))
             {
@@ -221,7 +340,8 @@ std::string board::get_fen() const
                     }
                     break;
                 case WALL_PIECE:
-                    continue;
+                    result += '#';
+                    break;
                 default:
                     result += get_piece(ppos(x,y));
                     if constexpr (SHOW_UMOVE)
@@ -234,10 +354,7 @@ std::string board::get_fen() const
                     break;
             }
         }
-        if(result.back() != '/')
-        {
-            result += "/";
-        }
+        result += "/";
     }
     result.erase(result.begin());
     result.pop_back(); // remove the extra '/'
@@ -279,266 +396,5 @@ bool board::is_under_attack(int pos, int color) const noexcept
 }
 
 
-/***************************************************** */
-
-array_board::array_board(std::string fen, const int x_size, const int y_size)
-{
-    piece.fill(WALL_PIECE);
-    char c;
-    int x = 0, y = y_size - 1;
-    for(size_t i = 0; i < fen.length(); i++)
-    {
-        c = fen[i];
-        if(i+1 < fen.length() && fen[i+1] == '*')
-        {
-            if(x >= x_size) // check overflow
-            {
-                std::stringstream sstm;
-                sstm << "Bad FEN, x=" << x << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
-            }
-            switch(c)
-            {
-                case 'K':
-                    this->set_piece(ppos(x,y), KING_UW);
-                    break;
-                case 'R':
-                    this->set_piece(ppos(x,y), ROOK_UW);
-                    break;
-                case 'P':
-                    this->set_piece(ppos(x,y), PAWN_UW);
-                    break;
-                case 'W':
-                    this->set_piece(ppos(x, y), BRAWN_UW);
-                    break;
-                case 'k':
-                    this->set_piece(ppos(x,y), KING_UB);
-                    break;
-                case 'r':
-                    this->set_piece(ppos(x,y), ROOK_UB);
-                    break;
-                case 'p':
-                    this->set_piece(ppos(x,y), PAWN_UB);
-                    break;
-                case 'w':
-                    this->set_piece(ppos(x, y), BRAWN_UB);
-                    break;
-                default:
-                    std::stringstream sstm;
-                    sstm << "Bad FEN: undefined behavior: * after [" << c << "] in \n" << fen << std::endl;
-                    throw std::runtime_error(sstm.str());
-            }
-            i++; //so that this loop increment i by 2, skipping c and the following *
-            x++;
-        }
-        else if(c == '/')
-        {
-            y--;
-            if(y < 0)
-            {
-                std::stringstream sstm;
-                sstm << "Bad FEN, y=" << y << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
-            }
-            x = 0;
-        }
-        else if(isspace(c))
-        {
-            //pass
-        }
-        else
-        {
-            int shift = 1;
-            if(isdigit(c))
-                shift = c - '0';
-            if(x + shift > x_size) // check overflow
-            {
-                std::stringstream sstm;
-                sstm << "Bad FEN, x=" << x + shift << " overflows in \n" << fen << std::endl;
-                throw std::runtime_error(sstm.str());
-            }
-            switch(c)
-            {
-                case '9':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '8':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '7':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '6':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '5':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '4':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '3':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '2':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '1':
-                    this->set_piece(ppos(x,y), NO_PIECE); x++;
-                    [[fallthrough]];
-                case '0':
-                    break;
-                case 'K':
-                case 'Q':
-                case 'B':
-                case 'N':
-                case 'R':
-                case 'P':
-                case 'U':
-                case 'D':
-                case 'W':
-                case 'S':
-                case 'Y':
-                case 'C':
-                case 'k':
-                case 'q':
-                case 'b':
-                case 'n':
-                case 'r':
-                case 'p':
-                case 'u':
-                case 'd':
-                case 'w':
-                case 's':
-                case 'y':
-                case 'c':
-                    this->set_piece(ppos(x,y), (piece_t)c); x++;
-                    break;
-                default:
-                    std::stringstream sstm;
-                    sstm << "Bad FEN, unknown piece [" << c << "] in \n" << fen << std::endl;
-                    throw std::runtime_error(sstm.str());
-            }
-        }
-    }
-}
-
-
-
-piece_t array_board::get_piece(int p) const
-{
-    return piece[p];
-}
-
-//const piece_t& board::operator[](int p) const
-//{
-//    return piece[p];
-//}
-//
-void array_board::set_piece(int pos, piece_t p)
-{
-    this->piece[pos] = p;
-}
-
-std::shared_ptr<array_board> array_board::replace_piece(int pos, piece_t p) const
-{
-    std::shared_ptr<array_board> b_ptr = std::make_shared<array_board>(*this);
-    b_ptr->piece[pos] = p;
-    return b_ptr;
-}
-
-std::shared_ptr<array_board> array_board::move_piece(int from, int to) const
-{
-    std::shared_ptr<array_board> b_ptr = std::make_shared<array_board>(*this);
-    b_ptr->piece[to] = static_cast<piece_t>(piece_name(piece[from]));
-    b_ptr->piece[from] = NO_PIECE;
-    return b_ptr;
-}
-//
-//piece_t board::get_piece(int x, int y) const
-//{
-//    return this->piece[ppos(x,y)];
-//}
-
-std::string array_board::to_string() const
-{
-    std::string result = "";
-    for (int y = BOARD_LENGTH - 1; y >= 0; y--) 
-    {
-        for (int x = 0; x < BOARD_LENGTH; x++) 
-        {
-            switch (this->get_piece(ppos(x, y)))
-            {
-                case NO_PIECE:
-                    result += ". ";
-                    break;
-                case WALL_PIECE:
-                    result += "##";
-                    break;
-                case KING_UW:
-                    result += "K'";
-                    break;
-                case ROOK_UW:
-                    result += "R'";
-                    break;
-                case PAWN_UW:
-                    result += "P'";
-                    break;
-                case KING_UB:
-                    result += "k'";
-                    break;
-                case ROOK_UB:
-                    result += "r'";
-                    break;
-                case PAWN_UB:
-                    result += "p'";
-                    break;
-                default:
-                    result += this->get_piece(ppos(x,y));
-                    result += " ";
-                    break;
-            }
-        }
-        result += "\n";
-    }
-    return result;
-}
-
-std::string array_board::get_fen() const
-{
-    std::string result = "/";
-    for (int y = BOARD_LENGTH - 1; y >= 0; y--)
-    {
-        for (int x = 0; x < BOARD_LENGTH; x++) 
-        {
-            switch(this->get_piece(ppos(x,y)))
-            {
-                case NO_PIECE:
-                    if(isdigit(result.back()))
-                    {
-                        result.back() += 1;
-                    }
-                    else
-                    {
-                        result += '1';
-                    }
-                    break;
-                case WALL_PIECE:
-                    continue;
-                default:
-                    result += piece_name(this->get_piece(ppos(x,y)));
-                    break;
-            }
-        }
-        if(result.back() != '/')
-        {
-            result += "/";
-        }
-    }
-    result.erase(result.begin());
-    result.pop_back(); // remove the extra '/'
-    return result;
-}
-
-template std::string board::get_fen<true>() const;
-template std::string board::get_fen<false>() const;
+template std::string board::get_fen<true>(int, int) const;
+template std::string board::get_fen<false>(int, int) const;

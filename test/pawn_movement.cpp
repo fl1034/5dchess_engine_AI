@@ -1,5 +1,6 @@
 #undef NDEBUG
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <iostream>
 #include <set>
@@ -12,7 +13,7 @@
 namespace {
 using square = std::tuple<int, int, int, int>; // x, y, t, l
 using moves = std::set<square>;
-const std::string empty = "8/8/8/8/8/8/8/8";
+using squares = std::array<piece_t, BOARD_SIZE>;
 int failures = 0;
 bool logging = false;
 std::string test_group;
@@ -31,13 +32,13 @@ void log_case(const std::string &name, const std::vector<boards_info_t> &boards,
 square at(vec4 p) { return {p.x(), p.y(), p.t(), p.l()}; }
 
 // Preserve explicit unmoved markers; board::set_piece clears that flag.
-std::string fen_of(const array_board &b)
+std::string fen_of(const squares &b)
 {
     std::string fen;
     for (int y = 7; y >= 0; --y) {
         int blanks = 0;
         for (int x = 0; x < 8; ++x) {
-            const piece_t piece = b.get_piece(ppos(x,y));
+            const piece_t piece = b[ppos(x,y)];
             if (piece == NO_PIECE) { ++blanks; continue; }
             if (blanks) { fen += char('0'+blanks); blanks = 0; }
             fen += char(piece_name(piece));
@@ -59,12 +60,12 @@ std::vector<boards_info_t> fixture(bool black, bool brawn, bool unmoved,
         for (int t = 1; t <= 3; ++t) {
             for (bool c : {false, true}) {
                 if (l == 0 && turn_t{t,c} > turn_t{2,black}) continue;
-                array_board b(empty);
+                squares b{};
                 if (l == 0 && t == 2 && c == black) {
                     piece_t piece = brawn ? (black ? BRAWN_B : BRAWN_W)
                                           : (black ? PAWN_B : PAWN_W);
                     if (unmoved) piece = static_cast<piece_t>(piece | 0x80);
-                    b.set_piece(ppos(x,y),piece);
+                    b[ppos(x,y)] = piece;
                 }
                 result.emplace_back(l,t,c,fen_of(b));
             }
@@ -77,9 +78,14 @@ void place(std::vector<boards_info_t> &boards, bool c, vec4 p, piece_t piece)
 {
     for (auto &[l,t,color,fen] : boards) {
         if (l != p.l() || t != p.t() || color != c) continue;
-        array_board b(fen);
-        b.set_piece(p.xy(),piece);
-        fen = fen_of(b);
+        const board position(fen);
+        squares cells;
+        for(int xy = 0; xy < BOARD_SIZE; ++xy) {
+            const auto unmoved = (position.umove() & pmask(xy)) ? 0x80 : 0;
+            cells[xy] = static_cast<piece_t>(position.get_piece(xy) | unmoved);
+        }
+        cells[p.xy()] = piece;
+        fen = fen_of(cells);
         return;
     }
     assert(false);

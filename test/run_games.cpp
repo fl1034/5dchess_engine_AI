@@ -37,17 +37,22 @@ int main(int argc, char *argv[])
     {
         if(argc == 0 || argv[0] == nullptr || argv[0][0] == '\0')
             throw std::runtime_error("Cannot locate the run_games executable");
-        const auto directory = executable_path(argv[0]).parent_path().parent_path()
-            / "pgn/online";
+        const auto root = executable_path(argv[0]).parent_path().parent_path()
+            / "pgn";
         std::vector<std::filesystem::path> paths;
-        for(const auto &entry : std::filesystem::directory_iterator(directory))
+        for(const char *collection : {"online"})
         {
-            if(entry.is_regular_file() && entry.path().extension() == ".5dpgn")
-                paths.push_back(entry.path());
+            const auto directory = root / collection;
+            const auto before = paths.size();
+            for(const auto &entry : std::filesystem::directory_iterator(directory))
+            {
+                if(entry.is_regular_file() && entry.path().extension() == ".5dpgn")
+                    paths.push_back(entry.path());
+            }
+            if(paths.size() == before)
+                throw std::runtime_error("No game fixtures found in " + directory.string());
         }
         std::sort(paths.begin(), paths.end());
-        if(paths.empty())
-            throw std::runtime_error("No online game fixtures found in " + directory.string());
 
         std::vector<std::string> pgns;
         for(const auto &path : paths)

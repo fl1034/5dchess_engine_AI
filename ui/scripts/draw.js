@@ -79,7 +79,7 @@ export default class ChessBoardCanvas
             return board ? `${board.x},${board.y}` : null;
         };
         this.infCanvas.onDoubleTap = (x, y) => this.zoomTappedBoard(x, y);
-        this.infCanvas.onTapPreview = (x, y) => this.onPreviewSquare(this.worldToBoard(x, y));
+        this.infCanvas.onTapPreview = (x, y) => this.handleBoardPreview(x, y);
         this.infCanvas.onTapCommit = token => this.onCommitSquare(token);
         this.infCanvas.onTapCancel = token => this.onCancelSquare(token);
         this.infCanvas.onRightClick = (x, y) => this.handleBoardClick(x, y, true);
@@ -500,8 +500,10 @@ export default class ChessBoardCanvas
         }
         
         
-        if(squareLength > 0.7) {
-            // Checkerboard pattern
+        // Walls retain the board-margin fill underneath the playable squares.
+        // This also avoids compounding opacity on phantom walls.
+        {
+            const fuzzy = squareLength <= 0.7;
             for (const board of cache.filteredBoards) {
                 let l = this._displayL(board.l), v = board.t << 1 | board.c;
                 const shiftX = v * this.boardSkipX;
@@ -511,13 +513,18 @@ export default class ChessBoardCanvas
                 if (board.isPhantom) {
                     ctx.globalAlpha *= this.colors.phantomBoardOpacity;
                 }
-                ctx.fillStyle = this.colors.squareBlack;
-                ctx.fillRect(shiftX, shiftY, this.boardLengthX * this.squareSize, this.boardLengthY * this.squareSize);
-                
-                ctx.fillStyle = this.colors.squareWhite;
+                const hasWalls = board.parsed?.some(row => row.includes('#'));
+                ctx.fillStyle = fuzzy ? this.colors.squareFuzzy : this.colors.squareBlack;
+                if (!hasWalls) {
+                    ctx.fillRect(shiftX, shiftY, this.boardLengthX * this.squareSize, this.boardLengthY * this.squareSize);
+                }
+
                 for (let row = 0; row < this.boardLengthY; row++) {
                     for (let col = 0; col < this.boardLengthX; col++) {
-                        if ((row + col) % 2 === 0) {
+                        if (board.parsed?.[row]?.[col] === '#') continue;
+                        if (hasWalls || (!fuzzy && (row + col) % 2 === 0)) {
+                            ctx.fillStyle = fuzzy ? this.colors.squareFuzzy
+                                : (row + col) % 2 === 0 ? this.colors.squareWhite : this.colors.squareBlack;
                             const drawRow = this._displayBoardRow(row);
                             ctx.fillRect(
                                 this._displayBoardCol(col) * this.squareSize + shiftX,
@@ -528,20 +535,6 @@ export default class ChessBoardCanvas
                         }
                     }
                 }
-                ctx.restore();
-            }
-        } else {
-            for (const board of cache.filteredBoards) {
-                let l = this._displayL(board.l), v = board.t << 1 | board.c;
-                const shiftX = v * this.boardSkipX;
-                const shiftY = l * this.boardSkipY;
-
-                ctx.save();
-                if (board.isPhantom) {
-                    ctx.globalAlpha *= this.colors.phantomBoardOpacity;
-                }
-                ctx.fillStyle = this.colors.squareFuzzy;
-                ctx.fillRect(shiftX, shiftY, this.boardLengthX * this.squareSize, this.boardLengthY * this.squareSize);
                 ctx.restore();
             }
         }
@@ -579,6 +572,7 @@ export default class ChessBoardCanvas
 
                 const bottomBoardRow = this.flipped ? 0 : (this.boardLengthY - 1);
                 for (let i = 1; i < this.boardLengthX; i+=2) {
+                    if (board.parsed?.[bottomBoardRow]?.[i] === '#') continue;
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
                         fileLabels[i].text,
@@ -587,6 +581,7 @@ export default class ChessBoardCanvas
                     );
                 }
                 for (let i = 0; i < this.boardLengthY; i+=2) {
+                    if (board.parsed?.[i]?.[this._displayBoardCol(0)] === '#') continue;
                     const drawRow = this._displayBoardRow(i);
                     ctx.fillStyle = this._getLabelTextColor(i, this._displayBoardCol(0));
                     ctx.fillText(
@@ -603,6 +598,7 @@ export default class ChessBoardCanvas
 
                 const bottomBoardRow = this.flipped ? 0 : (this.boardLengthY - 1);
                 for (let i = 0; i < this.boardLengthX; i+=2) {
+                    if (board.parsed?.[bottomBoardRow]?.[i] === '#') continue;
                     ctx.fillStyle = this._getLabelTextColor(bottomBoardRow, i);
                     ctx.fillText(
                         fileLabels[i].text,
@@ -611,6 +607,7 @@ export default class ChessBoardCanvas
                     );
                 }
                 for (let i = 1; i < this.boardLengthY; i+=2) {
+                    if (board.parsed?.[i]?.[this._displayBoardCol(0)] === '#') continue;
                     const drawRow = this._displayBoardRow(i);
                     ctx.fillStyle = this._getLabelTextColor(i, this._displayBoardCol(0));
                     ctx.fillText(
@@ -631,6 +628,7 @@ export default class ChessBoardCanvas
         for (let color in cache.filteredCoordinateHighlight) {
             ctx.fillStyle = color;
             for (let pos of cache.filteredCoordinateHighlight[color]) {
+                if (this.isWall(pos)) continue;
                 ctx.fillRect(...this._getCoordinate(pos), this.squareSize, this.squareSize);
             }
         }
@@ -779,6 +777,7 @@ export default class ChessBoardCanvas
 
     handleBoardClick(worldX, worldY, isRightClick) {
         const pos = this.worldToBoard(worldX, worldY);
+        if (this.isWall(pos)) return;
 
         if (pos.x >= 0 && pos.x < this.boardLengthX && pos.y >= 0 && pos.y < this.boardLengthY) {
             // Call the appropriate callback method
@@ -791,6 +790,17 @@ export default class ChessBoardCanvas
             const square = String.fromCharCode(97 + pos.x) + (pos.y + 1);
             this.updateStatusText(`${isRightClick ? 'right' : 'left'} click at (${pos.l}T${pos.t}${pos.c ? 'b' : 'w'})${square}`);
         }
+    }
+
+    isWall(pos) {
+        const board = this.data?.boards?.find(board => board.l === pos.l
+            && board.t === pos.t && Boolean(board.c) === Boolean(pos.c));
+        return board?.parsed?.[this.boardLengthY - 1 - pos.y]?.[pos.x] === '#';
+    }
+
+    handleBoardPreview(worldX, worldY) {
+        const pos = this.worldToBoard(worldX, worldY);
+        return this.isWall(pos) ? null : this.onPreviewSquare(pos);
     }
 
     // Override these methods in your implementation

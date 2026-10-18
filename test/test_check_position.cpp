@@ -89,7 +89,7 @@ void randomized_differential()
         for (int l = -2; l <= 2; ++l) {
             const int begin = rng()%5, end = begin+2+rng()%12;
             for (int ply = begin; ply <= end; ++ply)
-                boards.emplace_back(l,ply/2,ply%2,random_board(rng,width,height)->get_fen<true>());
+                boards.emplace_back(l,ply/2,ply%2,random_board(rng,width,height)->get_fen<true>(width,height));
         }
         multiverse original(timeline_layout::odd(), boards,width,height);
         state s(original);

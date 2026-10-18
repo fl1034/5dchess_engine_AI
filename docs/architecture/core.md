@@ -69,6 +69,19 @@ accepts `std::shared_ptr<const board>`; callers must not mutate a published boar
 through a retained mutable alias. Constructing it with
 `std::make_shared<const board>(draft)` publishes a separate immutable copy.
 
+The `board` FEN constructor parses square contents directly into its bitboards
+and unmoved mask. Unspecified squares, including padding outside the declared
+dimensions, start as walls. Explicit `*` markers populate the unmoved mask after
+placing the corresponding pieces; ordinary `set_piece()` edits continue to
+clear that square's unmoved flag. Board construction does not depend on PGN
+parsing: `pgnparser` extracts FEN strings and timeline/turn metadata, while the
+board constructor interprets the square notation.
+
+`board::to_string()` formats the bitboards directly as an 8 × 8 text grid,
+using `. ` for empty squares, `##` for walls, and piece letters followed by a
+space. This diagnostic output omits unmoved markers; `get_fen<true>()` preserves
+them for serialization.
+
 Move generators borrow their source state or multiverse. Consume or destroy them
 before moving, swapping, modifying, or destroying that source. Recreate borrowed
 `check_position` views after changing their source. Moving a state no longer
@@ -122,6 +135,34 @@ defined that the data of `vec4` is stored in a 32-bit integer, with
 ranges are -8 to 7 for X/Y and -2048 to 2047 for T/L; board squares still
 use X/Y values from 0 to 7. The widths must sum to 32, and X/Y widths must
 be greater than 3. See `src/misc/vec4.h` for the current definitions.
+
+## Internal 5DFEN wall extension
+
+This implementation uses `#` in a FEN rank to represent one `WALL_PIECE` square.
+This is a project-specific extension, not part of the Branched 5DPGN standard.
+Both the C++ board parser and the analyzer's JavaScript FEN parser accept it.
+Each `#` advances the file position by one; consecutive walls are printed as
+individual `#` characters. Digits compress empty squares only, and `*` is not
+valid after a wall.
+
+`board::get_fen(width, height)` prints
+exactly the declared rectangle, from the highest rank to the lowest. Walls
+inside that rectangle must be printed, including entire ranks of walls. Squares
+outside the rectangle are omitted regardless of their contents. Standalone
+boards do not store dimensions: the printer defaults to 8 × 8, and multiverse
+serialization passes its stored dimensions explicitly. The bitboard printer's
+`SHOW_UMOVE` template option preserves unmoved markers; its default omits them.
+
+Short input ranks currently retain their existing behavior: unspecified
+trailing squares become walls. Printing normalizes those squares to explicit
+`#` characters. Rejecting short ranks is deferred. Game and PGN serialization
+use the same size-aware printer, so interior walls and fully walled ranks
+survive export and reloading.
+
+The WebAssembly binding sends FEN strings for current and phantom boards. The
+worker builds `board.parsed` using the JavaScript FEN parser; there is no separate
+binding-generated square array. The renderer recognizes `#` as unavailable
+board space and retains the board-border fill at those squares.
 
 Moves & Actions
 =============

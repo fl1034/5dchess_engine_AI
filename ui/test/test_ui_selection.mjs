@@ -5,6 +5,8 @@ import vm from 'node:vm';
 
 const source = await readFile(new URL('../scripts/selection.js', import.meta.url), 'utf8');
 const { createSelection } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { parse_FEN } = await import('data:text/javascript,' + encodeURIComponent(
+    await readFile(new URL('../scripts/parse.js', import.meta.url), 'utf8')));
 const from = { l: 0, t: 0, c: false, x: 0, y: 1 };
 const to = { ...from, y: 3 };
 
@@ -238,7 +240,7 @@ test('worker echoes selection identifiers and distinguishes refreshes from chang
     const engine = { get_version: () => 'test' };
     const workerSource = (await readFile(new URL('../scripts/worker.js', import.meta.url), 'utf8'))
         .replace(/^import .*;\n/gm, '');
-    vm.runInNewContext(workerSource, { self, PendingBranches, actionKey, createModule: () => Promise.resolve(engine) });
+    vm.runInNewContext(workerSource, { self, PendingBranches, actionKey, parse_FEN, createModule: () => Promise.resolve(engine) });
     await Promise.resolve();
     let previewActive = false;
     self.game = {
@@ -271,4 +273,15 @@ test('worker echoes selection identifiers and distinguishes refreshes from chang
     assert.deepEqual(messages.at(-1).data.boards, []);
     self.onmessage({ data: { type: 'apply_move', from, to } });
     assert.equal(messages.at(-1).positionChanged, true);
+
+    // The worker reconstructs walls, including an entirely walled rank, from FEN.
+    const parsed = Array.from({ length: 8 }, () => Array(8).fill('1'));
+    parsed[2].fill('#');
+    parsed[4][3] = '#';
+    const wallBoard = { l: 0, t: 1, c: false, fen: '8/8/########/8/3#4/8/8/8' };
+    self.game.get_current_boards = () => [wallBoard];
+    self.game.get_phantom_boards_and_checks = () => ({ boards: [{ ...wallBoard, c: true }], checks: [] });
+    self.onmessage({ data: { type: 'view' } });
+    assert.deepEqual(messages.at(-1).data.boards[0].parsed, parsed);
+    assert.deepEqual(messages.at(-1).data.phantom[0].parsed, parsed);
 });

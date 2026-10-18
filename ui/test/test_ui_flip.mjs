@@ -137,6 +137,68 @@ test('changing the preference redraws without moving boards or the camera', () =
     assert.equal(before[1], after[1]);
 });
 
+test('walls merge with margins at every zoom and ignore clicks, previews, labels and highlights', () => {
+    for (const flipped of [false, true]) {
+        for (const preserveFiles of [false, true]) {
+            for (const c of [false, true]) {
+                for (const phantom of [false, true]) {
+                    for (const zoom of [-5, 5]) {
+                        const canvas = board(7, 5, flipped, preserveFiles);
+                        const parsed = Array.from({ length: 5 }, () => Array(7).fill('1'));
+                        parsed[2][2] = parsed[2][3] = parsed[4][0] = '#';
+                        const wall = { l: 1, t: 2, c, x: 2, y: 2 };
+                        const data = { ...wall, fen: 'display', parsed, isPhantom: phantom };
+                        canvas.data = { boards: [data] };
+                        canvas.colors = { boardMarginWhite: 'white-margin', boardMarginBlack: 'black-margin',
+                            squareWhite: 'white', squareBlack: 'black', squareFuzzy: 'fuzzy', phantomBoardOpacity: 0.3 };
+                        canvas.boardMargin = 4;
+                        canvas.fontSizeforXY = 3;
+                        canvas.cameraElement = {};
+                        canvas.infCanvas.cameraCurrent.getZoomLevel = () => zoom;
+                        canvas._filterBoardData = () => {};
+                        canvas.filterCache = { filteredBoards: [data],
+                            filteredCoordinateHighlight: { highlight: [wall] },
+                            filteredArrowHighlight: {}, filteredBoardHighlight: {}, filteredTimelineHighlight: {} };
+                        const rectangles = [], labels = [], stack = [];
+                        const ctx = {
+                            globalAlpha: 1,
+                            save() { stack.push({ fillStyle: this.fillStyle, globalAlpha: this.globalAlpha }); },
+                            restore() { Object.assign(this, stack.pop()); },
+                            fillRect(...args) { rectangles.push({ color: this.fillStyle, alpha: this.globalAlpha, args }); },
+                            fillText(text, x, y) { labels.push({ text, x, y }); },
+                            drawImage() { assert.fail('A wall must not draw a piece asset'); },
+                            measureText() { return { actualBoundingBoxLeft: 0, actualBoundingBoxAscent: 2, actualBoundingBoxDescent: 0 }; },
+                        };
+                        canvas.drawBoards(ctx, -3, 3, 0, 6);
+                        const boardLayers = rectangles.slice(rectangles.findIndex(rect =>
+                            rect.color === 'white-margin' || rect.color === 'black-margin'));
+                        for (const pos of [wall, { ...wall, x: 3 }, { ...wall, x: 0, y: 0 }]) {
+                            const [px, py] = canvas._getCoordinate(pos);
+                            const layers = boardLayers.filter(({ args: [x, y, width, height] }) =>
+                                px + 5 >= x && px + 5 < x + width && py + 5 >= y && py + 5 < y + height);
+                            assert.equal(layers.length, 1, 'Only the board-margin layer should cover a wall');
+                            assert.equal(layers[0].color, c ? 'black-margin' : 'white-margin');
+                            assert.equal(layers[0].alpha, phantom ? 0.3 : 1);
+                            assert(!labels.some(({ x, y }) => x >= px && x < px + 10 && y >= py && y < py + 10));
+                            canvas.onClickSquare = canvas.onRightClickSquare = canvas.onPreviewSquare = () =>
+                                assert.fail('Walls must not reach selection callbacks');
+                            canvas.handleBoardClick(px + 5, py + 5, false);
+                            canvas.handleBoardClick(px + 5, py + 5, true);
+                            assert.equal(canvas.handleBoardPreview(px + 5, py + 5), null);
+                        }
+                        let selected;
+                        canvas.onClickSquare = (...args) => { selected = args; };
+                        const normal = { ...wall, x: 1 };
+                        const [px, py] = canvas._getCoordinate(normal);
+                        canvas.handleBoardClick(px + 5, py + 5, false);
+                        assert.deepEqual(selected, [normal.l, normal.t, normal.c, normal.x, normal.y]);
+                    }
+                }
+            }
+        }
+    }
+});
+
 function arrowCanvas(zoom, flipped = false) {
     const canvas = board(8, 8, flipped, false);
     canvas.infCanvas.viewportSize = { width: 500, height: 400 };

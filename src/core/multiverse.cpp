@@ -229,7 +229,7 @@ std::vector<std::tuple<int,int,bool,std::string>> multiverse::get_boards() const
             const auto [t, c] = v_to_tc(v);
             if(timeline[v] != nullptr)
             {
-                result.push_back(std::make_tuple(l,t,c,timeline[v]->get_fen<SHOW_UMOVE>()));
+                result.push_back(std::make_tuple(l,t,c,timeline[v]->get_fen<SHOW_UMOVE>(size_x, size_y)));
             }
         }
     }

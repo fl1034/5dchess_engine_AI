@@ -2,11 +2,53 @@
 /* This file, together with the `package.json` file in the same folder
 are **not** a part of UI. Instead, they are a standalone test script. */
 import createModule from './engine.js';
+import { readFile } from 'node:fs/promises';
+const { parse_FEN } = await import('data:text/javascript,' + encodeURIComponent(
+    await readFile(new URL('../scripts/parse.js', import.meta.url), 'utf8')));
 
 async function runTest() {
   try {
     const engine_wasm = await createModule();
     console.log('Module loaded!');
+
+    const walls = engine_wasm.from_pgn(`[Mode "5D"]
+[Result "0-1"]
+[Date "2023.05.13"]
+[Time "19:08:21 (+02:00)"]
+[Size "8x8"]
+[White "Narik"]
+[Black "Mauer01"]
+[Event "Custom Variant tourney match 2"]
+[Game "1"]
+[Board "custom"]
+[r*dbqk*bdr*/p*p*p*p*p*p*p*p*/1dDDdD1/222/222/1DddDd1/P*P*P*P*P*P*P*P*/R*DBQK*BDR*:0:1:w]`);
+    if (!walls.success) throw new Error(walls.message);
+    const wallBoard = walls.game.get_current_boards()[0];
+    if ('parsed' in wallBoard) throw new Error('Board display must be reconstructed from FEN');
+    const cells = parse_FEN(wallBoard.fen, 8, 8);
+    if (cells.length !== 8 || cells.some(row => row.length !== 8)
+        || cells.flat().filter(cell => cell === '#').length !== 6
+        || cells[2][7] !== '#' || cells[3][6] !== '#' || cells[4][6] !== '#'
+        || cells[5][7] !== '#' || cells[2][5] !== 'D') {
+      throw new Error('Wall display cells lost their positions');
+    }
+    const reloadedWalls = engine_wasm.from_pgn(walls.game.show_pgn());
+    if (!reloadedWalls.success) throw new Error(reloadedWalls.message);
+    if (reloadedWalls.game.get_current_boards()[0].fen !== wallBoard.fen) {
+      throw new Error('Wall FEN failed to round trip through PGN');
+    }
+    reloadedWalls.game.delete();
+    walls.game.delete();
+
+    const rectangular = engine_wasm.from_pgn('[Board "Custom"] [Size "4x3"] [k3/4/3K:0:1:w]');
+    if (!rectangular.success) throw new Error(rectangular.message);
+    const rectangle = parse_FEN(rectangular.game.get_current_boards()[0].fen, 4, 3);
+    if (rectangle.length !== 3 || rectangle.some(row => row.length !== 4)
+        || rectangle.flat().includes('#') || rectangle[0][0] !== 'k' || rectangle[2][3] !== 'K') {
+      throw new Error('Display cells include padding outside the declared board');
+    }
+    rectangular.game.delete();
+    console.log('Wall and rectangular board display tests passed');
 
     const g0 = engine_wasm.from_pgn('[Board "Standard"]');
     if (!g0.success) {

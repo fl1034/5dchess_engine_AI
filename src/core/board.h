@@ -14,8 +14,6 @@
 #include "piece.h"
 #include "bitboard.h"
 
-class array_board;
-
 /*
 The bitboards collection associated with a board.
  */
@@ -101,45 +99,15 @@ public:
     void set_piece(int pos, piece_t p);
     std::shared_ptr<const board> replace_piece(int pos, piece_t p) const;
     std::shared_ptr<const board> move_piece(int from, int to) const;
-    array_board to_array_board() const;
     std::string to_string() const;
     
     template<bool SHOW_UMOVE=false>
-    std::string get_fen() const;
+    std::string get_fen(int size_x = BOARD_LENGTH, int size_y = BOARD_LENGTH) const;
 
     // all the pieces (both white and black) that attacks a given square
     bitboard_t attacks_to(int pos) const noexcept;
 	// pieces hositile to `color` that attacks a given square
     bool is_under_attack(int pos, int color) const noexcept;
-};
-
-
-class array_board {
-private:
-    std::array<piece_t, BOARD_SIZE> piece;
-public:
-    array_board(): piece{}{}
-    array_board(std::string fen, int size_x = BOARD_LENGTH, int size_y = BOARD_LENGTH);
-    
-    // the getter method
-    piece_t get_piece(int p) const;
-    //const piece_t& operator[](int p) const;
-    // the setter method, which is deprecated. Use replace_piece or move_piece whenever possible
-    void set_piece(int pos, piece_t p);
-
-    // these methods return the pointer to a new board object so that there is no side effect
-    std::shared_ptr<array_board> replace_piece(int pos, piece_t p) const;
-    std::shared_ptr<array_board> move_piece(int from, int to) const;
-
-    std::string to_string() const;
-    
-    std::string get_fen() const;
-#ifdef SHOW_BOARD_DESTRUCTION
-    ~board()
-    {
-        std::cerr << "Board destroyed: " << get_fen() << std::endl;
-    }
-#endif
 };
 
 
