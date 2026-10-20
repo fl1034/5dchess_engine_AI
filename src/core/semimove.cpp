@@ -27,7 +27,7 @@ std::string semimove::lan(const state &s) const
     };
     auto show_piece = [&s](vec4 from) -> std::string
     {
-        const piece_t piece = to_white(piece_name(s.get_piece(from, s.get_present().second)));
+        const piece_t piece = to_white(piece_name(s.get_piece(from, s.get_present().c())));
         return std::string(1, static_cast<char>(piece));
     };
     return visit(overloads {

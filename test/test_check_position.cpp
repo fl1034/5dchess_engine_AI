@@ -44,21 +44,21 @@ void compare_phantom(const state &s)
     const auto [lo, hi] = s.get_lines_range();
     for (int l = lo; l <= hi; ++l) {
         const auto start = s.get_timeline_start(l);
-        const auto [t, c] = s.get_timeline_end(l);
+        const auto [t, c] = s.get_timeline_end(l).get();
         const auto end = expected.get_timeline_end(l);
-        for (turn_t at = start; at <= end; at = next_turn(at)) {
-            const board *actual = view.get_board_ptr(l,at.first,at.second);
+        for (turn at = start; at <= end; at = at.next_turn()) {
+            const board *actual = view.get_board_ptr(l,at.t(),at.c());
             assert(actual);
             assert(actual->get_fen<true>() ==
-                   expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
-            const board *borrowed = at <= turn_t{t,c}
-                ? s.get_board_ptr(l,at.first,at.second) : s.get_board_ptr(l,t,c);
+                   expected.get_board_ptr(l,at.t(),at.c())->get_fen<true>());
+            const board *borrowed = at <= turn{t,c}
+                ? s.get_board_ptr(l,at.t(),at.c()) : s.get_board_ptr(l,t,c);
             assert(actual == borrowed);
         }
-        const auto after_end = next_turn(end);
-        assert(!view.get_board_ptr(l,after_end.first,after_end.second));
+        const auto after_end = end.next_turn();
+        assert(!view.get_board_ptr(l,after_end.t(),after_end.c()));
     }
-    const bool checked = expected.find_checks(!s.get_present().second).first().has_value();
+    const bool checked = expected.find_checks(!s.get_present().c()).first().has_value();
     assert(s.has_phantom_check() == checked);
     assert(s.get_boards() == before);
 }
@@ -109,11 +109,11 @@ void randomized_differential()
         for (int l = -3; l <= 3; ++l) {
             if (l != -3 && l != 3 && rng()%2) continue;
             auto b = random_board(rng,width,height);
-            const turn_t at = (l == -3 || l == 3)
-                ? turn_t{static_cast<int>(rng()%8),static_cast<bool>(rng()%2)}
-                : next_turn(s.get_timeline_end(l));
+            const turn at = (l == -3 || l == 3)
+                ? turn{static_cast<int>(rng()%8),static_cast<bool>(rng()%2)}
+                : s.get_timeline_end(l).next_turn();
             view.add_board(l,at,*b);
-            materialized.insert_board(l,at.first,at.second,b);
+            materialized.insert_board(l,at.t(),at.c(),b);
             additions.push_back(std::move(b));
         }
         state expected(materialized);
@@ -169,17 +169,17 @@ void new_boards_check_each_other()
         auto target = std::make_shared<board>(*attacker);
         attacker->set_piece(ppos(3,3),mover ? ROOK_W : ROOK_B);
         target->set_piece(ppos(3,3),mover ? KING_B : KING_W);
-        const auto at = next_turn({2,mover});
+        const auto at = turn{2,mover}.next_turn();
         view.add_board(0,at,*attacker);
         view.add_board(1,at,*target);
         auto expected = original;
         expected.append_board(0,attacker);
-        expected.insert_board(1,at.first,at.second,target);
+        expected.insert_board(1,at.t(),at.c(),target);
         compare(view,state(expected));
         assert(view.first_check(!mover,false));
         // A branch has no inherited history and uncreated reserved lines are absent.
         assert(!view.get_board_ptr(1,2,mover));
-        assert(!view.get_board_ptr(-1,at.first,at.second));
+        assert(!view.get_board_ptr(-1,at.t(),at.c()));
     }
 }
 }
@@ -219,8 +219,7 @@ state physical_position(bool mover)
 
 void compare_phantom(const state &s)
 {
-    const auto [t, player] = s.get_present();
-    (void)t;
+    const bool player = s.get_present().c();
     const state expected = s.phantom();
     const auto view = check_position::for_phantom(s);
     std::set<full_move> reference, actual;
@@ -231,13 +230,13 @@ void compare_phantom(const state &s)
     const auto [lo, hi] = s.get_lines_range();
     for (int l = lo; l <= hi; ++l) {
         const auto end = expected.get_timeline_end(l);
-        for (auto at = s.get_timeline_start(l); at <= end; at = next_turn(at)) {
-            const auto *b = view.get_board_ptr(l,at.first,at.second);
+        for (auto at = s.get_timeline_start(l); at <= end; at = at.next_turn()) {
+            const auto *b = view.get_board_ptr(l,at.t(),at.c());
             assert(b);
-            assert(b->get_fen<true>() == expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
+            assert(b->get_fen<true>() == expected.get_board_ptr(l,at.t(),at.c())->get_fen<true>());
         }
-        const auto after = next_turn(end);
-        assert(!view.get_board_ptr(l,after.first,after.second));
+        const auto after = end.next_turn();
+        assert(!view.get_board_ptr(l,after.t(),after.c()));
     }
 }
 
@@ -252,8 +251,8 @@ void test_phantom_cases()
         const auto view = check_position::for_phantom(cross);
         const auto hit = view.first_check(!mover,false);
         assert(hit && hit->from.l() != hit->to.l());
-        const auto at = next_turn({1,mover});
-        assert(hit->from.t() == at.first && hit->to.t() == at.first);
+        const auto at = turn{1,mover}.next_turn();
+        assert(hit->from.t() == at.t() && hit->to.t() == at.t());
 
         // During an action the stored player must be used, even after the
         // apparent present has changed to the opponent before submit().
@@ -264,14 +263,14 @@ void test_phantom_cases()
         assert(partial.apply_move<true>(full_move(vec4(0,0,1,0),vec4(0,1,1,0))));
         compare_phantom(partial);
         assert(partial.apply_move<true>(full_move(vec4(0,0,1,1),vec4(0,1,1,1))));
-        assert(partial.get_present().second != partial.apparent_present().second);
+        assert(partial.get_present().c() != partial.apparent_present().c());
         compare_phantom(partial);
         const auto before_submit = check_position::for_phantom(partial);
         // Neither endpoint matches the stored player: append nothing.
         for (int l : {0,1}) {
             const auto end = partial.get_timeline_end(l);
-            const auto after = next_turn(end);
-            assert(!before_submit.get_board_ptr(l,after.first,after.second));
+            const auto after = end.next_turn();
+            assert(!before_submit.get_board_ptr(l,after.t(),after.c()));
         }
         assert(partial.submit());
         compare_phantom(partial);
@@ -292,8 +291,8 @@ void test_present_boundaries()
         compare_phantom(s);
         const auto view = check_position::for_phantom(s);
         for (int l : {0,1,2}) {
-            const auto after = next_turn(s.get_timeline_end(l));
-            assert(static_cast<bool>(view.get_board_ptr(l,after.first,after.second))
+            const auto after = s.get_timeline_end(l).next_turn();
+            assert(static_cast<bool>(view.get_board_ptr(l,after.t(),after.c()))
                    == (l == 0));
         }
     }
@@ -304,26 +303,26 @@ void compare_check_symbols(const state &s)
     const auto before = s.get_boards();
     const auto stored = s.get_present();
     auto opponent_present = s.apparent_present();
-    if (opponent_present.second == stored.second)
-        opponent_present = next_turn(opponent_present);
-    assert(opponent_present.second != stored.second);
+    if (opponent_present.c() == stored.c())
+        opponent_present = opponent_present.next_turn();
+    assert(opponent_present.c() != stored.c());
     multiverse expected(timeline_layout::odd, before);
     const auto [lo, hi] = s.get_active_range();
     for (int l = lo; l <= hi; ++l) {
         if (s.get_timeline_end(l) == opponent_present)
             expected.append_board(l, s.get_board(l,
-                opponent_present.first, opponent_present.second));
+                opponent_present.t(), opponent_present.c()));
     }
     const auto view = check_position::for_check_symbols(s);
     check_position_tests::compare(view,state(expected));
     for (int l = s.get_lines_range().first; l <= s.get_lines_range().second; ++l) {
         const auto end = expected.get_timeline_end(l);
-        for (auto at = s.get_timeline_start(l); at <= end; at = next_turn(at)) {
-            const auto *b = view.get_board_ptr(l,at.first,at.second);
-            assert(b && b->get_fen<true>() == expected.get_board_ptr(l,at.first,at.second)->get_fen<true>());
+        for (auto at = s.get_timeline_start(l); at <= end; at = at.next_turn()) {
+            const auto *b = view.get_board_ptr(l,at.t(),at.c());
+            assert(b && b->get_fen<true>() == expected.get_board_ptr(l,at.t(),at.c())->get_fen<true>());
         }
-        const auto after = next_turn(end);
-        assert(!view.get_board_ptr(l,after.first,after.second));
+        const auto after = end.next_turn();
+        assert(!view.get_board_ptr(l,after.t(),after.c()));
     }
     assert(s.get_boards() == before && s.get_present() == stored);
 }
@@ -338,7 +337,7 @@ void test_check_symbol_contexts()
         state partial(m);
         // Move inactive and future boards before the mandatory present board.
         for (int l : {2,1,0}) {
-            const int t = partial.get_timeline_end(l).first;
+            const int t = partial.get_timeline_end(l).t();
             assert(partial.apply_move<true>(full_move(vec4(0,0,t,l),vec4(0,1,t,l))));
             compare_check_symbols(partial);
         }
@@ -347,11 +346,11 @@ void test_check_symbol_contexts()
 
         // A historical branch moves the apparent present behind the stored one.
         std::vector<boards_info_t> history;
-        for (auto at = turn_t{1,mover}; at <= turn_t{3,mover}; at = next_turn(at))
-            history.emplace_back(0,at.first,at.second,fen);
+        for (auto at = turn{1,mover}; at <= turn{3,mover}; at = at.next_turn())
+            history.emplace_back(0,at.t(),at.c(),fen);
         state branching(multiverse(timeline_layout::odd, history));
         assert(branching.apply_move<true>(full_move(vec4(0,0,3,0),vec4(0,1,1,0))));
-        assert(branching.apparent_present() == next_turn(turn_t{1,mover}));
+        assert(branching.apparent_present() == turn(1,mover).next_turn());
         compare_check_symbols(branching);
     }
 }
@@ -394,7 +393,7 @@ void test_royal_exposure()
             if (target == 2) boards.emplace_back(1,opponent_t,!defender,"8/8/8/8/8/8/8/8");
             boards.emplace_back(target,opponent_t,!defender,checked);
             const state setup(multiverse(timeline_layout::odd,boards));
-            assert(setup.get_present().second == defender);
+            assert(setup.get_present().c() == defender);
             // A setup must also inspect sources of the off-turn color.
             assert(setup.find_royal_exposure(true));
             assert(!setup.find_royal_exposure(false));

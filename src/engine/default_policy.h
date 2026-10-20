@@ -146,7 +146,7 @@ public:
             }
             if(!action.has_value())
             {
-                bool player = s.get_present().second;
+                bool player = s.get_present().c();
                 std::optional<bool> winner = std::nullopt;
                 if(s.get_mate_type() == mate_type::CHECKMATE)
                 {

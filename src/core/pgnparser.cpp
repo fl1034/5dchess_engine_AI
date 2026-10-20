@@ -43,11 +43,12 @@ std::vector<std::string> views_to_strings(const std::vector<std::string_view> &v
     return result;
 }
 
-pgnparser::pgnparser(std::string msg, bool ck, turn_t start_turn)
+pgnparser::pgnparser(std::string msg, bool ck, turn start_turn)
     : check_turn_number(ck), source(std::make_shared<const std::string>(std::move(msg))), input(*source)
 {
     buffer.current = input.begin();
-    buffer.turn = previous_turn(start_turn);
+    buffer.before_turn_zero = start_turn == turn{};
+    buffer.turn = buffer.before_turn_zero ? turn{} : start_turn.previous_turn();
     next_token();
 }
 
@@ -199,15 +200,17 @@ void pgnparser::next_token()
                     throw parse_error(parse_error::turn_out_of_range{{0, vec4::T_MAX}}, source, {begin, end});
                 bool c = *buffer.current == 'b';
                 buffer.current++;
-                turn_t newturn = std::make_pair(buffer.number, c);
-                if(check_turn_number && newturn != next_turn(buffer.turn))
+                turn newturn{static_cast<int>(buffer.number), c};
+                const turn expected = buffer.before_turn_zero ? turn{} : buffer.turn.next_turn();
+                if(check_turn_number && newturn != expected)
                 {
-                    throw parse_error(parse_error::nonconsecutive_turn{next_turn(buffer.turn), newturn},
+                    throw parse_error(parse_error::nonconsecutive_turn{expected, newturn},
                         source, {begin, end + 2});
                 }
                 dprint("token:TURN", buffer.number, c ? "b" : "w");
                 buffer.token = TURN;
                 buffer.turn = newturn;
+                buffer.before_turn_zero = false;
                 buffer.current++;
             }
             else if(buffer.current!=input.end() && *buffer.current == '.')
@@ -215,15 +218,17 @@ void pgnparser::next_token()
                  if(buffer.number > static_cast<unsigned>(vec4::T_MAX))
                      throw parse_error(parse_error::turn_out_of_range{{0, vec4::T_MAX}}, source, {begin, end});
                  const bool c = false;
-                 turn_t newturn = {static_cast<int>(buffer.number), c};
-                 if(check_turn_number && newturn != next_turn(buffer.turn))
+                 turn newturn = {static_cast<int>(buffer.number), c};
+                 const turn expected = buffer.before_turn_zero ? turn{} : buffer.turn.next_turn();
+                 if(check_turn_number && newturn != expected)
                  {
-                    throw parse_error(parse_error::nonconsecutive_turn{next_turn(buffer.turn), newturn},
+                    throw parse_error(parse_error::nonconsecutive_turn{expected, newturn},
                         source, {begin, end + 1});
                  }
                  dprint("token:TURN", buffer.number, c ? "b" : "w");
                  buffer.token = TURN;
                  buffer.turn = newturn;
+                 buffer.before_turn_zero = false;
                  buffer.current++;
             }
             else
@@ -234,8 +239,9 @@ void pgnparser::next_token()
             break;
         }
         case '/':
-            buffer.turn = next_turn(buffer.turn);
-            dprint("token:TURN /", buffer.turn.first, buffer.turn.second?"b":"w");
+            buffer.turn = buffer.before_turn_zero ? turn{} : buffer.turn.next_turn();
+            buffer.before_turn_zero = false;
+            dprint("token:TURN /", buffer.turn.t(), buffer.turn.c()?"b":"w");
             buffer.token = TURN;
             buffer.current++;
             break;
@@ -794,7 +800,7 @@ std::optional<actions> pgnparser::parse_actions()
 {
     PARSE_START;
     if(buffer.token != TURN) PARSE_FAIL;
-    //turn_t turn = buffer.turn;
+    //turn turn = buffer.turn;
     next_token();
     while(buffer.token == WHITE_SPACE || buffer.token == COMMENT)
     {
@@ -843,7 +849,8 @@ std::optional<gametree> pgnparser::parse_gametree()
     gametree::variations_t variations;
     std::optional<actions> act_buffer;
     std::optional<gametree> gt_buffer;
-    turn_t branch_start_turn = buffer.turn;
+    const turn branch_start_turn = buffer.turn;
+    const bool before_turn_zero = buffer.before_turn_zero;
     while (buffer.token == LEFT_PAREN)
     {
         next_token();
@@ -858,7 +865,8 @@ std::optional<gametree> pgnparser::parse_gametree()
         else
             variations.push_back({*act_buffer, std::make_unique<gametree>(std::move(*gt_buffer))});
         buffer.turn = branch_start_turn; //last branch is over, reset turn number
-        dprint("turn reset to:", buffer.turn.first, buffer.turn.second?"b":"w");
+        buffer.before_turn_zero = before_turn_zero;
+        dprint("turn reset to:", buffer.turn.t(), buffer.turn.c()?"b":"w");
         next_token();
         parse_comments();
     }

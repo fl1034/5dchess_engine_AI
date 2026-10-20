@@ -173,7 +173,7 @@ template<typename T>
     requires std::default_initializable<T>
 inline bool fine_node<T>::get_player() const noexcept
 {
-    return get_hc_info().get_state().get_present().second;
+    return get_hc_info().get_state().get_present().c();
 }
 
 template<typename T>

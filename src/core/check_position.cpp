@@ -1,4 +1,5 @@
 #include "check_position.h"
+#include <limits>
 #include "magic.h"
 #include "move_geometry.h"
 #include <algorithm>
@@ -21,14 +22,14 @@ check_position::check_position(const state &s, int l_min, int l_max)
     }
 }
 
-check_position check_position::for_present(const state &s, turn_t present)
+check_position check_position::for_present(const state &s, turn present)
 {
     check_position result(s);
     const auto [lo, hi] = s.get_active_range();
     for (int l = lo; l <= hi; ++l) {
-        const auto [t, c] = s.get_timeline_end(l);
-        if (turn_t{t,c} == present) {
-            result.add_board(l, next_turn({t,c}), *s.get_board_ptr(l,t,c));
+        const auto [t, c] = s.get_timeline_end(l).get();
+        if (turn{t,c} == present) {
+            result.add_board(l, turn{t,c}.next_turn(), *s.get_board_ptr(l,t,c));
         }
     }
     return result;
@@ -42,7 +43,7 @@ check_position check_position::for_phantom(const state &s)
 check_position check_position::for_check_symbols(const state &s)
 {
     auto present = s.apparent_present();
-    if (present.second == s.get_present().second) present = next_turn(present);
+    if (present.c() == s.get_present().c()) present = present.next_turn();
     return for_present(s, present);
 }
 
@@ -51,11 +52,11 @@ check_position check_position::for_move_candidates(const state &s)
     const auto [lo, hi] = s.get_lines_range();
     const int branch = s.new_line();
     check_position result(s, std::min(lo,branch), std::max(hi,branch));
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     for (int l = lo; l <= hi; ++l) {
         const auto at = s.get_timeline_end(l);
-        if (at.second != player)
-            result.add_board(l, next_turn(at), *s.get_board_ptr(l,at.first,at.second));
+        if (at.c() != player)
+            result.add_board(l, at.next_turn(), *s.get_board_ptr(l,at.t(),at.c()));
     }
     return result;
 }
@@ -74,7 +75,7 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
     std::array<line_view,2> saved{};
     for (std::size_t i = 0; i < count; ++i) {
         const auto &update = boards[i];
-        const turn_t start{update.t, update.c};
+        const turn start{update.t, update.c};
         assert(update.value);
         assert(update.l >= first_line && update.l-first_line < static_cast<int>(lines.size()));
         assert(i == 0 || update.l != sources[0]);
@@ -84,7 +85,7 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
         if (!line.exists) line.start = start;
         line.exists = true;
         line.added_start = start;
-        line.end = next_turn(start);
+        line.end = start.next_turn();
         line.added = update.value;
     }
     struct restore {
@@ -103,7 +104,7 @@ bool check_position::gives_check(board_overlay move_overlay, bool attacker,
             return move.from.tl() != move.to.tl();
         } else {
             const auto &target = lines[move.to.l()-first_line];
-            return turn_t{move.to.t(),attacker} != target.end;
+            return turn{move.to.t(),attacker} != target.end;
         }
     };
     constexpr bool include_physical = Kind == check_kind::physical;
@@ -121,13 +122,13 @@ template bool check_position::gives_check<check_position::check_kind::superphysi
 template bool check_position::gives_check<check_position::check_kind::historical>(
     check_position::board_overlay, bool, std::optional<check_position::board_overlay>);
 
-void check_position::add_board(int l, turn_t at, const board &b)
+void check_position::add_board(int l, turn at, const board &b)
 {
     assert(l >= first_line && l - first_line < static_cast<int>(lines.size()));
     auto &line = lines[l - first_line];
     assert(!line.added);
     if (line.exists) {
-        assert(at == next_turn(line.end));
+        assert(at == line.end.next_turn());
     } else {
         line.exists = true;
         line.start = at;
@@ -139,10 +140,11 @@ void check_position::add_board(int l, turn_t at, const board &b)
 
 const board *check_position::get_board_ptr(int l, int t, bool c) const
 {
-    if (l < first_line || l - first_line >= static_cast<int>(lines.size()))
+    if (t < 0 || t > std::numeric_limits<int>::max() / 2
+        || l < first_line || l - first_line >= static_cast<int>(lines.size()))
         return nullptr;
     const auto &line = lines[l - first_line];
-    const turn_t at{t,c};
+    const turn at{t,c};
     if (!line.exists || at < line.start || at > line.end)
         return nullptr;
     if (line.added && at >= line.added_start)
@@ -324,8 +326,8 @@ bool check_position::scan(bool include_physical, Emit &&emit,
 {
     auto scan_line = [&](int i) {
         const auto &line = lines[i];
-        if (!line.exists || line.end.second != C) return false;
-        const vec4 p0(0,0,line.end.first,first_line+i);
+        if (!line.exists || line.end.c() != C) return false;
+        const vec4 p0(0,0,line.end.t(),first_line+i);
         const board &source = *get_board_ptr(p0.l(),p0.t(),C);
         const bitboard_t friendly = source.hostile<!C>(); // excludes walls
         if ((include_physical && scan_physical<C>(p0,source,friendly,emit))

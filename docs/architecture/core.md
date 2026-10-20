@@ -35,11 +35,28 @@ I try to follow the terminology described in <https://github.com/adri326/5dchess
 
 + The game tree is represented by `gnode<T>` (defined in `src/core/gametree.h`). Nodes store actions, optional states, child variations, and caller-supplied information. The [client layer](client.md) uses this tree to manage game history and navigation.
 
-+ A `state` object (defined in `src/core/state.h`) stores a `multiverse` directly by value and some additional information such as who is playing. The purpose for that is to distinguish between whether an action is being submitted or not.
++ A `state` object (defined in `src/core/state.h`) stores a `multiverse` directly by value and a `turn present` for the current action. `get_present()` returns this stored turn; `apparent_present()` computes the multiverse's present. The two can differ while an action is being assembled. Branching may move the stored turn number backward while retaining its player; submission replaces the stored turn with the apparent present.
 
 + A `multiverse` object (defined in `src/core/multiverse.h`) is a concrete value type containing a 2-dimensional list of `std::shared_ptr<const board>` snapshots. Copies duplicate timeline containers and metadata while sharing existing boards; applying a move constructs new result boards. Odd/even rules are stored in a `timeline_layout` value (defined in `src/core/timeline_layout.h`), selected with the inline constexpr objects `timeline_layout::odd` or `timeline_layout::even`. Layout values support constexpr equality; the private enum is not exposed. `mirror(l)` reflects a timeline across the center: `-l` for odd layouts and `-l - 1` for even layouts. The same rule handles negative timeline labels and active-range calculation.
 
 + A `board` object (defined in `src/core/board.h`) stores piece and color information in bitboards, together with an unmoved-piece mask.
+
+`turn` (defined in `src/core/turn.h`) represents a turn number and side to move
+in one integer. Construct it as `turn{t, c}`, where `t` is nonnegative and `c`
+is false for White or true for Black. The default is `{0, false}`. Use `t()`
+and `c()` when only one field is needed, or `auto [t, c] = at.get()` when both
+fields are needed.
+Comparisons follow chronological order. `next_turn()` and `previous_turn()`
+return new values; prefix and postfix `++` and `--` mutate the value.
+`to_string()` produces notation such as `1w` or `1b`.
+
+Storage code uses `index()` and `turn::from_index(v)` to convert between turns
+and their nonnegative indices, `2*t + c`. The largest representable value is
+`turn::max`, whose index is `std::numeric_limits<int>::max()`; the largest turn
+number is half that limit. Invalid constructor arguments and advancement beyond
+either boundary violate assertion-checked preconditions. Multiverse timeline
+bounds use `turn` directly. The client getter `game::get_current_present()` keeps
+returning a pair for interface serialization.
 
 Construct a universe with an explicit layout, for example:
 
@@ -210,12 +227,12 @@ const int l_max = std::max({base_l_max, departure_l, arrival_l});
 check_position candidate(base, l_min, l_max);
 candidate.add_board(
     departure_l,
-    next_turn({mv.from.t(), player}),
+    turn{mv.from.t(), player}.next_turn(),
     departure_board
 );
 candidate.add_board(
     arrival_l,
-    next_turn({mv.to.t(), player}),
+    turn{mv.to.t(), player}.next_turn(),
     arrival_board
 );
 

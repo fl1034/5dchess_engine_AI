@@ -88,7 +88,7 @@ void test_white_to_move_with_inactive_timeline()
     const state s(multiverse);
     const auto data = count_timelines(s);
 
-    assert(s.get_present() == turn_t(1, false));
+    assert(s.get_present() == turn(1, false));
     assert(data.total == 5);
     assert(data.active == 4);
     assert(data.inactive == 1);
@@ -117,7 +117,7 @@ void test_black_to_move_with_timeline_advantage()
     const state s(multiverse);
     const auto data = count_timelines(s);
 
-    assert(s.get_present() == turn_t(1, true));
+    assert(s.get_present() == turn(1, true));
     assert(data.total == 6);
     assert(data.active == 5);
     assert(data.inactive == 1);

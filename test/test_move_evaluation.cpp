@@ -349,12 +349,12 @@ void compare(const state &position, coverage &seen)
             const auto [lo, hi] = after.get_lines_range();
             for (int l = lo; l <= hi; ++l) {
                 const auto at = after.get_timeline_end(l);
-                if (at.second != position.get_present().second)
-                    check_view.add_board(l, next_turn(at),
-                        *after.get_board_ptr(l,at.first,at.second));
+                if (at.c() != position.get_present().c())
+                    check_view.add_board(l, at.next_turn(),
+                        *after.get_board_ptr(l,at.t(),at.c()));
             }
             assert(checking == static_cast<bool>(
-                check_view.first_check(position.get_present().second)));
+                check_view.first_check(position.get_present().c())));
             assert(checking == (evaluator.is_physical_check(axis, coordinate)
                                 || evaluator.is_sp_check(axis, coordinate)));
             if (evaluator.is_historical_check(axis, coordinate)) assert(checking);

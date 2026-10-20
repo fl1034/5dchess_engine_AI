@@ -38,7 +38,7 @@ private:
     std::vector<std::vector<std::shared_ptr<const board>>> boards;
     // the following data are derivated from boards:
     int l_min, l_max, active_min, active_max;
-    std::vector<int> timeline_start, timeline_end;
+    std::vector<turn> timeline_start, timeline_end;
 
     // private methods for move generation
     template<piece_t P, bool C>
@@ -92,8 +92,8 @@ public:
     std::pair<int, int> get_initial_lines_range() const noexcept { return layout.initial_range(); }
     std::pair<int, int> get_lines_range() const noexcept;
     std::pair<int, int> get_active_range() const noexcept;
-    turn_t get_timeline_start(int l) const;
-    turn_t get_timeline_end(int l) const;
+    turn get_timeline_start(int l) const;
+    turn get_timeline_end(int l) const;
 
     // Share ownership of a read-only board; invalid indices throw.
     std::shared_ptr<const board> get_board(int l, int t, bool c) const;
@@ -113,7 +113,7 @@ public:
      where: present_t is the time of present in L,T coordinate
             present_c is either false (for white) or true (for black)
      */
-    turn_t get_present() const noexcept;
+    turn get_present() const noexcept;
 
     // move generation
     template<bool C> bitboard_t gen_physical_moves(vec4 p) const;

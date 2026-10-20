@@ -119,7 +119,7 @@ void game::fresh()
 
 std::pair<int,bool> game::get_current_present() const
 {
-    return get_current_state().get_present();
+    return get_current_state().get_present().get();
 }
 
 std::vector<ext_move> game::get_cached_moves() const
@@ -154,7 +154,7 @@ std::vector<boards_info_t> game::get_current_boards() const
 std::pair<std::vector<boards_info_t>, std::vector<full_move>> game::get_phantom_boards_and_checks() const
 {
     const state &s = get_current_state();
-    auto [t, c] = s.get_present();
+    const bool c = s.get_present().c();
     const state &ps = s.phantom();
     std::vector<full_move> checks;
     std::set<vec4> tls;
@@ -216,7 +216,7 @@ game::match_status_t game::get_match_status() const
     {
         return match_status_t::PLAYING;
     }
-    auto [t, c] = s.get_present();
+    const bool c = s.get_present().c();
     if(s.has_phantom_check())
     {
         return c ? match_status_t::WHITE_WINS : match_status_t::BLACK_WINS;
@@ -240,8 +240,8 @@ bool game::is_playable(vec4 p) const
     if (std::find(mandatory_timelines.begin(), mandatory_timelines.end(), p.l()) != mandatory_timelines.end() ||
         std::find(optional_timelines.begin(), optional_timelines.end(), p.l()) != optional_timelines.end()) 
     {
-        auto [t, c] = cs.get_present();
-        auto v1 = std::make_pair(p.t(), c);
+        const bool c = cs.get_present().c();
+        const turn v1{p.t(), c};
         auto v2 = cs.get_timeline_end(p.l());
         if(v1 == v2)
         {
@@ -388,13 +388,13 @@ bool game::visit_child(const action &act)
 
 bool game::currently_check() const
 {
-    auto [t, c] = get_current_state().get_present();
+    const bool c = get_current_state().get_present().c();
     return get_current_state().find_checks(!c).first().has_value();
 }
 
 std::vector<std::pair<vec4, vec4>> game::get_current_checks() const
 {
-    auto [t, c] = get_current_state().get_present();
+    const bool c = get_current_state().get_present().c();
     std::vector<std::pair<vec4, vec4>> result;
     for(full_move fm : get_current_state().find_checks(!c))
     {

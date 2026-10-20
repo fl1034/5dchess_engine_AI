@@ -17,15 +17,15 @@ bool check_move_boards(
 {
     using board_overlay = check_position::board_overlay;
 
-    const bool move_player = before.get_present().second;
+    const bool move_player = before.get_present().c();
     const bool is_physical_move = move.from.tl() == move.to.tl();
     const int arrival_line = move.new_position(before).l();
 
     // The result board first appears on the next turn. The candidate view also
     // presents that same board at the moving player's following turn.
-    const turn_t arrival_start = next_turn({move.to.t(), move_player});
+    const turn arrival_start = turn{move.to.t(), move_player}.next_turn();
     const board_overlay arrival{
-        arrival_line, arrival_start.first, arrival_start.second, result
+        arrival_line, arrival_start.t(), arrival_start.c(), result
     };
 
     if (is_physical_move) 
@@ -34,9 +34,9 @@ bool check_move_boards(
     }
 
     assert(departure != nullptr);
-    const turn_t departure_start = next_turn({move.from.t(), move_player});
+    const turn departure_start = turn{move.from.t(), move_player}.next_turn();
     const board_overlay departure_view{
-        move.from.l(), departure_start.first, departure_start.second, departure
+        move.from.l(), departure_start.t(), departure_start.c(), departure
     };
     return checks.gives_check<Kind>(arrival, move_player, departure_view);
 }
@@ -76,7 +76,7 @@ bool semimove_feature::is_physical_check(index_t axis, index_t coordinate)
 {
     const auto boards = info.get_move_boards(axis, coordinate);
     if (!boards) return false;
-    const bool defender = !info.get_state().get_present().second;
+    const bool defender = !info.get_state().get_present().c();
     return has_physical_check(*boards->result, defender)
         || (boards->departure
             && has_physical_check(*boards->departure, defender));
@@ -105,5 +105,5 @@ bool semimove_feature::has_latent_king_threat(index_t axis,
     if (!boards || to_white(boards->move.moved_piece(info.get_state())) != KING_W)
         return false;
     return ::has_latent_king_threat(*boards->result, boards->move.to.xy(),
-                                     info.get_state().get_present().second);
+                                     info.get_state().get_present().c());
 }

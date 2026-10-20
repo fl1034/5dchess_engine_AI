@@ -200,8 +200,8 @@ void test_parse_diagnostics()
 
     const auto sequence = parse_failure("1. e4 3w. e5");
     assert(sequence.get_range() == "3w.");
-    const auto &turn = std::get<parse_error::nonconsecutive_turn>(sequence.get_error_type());
-    assert(turn.expected == turn_t(1, true) && turn.actual == turn_t(3, false));
+    const auto &turn_error = std::get<parse_error::nonconsecutive_turn>(sequence.get_error_type());
+    assert(turn_error.expected == turn(1, true) && turn_error.actual == turn(3, false));
     assert(std::string(sequence.what()) == "Expected turn 1b; found 3w.");
     check_failure<parse_error::nonconsecutive_turn>("1. e4 3. e5", 6, 8);
 
@@ -301,6 +301,14 @@ void test_source_ownership()
 
 int main()
 {
+    for(const std::string notation : {"/ e4 / e5", "(/ e4) / d4"})
+    {
+        const auto parsed = pgnparser(notation, true, {0,false}).parse_gametree();
+        assert(parsed.has_value());
+        const auto &branches = std::get<pgnparser_ast::gametree::variations_t>(
+            parsed->variations_or_outcome);
+        assert(!branches.empty());
+    }
     //test_actions();
     //test_gametree();
     test_parse_diagnostics();

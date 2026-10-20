@@ -29,7 +29,7 @@ generator<moveseq> naive_search_impl(state s, moveseq mvs, int k, bool b)
     {
         for(vec4 q : s.gen_piece_move(p))
         {
-            bool branching = std::make_pair(q.t(),C)<s.get_timeline_end(q.l());
+            bool branching = turn(q.t(),C)<s.get_timeline_end(q.l());
             if(!branching && (b || (C?q.l()>k:q.l()<k)))
                 continue;
             state t = *s.can_apply(full_move(p, q));
@@ -43,7 +43,7 @@ generator<moveseq> naive_search_impl(state s, moveseq mvs, int k, bool b)
 
 generator<moveseq> naive_search(state s)
 {
-    const auto [t,c] = s.get_present();
+    const bool c = s.get_present().c();
     const auto [lmin, lmax] = s.get_lines_range();
     return c ? naive_search_impl<true>(s, {}, lmax+1, false) : naive_search_impl<false>(s, {}, lmin-1, false);
 }

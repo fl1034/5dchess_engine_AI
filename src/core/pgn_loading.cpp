@@ -147,7 +147,7 @@ load_initial_position(const pgnparser_ast::game &g)
                     for(std::size_t i = 0; i < std::min(g.board_sources.size(), g.boards.size()); ++i) {
                         const auto &[fen, sign, l, t, c] = g.boards[i];
                         const int signed_l = sign == pgnparser_ast::NEGATIVE ? layout.mirror(l) : l;
-                        if(signed_l == line && turn_t{t,c} == at) {
+                        if(signed_l == line && turn{t,c} == at) {
                             subject = pgn_validation_error::source_location{g.source_text, g.board_sources[i].declaration};
                             break;
                         }

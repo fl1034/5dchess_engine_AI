@@ -23,12 +23,8 @@ class state
     friend std::uint64_t hash_state(const state &s);
 
     multiverse m;
-    /*
-     `present` is in L,T coordinate (i.e. not u,v corrdinated).
-     These numbers can be inherited from copy-construction; thus they are not necessarily equal to `m.get_present()`.
-    */
-    int present;
-    bool player;
+    // The current action's turn can differ from the multiverse's apparent present.
+    turn present;
     promotion_options promotions;
     
     template<bool C>
@@ -60,7 +56,6 @@ public:
     friend void swap(state &a, state &b) noexcept {
         std::swap(a.m, b.m);
         std::swap(a.present, b.present);
-        std::swap(a.player, b.player);
         std::swap(a.promotions, b.promotions);
     }
 
@@ -99,15 +94,15 @@ public:
     
     /*
      Pass on active boards at the stored present to distinguish checkmate
-     from stalemate. The returned state retains its stored present/player.
+     from stalemate. The returned state retains its stored present.
      */
     state phantom() const;
-    // Equivalent to phantom().find_checks(!get_present().second).first(),
+    // Equivalent to phantom().find_checks(!get_present().c()).first(),
     // tested for presence, without cloning the multiverse. Includes physical checks.
     bool has_phantom_check() const;
 
     /*
-     new_line(): return the index of a new line to be created by this->player.
+     new_line(): return the index of a new line to be created by the current player.
     */
     int new_line() const noexcept;
     
@@ -151,13 +146,13 @@ public:
     // Neither mode validates movement or royal safety.
     template<bool UNSAFE = false>
     std::optional<ext_move> normalize_promotion(full_move move, piece_t requested = NO_PIECE) const;
-    turn_t get_present() const noexcept;
-    turn_t apparent_present() const noexcept;
+    turn get_present() const noexcept;
+    turn apparent_present() const noexcept;
     std::pair<int, int> get_initial_lines_range() const noexcept;
     std::pair<int, int> get_lines_range() const noexcept;
     std::pair<int, int> get_active_range() const noexcept;
-    turn_t get_timeline_start(int l) const;
-    turn_t get_timeline_end(int l) const;
+    turn get_timeline_start(int l) const;
+    turn get_timeline_end(int l) const;
     piece_t get_piece(vec4 p, bool color) const;
     // Share ownership of a read-only board; invalid indices throw.
     std::shared_ptr<const board> get_board(int l, int t, bool c) const;

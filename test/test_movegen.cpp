@@ -61,7 +61,7 @@ std::vector<boards_info_t> fixture(bool black, bool brawn, bool unmoved,
     for (int l = -2; l <= 2; ++l) {
         for (int t = 1; t <= 3; ++t) {
             for (bool c : {false, true}) {
-                if (l == 0 && turn_t{t,c} > turn_t{2,black}) continue;
+                if (l == 0 && turn{t,c} > turn{2,black}) continue;
                 squares b{};
                 if (l == 0 && t == 2 && c == black) {
                     piece_t piece = brawn ? (black ? BRAWN_B : BRAWN_W)
@@ -306,7 +306,7 @@ void promotion(bool black, bool brawn)
                 if (!physical && !branching) {
                     std::erase_if(boards,[&](const boards_info_t &board) {
                         return std::get<0>(board) == q.l()
-                            && turn_t{std::get<1>(board),std::get<2>(board)} > turn_t{q.t(),black};
+                            && turn{std::get<1>(board),std::get<2>(board)} > turn{q.t(),black};
                     });
                 }
                 for (auto rules : {promotion_options::QUEEN, promotion_options::KNIGHT,
@@ -334,9 +334,9 @@ void promotion(bool black, bool brawn)
                             std::cerr << "promotion move rejected: " << move << '\n';
                             continue;
                         }
-                        const auto [t,c] = result.get_timeline_end(line);
+                        const auto [t,c] = result.get_timeline_end(line).get();
                         const board *destination = result.get_board_ptr(line,t,c);
-                        const auto [source_t,source_c] = result.get_timeline_end(p.l());
+                        const auto [source_t,source_c] = result.get_timeline_end(p.l()).get();
                         const board *source = result.get_board_ptr(p.l(),source_t,source_c);
                         if (!destination || !source
                             || destination->get_piece(q.xy()) != expected
@@ -355,6 +355,16 @@ void promotion(bool black, bool brawn)
 
 void en_passant(bool black, bool brawn)
 {
+    if(!black && !brawn)
+    {
+        // Turn 0w has no predecessor from which en passant can be established.
+        multiverse zero(timeline_layout::odd, {{0,0,false,"8/8/8/3Pp3/8/8/8/8"}});
+        const auto moves = zero.gen_physical_moves<false>(vec4(3,4,0,0));
+        assert(!(moves & pmask(ppos(4,5))));
+        assert(moves & pmask(ppos(3,5)));
+        assert(!zero.inbound(vec4(3,4,-1,0), false));
+        assert(!zero.get_board_ptr(0,-1,false));
+    }
     const vec4 p(3,black ? 3 : 4,2,0);
     const int dy = black ? -1 : 1;
     const auto original = fixture(black,brawn,false,p.x(),p.y());
@@ -382,15 +392,15 @@ void en_passant(bool black, bool brawn)
             auto boundary = boards;
             std::erase_if(boundary,[&](const boards_info_t &info) {
                 return std::get<0>(info) == p.l()
-                    && turn_t{std::get<1>(info),std::get<2>(info)}
-                        < turn_t{previous_t,!black};
+                    && turn{std::get<1>(info),std::get<2>(info)}
+                        < turn{previous_t,!black};
             });
             expect("en passant at history boundary for "+victim,
                    boundary,black,p,expected);
             std::erase_if(boundary,[&](const boards_info_t &info) {
                 return std::get<0>(info) == p.l()
-                    && turn_t{std::get<1>(info),std::get<2>(info)}
-                        == turn_t{previous_t,!black};
+                    && turn{std::get<1>(info),std::get<2>(info)}
+                        == turn{previous_t,!black};
             });
             expect("no preceding board for "+victim,
                    boundary,black,p,quiet(p,black,false));
@@ -398,7 +408,7 @@ void en_passant(bool black, bool brawn)
             log_case("apply en passant a "+victim,boards,1);
             state s(multiverse(timeline_layout::odd,boards));
             const bool applied = s.apply_move(full_move(p,destination));
-            const auto [t,c] = s.get_timeline_end(0);
+            const auto [t,c] = s.get_timeline_end(0).get();
             const board *result = s.get_board_ptr(0,t,c);
             if (!applied || !result || result->get_piece(p.xy()) != NO_PIECE
                 || result->get_piece(ppos(p.x()+dx,p.y())) != NO_PIECE
@@ -433,7 +443,7 @@ state castling_position(const squares &pieces, int width, int height, bool black
 
 void check_castling(const state &before, vec4 p, int direction, bool allowed)
 {
-    const bool black = before.get_present().second;
+    const bool black = before.get_present().c();
     const auto [width,height] = before.get_board_size();
     const board &source = *before.get_board_ptr(0,1,black);
     bitboard_t castles = 0;
@@ -470,7 +480,7 @@ void check_castling(const state &before, vec4 p, int direction, bool allowed)
 
     state after = before;
     assert(after.apply_move(move));
-    const auto [t,c] = after.get_timeline_end(0);
+    const auto [t,c] = after.get_timeline_end(0).get();
     assert(after.get_board_ptr(0,t,c)->get_fen<true>(width,height)
         == expected.get_fen<true>(width,height));
 

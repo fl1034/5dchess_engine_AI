@@ -74,8 +74,8 @@ public:
     struct turn_out_of_range : invalid_number {};
     struct timeline_out_of_range : invalid_number {};
     struct nonconsecutive_turn {
-        turn_t expected;
-        turn_t actual;
+        turn expected;
+        turn actual;
     };
     struct duplicate_header {
         std::string key;

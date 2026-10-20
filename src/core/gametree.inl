@@ -37,14 +37,14 @@ template<typename T>
 inline std::string gnode<T>::render_pgn_turn(
     const std::function<std::string(const T &)> &show,
     pgn_options show_flags,
-    turn_t turn,
+    turn turn,
     bool full_turn_display,
     const action &witness,
     bool has_continuation
 )
 {
     std::ostringstream oss;
-    auto [t, c] = turn;
+    auto [t, c] = turn.get();
     if(full_turn_display)
     {
         oss << t << (c ? 'b' : 'w') << ". ";
@@ -86,7 +86,7 @@ template<typename T>
 inline std::string gnode<T>::pgn_tree(
     const std::function<std::string(const T &)> &show,
     pgn_options show_flags,
-    turn_t start_turn,
+    turn start_turn,
     bool full_turn_display
 )
 {
@@ -112,7 +112,7 @@ inline std::string gnode<T>::pgn_tree(
             show, turn_flags, start_turn, full_turn_display,
             *witness, !children.empty()
         );
-        start_turn = next_turn(start_turn);
+        start_turn = start_turn.next_turn();
     }
     else
     {
@@ -148,7 +148,7 @@ inline std::string gnode<T>::pgn_path(
 
     std::ostringstream oss;
     oss << show(path.front()->get_info()) << "\n";
-    turn_t start_turn = {1, false};
+    turn start_turn = {1, false};
     const action empty_witness;
     for(size_t i = 1; i < path.size(); ++i)
     {
@@ -162,7 +162,7 @@ inline std::string gnode<T>::pgn_path(
             show, turn_flags, start_turn, false,
             witness, i + 1 < path.size()
         );
-        start_turn = next_turn(start_turn);
+        start_turn = start_turn.next_turn();
     }
     return oss.str();
 }

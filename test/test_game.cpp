@@ -71,20 +71,20 @@ void test_activation(timeline_layout layout)
     multiverse m(layout, initial);
     const auto central = layout.initial_range();
     assert(m.get_active_range() == central);
-    assert((m.get_present() == turn_t{3, false}));
+    assert((m.get_present() == turn{3, false}));
     assert(m.pretty_lt(vec4(0, 0, 3, central.first))
            == (layout.is_even() ? "(-0T3)" : "(0T3)"));
 
     m.insert_board(1, 2, true, std::make_shared<board>(empty));
     assert((m.get_active_range() == std::pair{central.first, 1}));
-    assert((m.get_present() == turn_t{2, true}));
+    assert((m.get_present() == turn{2, true}));
     m.insert_board(2, 1, false, std::make_shared<board>(empty));
     assert((m.get_active_range() == std::pair{central.first, 1}));
     // An inactive historical board must not move the present yet.
-    assert((m.get_present() == turn_t{2, true}));
+    assert((m.get_present() == turn{2, true}));
     m.insert_board(layout.mirror(1), 3, false, std::make_shared<board>(empty));
     assert((m.get_active_range() == std::pair{layout.mirror(1), 2}));
-    assert((m.get_present() == turn_t{1, false}));
+    assert((m.get_present() == turn{1, false}));
     m.insert_board(3, 3, false, std::make_shared<board>(empty));
     assert((m.get_active_range() == std::pair{layout.mirror(1), 2}));
     m.insert_board(layout.mirror(2), 3, false, std::make_shared<board>(empty));
@@ -106,8 +106,8 @@ void test_value_ownership()
     const auto original_boards = copied.get_boards();
     assert(independent.apply_move<true>(full_move(vec4(0, 0, 1, 0), vec4(1, 0, 1, 0))));
     assert(copied.get_boards() == original_boards);
-    assert((original.get_timeline_end(0) == turn_t{1, false}));
-    assert((independent.get_timeline_end(0) == turn_t{1, true}));
+    assert((original.get_timeline_end(0) == turn{1, false}));
+    assert((independent.get_timeline_end(0) == turn{1, true}));
 
     multiverse movable = original;
     const board *shared = movable.get_board_ptr(0, 1, false);
@@ -122,7 +122,7 @@ void test_value_ownership()
     swap(moved, other);
     assert((moved.get_board_size() == std::pair{8, 8}));
     assert((moved.get_initial_lines_range() == std::pair{-1, 0}));
-    assert((moved.get_present() == turn_t{2, true}));
+    assert((moved.get_present() == turn{2, true}));
     assert(moved.get_boards() == other_boards);
     assert((other.get_board_size() == std::pair{4, 4}));
     assert((other.get_initial_lines_range() == std::pair{0, 0}));
@@ -492,7 +492,7 @@ int run()
     assert(!g.is_playable(first.get_from()));
     assert(g.gen_move_if_playable(first.get_from()).empty());
     assert(g.get_movable_pieces() == expected->get_movable_pieces());
-    assert(g.get_current_present() == expected->get_present());
+    assert(g.get_current_present() == expected->get_present().get());
     assert(g.get_current_timeline_status() == expected->get_timeline_status());
     assert(g.show_pgn() == pgn);
     // Replacement calculates from the real position, not the previous preview.
@@ -1096,7 +1096,7 @@ void test_strict_state_loading()
 void test_unsafe_validation()
 {
     // UNSAFE relaxes royal safety, not move resolution or completed turns.
-    for(const std::string pgn : {
+    for(const std::string &pgn : {
         standard + "1. e2e5",
         std::string("[Promotions \"q\"]") + standard,
         std::string("[Timeline \"sideways\"]") + standard,
@@ -1160,7 +1160,7 @@ void test_submission_policy()
         standard + "1. e4 / f6 2. d4 / g5 3. Qh5"})
     {
         state draft = state::from_pgn(pgn);
-        const bool black = draft.get_present().second;
+        const bool black = draft.get_present().c();
         assert(!draft.test_present());
         assert(!draft.can_submit());
         assert(!draft.submit());

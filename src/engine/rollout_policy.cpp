@@ -97,7 +97,7 @@ std::optional<reward_t<rollout_details>> evaluate_zero_position(
     {
         std::optional<bool> winner;
         if(s.get_mate_type() == mate_type::CHECKMATE)
-            winner = !s.get_present().second;
+            winner = !s.get_present().c();
         return evaluation.mate_reward(winner, 0);
     }
     return evaluation.cutoff_reward(std::move(s), 0, stop, nullptr);

@@ -683,7 +683,7 @@ void test_builtin_weight_profiles()
 void test_rollout_policy_preserves_input()
 {
     state original = standard_position();
-    const turn_t initial_turn = original.get_present();
+    const turn initial_turn = original.get_present();
     observer obs;
     rollout_default_policy policy({}, {}, 1, 7);
     const auto result = policy.evaluate(original, {}, obs);

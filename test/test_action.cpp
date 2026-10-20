@@ -69,7 +69,7 @@ int run()
     state after_quiet = standard;
     assert(after_quiet.apply_move(quiet));
     const auto quiet_check_view = check_position::for_check_symbols(after_quiet);
-    assert(!quiet_check_view.first_check(standard.get_present().second));
+    assert(!quiet_check_view.first_check(standard.get_present().c()));
 
     state capture_position = standard;
     assert(capture_position.apply_move(full_move("(0T1)e2e4")));
@@ -117,7 +117,7 @@ int run()
     state after_check = checking_position;
     assert(after_check.apply_move(checking_move));
     const auto checking_view = check_position::for_check_symbols(after_check);
-    assert(checking_view.first_check(checking_position.get_present().second));
+    assert(checking_view.first_check(checking_position.get_present().c()));
     assert(checking_move.pgn(checking_position, QUEEN_W, pgn_options::SHOW_MATE)
                .find('+') != std::string::npos);
     const action checking_action = action::from_vector(
@@ -133,7 +133,7 @@ int run()
             {0,1,mover,fen}, {1,3,mover,fen}, {2,1,mover,fen}
         },4,4));
         for (int l : {1,2}) {
-            const int t = multi.get_timeline_end(l).first;
+            const int t = multi.get_timeline_end(l).t();
             const int from_y = mover ? 3 : 0, to_y = mover ? 0 : 3;
             const full_move optional_check(vec4(0,from_y,t,l),vec4(0,to_y,t,l));
             assert(optional_check.pgn(multi, QUEEN_W, pgn_options::SHOW_MATE)
@@ -318,7 +318,7 @@ int run()
         assert(prepared.promote_to == default_promote_to(rules));
         state result = before;
         assert(result.apply_move<true>(promotion));
-        const auto [t, player] = result.get_timeline_end(0);
+        const auto [t, player] = result.get_timeline_end(0).get();
         const piece_t expected_white = rules == promotion_options::NONE
             ? (brawn ? BRAWN_W : PAWN_W) : default_promote_to(rules);
         assert(result.get_piece(vec4(0, black ? 0 : 7, t, 0), player)
@@ -502,7 +502,7 @@ int run()
     assert(!no_pt.has_value());
     const auto unchanged_pawn = no_promotion_state.can_apply(*no_fm);
     assert(unchanged_pawn.has_value());
-    const auto [pawn_t, pawn_c] = unchanged_pawn->get_timeline_end(no_fm->to.l());
+    const auto [pawn_t, pawn_c] = unchanged_pawn->get_timeline_end(no_fm->to.l()).get();
     assert(unchanged_pawn->get_piece(
         vec4(no_fm->to.x(), no_fm->to.y(), pawn_t, no_fm->to.l()), pawn_c)
         == PAWN_W);
@@ -540,7 +540,7 @@ int run()
 
     state unsafe_state = promotion_state;
     assert(unsafe_state.apply_move<true>(ext_move(*fm, KNIGHT_W)));
-    const auto [end_t, end_c] = unsafe_state.get_timeline_end(fm->to.l());
+    const auto [end_t, end_c] = unsafe_state.get_timeline_end(fm->to.l()).get();
     assert(unsafe_state.get_piece(
         vec4(fm->to.x(), fm->to.y(), end_t, fm->to.l()), end_c) == KNIGHT_W);
 

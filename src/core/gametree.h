@@ -37,7 +37,7 @@ class gnode {
     std::string render_pgn_turn(
         const std::function<std::string(const T &)> &show,
         pgn_options show_flags,
-        turn_t turn,
+        turn turn,
         bool full_turn_display,
         const action &witness,
         bool has_continuation
@@ -139,7 +139,7 @@ public:
     std::string pgn_tree(
         const std::function<std::string(const T &)> &show = [](const T &){return "";},
         pgn_options show_flags = default_pgn_options,
-        turn_t start_turn = {1,false},
+        turn start_turn = {1,false},
         bool full_turn_display=true
     );
 

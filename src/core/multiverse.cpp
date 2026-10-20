@@ -1,7 +1,6 @@
 #include "multiverse.h"
 #include "utils.h"
 #include "magic.h"
-#include <bit>
 #include "move_geometry.h"
 #include <regex>
 #include <span>
@@ -14,7 +13,7 @@
 #include <cassert>
 
 /*
- The following static functions describe the correspondence between two coordinate systems: L,T and u,v
+ The following static functions describe the correspondence between timeline coordinates L and storage indices u
  
 l_to_u make use of the bijection from integers to non-negative integers:
 x -> ~(x>>1)
@@ -27,24 +26,12 @@ constexpr static int l_to_u(int l) noexcept
         return static_cast<int>(~(static_cast<unsigned int>(l) << 1));
 }
 
-constexpr static int tc_to_v(int t, bool c) noexcept
-{
-    const unsigned int v = static_cast<unsigned int>(t) << 1
-                         | static_cast<unsigned int>(c);
-    return std::bit_cast<int>(v);
-}
-
 constexpr static int u_to_l(int u) noexcept
 {
     if(u & 1)
         return ~(u >> 1);
     else
         return u >> 1;
-}
-
-constexpr static std::pair<int, bool> v_to_tc(int v) noexcept
-{
-    return {v >> 1, static_cast<bool>(v & 1)};
 }
 
 multiverse::multiverse(timeline_layout layout, std::vector<boards_info_t> bds, int size_x, int size_y)
@@ -61,9 +48,9 @@ multiverse::multiverse(timeline_layout layout, std::vector<boards_info_t> bds, i
         int u = l_to_u(l);
         if(boards[u].empty())
             throw std::runtime_error("multiverse(): There is a gap between timelines.");
-        for(int v = timeline_start[u]; v <= timeline_end[u]; v++)
+        for(turn at = timeline_start[u]; at <= timeline_end[u]; ++at)
         {
-            if(boards[u][v] == nullptr)
+            if(boards[u][at.index()] == nullptr)
             {
                 throw std::runtime_error("multiverse(): There is a gap between boards on timeline L"
                     + std::to_string(u_to_l(u)) + ".");
@@ -73,14 +60,14 @@ multiverse::multiverse(timeline_layout layout, std::vector<boards_info_t> bds, i
     std::tie(active_min, active_max) = calculate_active_range();
 }
 
-turn_t multiverse::get_present() const noexcept
+turn multiverse::get_present() const noexcept
 {
-    int present_v = std::numeric_limits<int>::max();
+    turn present = turn::max;
     for(int l = active_min; l <= active_max; l++)
     {
-        present_v = std::min(present_v, timeline_end[l_to_u(l)]);
+        present = std::min(present, timeline_end[l_to_u(l)]);
     }
-    return v_to_tc(present_v);
+    return present;
 }
 
 std::pair<int, int> multiverse::get_board_size() const noexcept
@@ -98,23 +85,23 @@ std::pair<int, int> multiverse::get_active_range() const noexcept
     return std::make_pair(active_min, active_max);
 }
 
-turn_t multiverse::get_timeline_start(int l) const
+turn multiverse::get_timeline_start(int l) const
 {
-    return v_to_tc(timeline_start.at(l_to_u(l)));
-    //return v_to_tc(timeline_start[l_to_u(l)]);
+    return timeline_start.at(l_to_u(l));
 }
 
-turn_t multiverse::get_timeline_end(int l) const
+turn multiverse::get_timeline_end(int l) const
 {
-    return v_to_tc(timeline_end.at(l_to_u(l)));
-    //return v_to_tc(timeline_end[l_to_u(l)]);
+    return timeline_end.at(l_to_u(l));
 }
 
 std::shared_ptr<const board> multiverse::get_board(int l, int t, bool c) const
 {
     try
     {
-        return this->boards.at(l_to_u(l)).at(tc_to_v(t,c));
+        if(t < 0 || t > std::numeric_limits<int>::max() / 2)
+            throw std::out_of_range("Turn is outside the supported range");
+        return this->boards.at(l_to_u(l)).at(turn(t,c).index());
     }
     catch(const std::out_of_range &ex)
     {
@@ -133,7 +120,8 @@ const board *multiverse::get_board_ptr(int l, int t, bool c) const noexcept
     if (u >= boards.size() || t < 0)
         return nullptr;
     const auto &timeline = boards[u];
-    const auto v = static_cast<std::size_t>(t) * 2 + static_cast<std::size_t>(c);
+    if (t > std::numeric_limits<int>::max() / 2) return nullptr;
+    const auto v = static_cast<std::size_t>(turn(t, c).index());
     if (v >= timeline.size())
         return nullptr;
     return timeline[v].get();
@@ -151,15 +139,16 @@ void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<c
     assert(vec4::L_MIN <= l && l <= vec4::L_MAX);
     assert(0 <= t && t <= vec4::T_MAX);
     int u = l_to_u(l);
-    int v = tc_to_v(t, c);
+    const turn at{t, c};
+    const int v = at.index();
 
     // if u is too large, resize this->board to accommodate new board
     // and fill any missing row with empty vector
     if(u >= static_cast<int>(this->boards.size()))
     {
         this->boards.resize(u+1, std::vector<std::shared_ptr<const board>>());
-        this->timeline_start.resize(u+1, std::numeric_limits<int>::max());
-        this->timeline_end.resize(u+1, std::numeric_limits<int>::min());
+        this->timeline_start.resize(u+1, turn::max);
+        this->timeline_end.resize(u+1, turn{});
     }
     l_min = std::min(l_min, l);
     l_max = std::max(l_max, l);
@@ -178,8 +167,8 @@ void multiverse::insert_board_impl(int l, int t, bool c, const std::shared_ptr<c
         throw std::runtime_error("multiverse::insert_board_impl(): Duplicate definition of the board on L="+std::to_string(l)+" (plain notation), T="+std::to_string(t)+" C="+std::string(c?"b":"w"));
     }
     timeline[v] = b_ptr;
-    timeline_start[u] = std::min(timeline_start[u], v);
-    timeline_end[u]   = std::max(timeline_end[u],   v);
+    timeline_start[u] = std::min(timeline_start[u], at);
+    timeline_end[u]   = std::max(timeline_end[u],   at);
 }
 
 void multiverse::insert_board(int l, int t, bool c, const std::shared_ptr<const board> &b_ptr)
@@ -226,7 +215,7 @@ std::vector<std::tuple<int,int,bool,std::string>> multiverse::get_boards() const
         int l = u_to_l(u);
         for(int v = 0; v < static_cast<int>(timeline.size()); v++)
         {
-            const auto [t, c] = v_to_tc(v);
+            const auto [t, c] = turn::from_index(v).get();
             if(timeline[v] != nullptr)
             {
                 result.push_back(std::make_tuple(l,t,c,timeline[v]->get_fen<SHOW_UMOVE>(size_x, size_y)));
@@ -239,7 +228,7 @@ std::vector<std::tuple<int,int,bool,std::string>> multiverse::get_boards() const
 std::string multiverse::to_string() const
 {
     std::stringstream sstm;
-    auto [present, player] = get_present();
+    auto [present, player] = get_present().get();
     sstm << "Multiverse present: T" << present << (player?'b':'w') << "\n";
     sstm << "lines range:" << get_lines_range() << "\t";
     sstm << "active range:" << get_active_range() << "\n";
@@ -249,7 +238,7 @@ std::string multiverse::to_string() const
         int l = u_to_l(u);
         for(int v = 0; v < static_cast<int>(timeline.size()); v++)
         {
-            const auto [t, c] = v_to_tc(v);
+            const auto [t, c] = turn::from_index(v).get();
             if(timeline[v] != nullptr)
             {
                 sstm << "L" << l << "T" << t << (c ? 'b' : 'w');
@@ -263,20 +252,21 @@ std::string multiverse::to_string() const
 
 bool multiverse::inbound(vec4 a, bool color) const noexcept
 {
-    int l = a.l(), u = l_to_u(l), v = tc_to_v(a.t(), color);
-    if(a.outbound() || l < l_min || l > l_max)
+    int l = a.l(), u = l_to_u(l);
+    if(a.outbound() || a.t() < 0 || l < l_min || l > l_max)
         return false;
-    return timeline_start[u] <= v && v <= timeline_end[u];
+    const turn at{a.t(), color};
+    return timeline_start[u] <= at && at <= timeline_end[u];
 }
 
 piece_t multiverse::get_piece(vec4 a, bool color) const
 {
-    return boards[l_to_u(a.l())][tc_to_v(a.t(), color)]->get_piece(a.xy());
+    return boards[l_to_u(a.l())][turn(a.t(), color).index()]->get_piece(a.xy());
 }
 
 bool multiverse::get_umove_flag(vec4 a, bool color) const noexcept
 {
-    return boards[l_to_u(a.l())][tc_to_v(a.t(), color)]->umove() & pmask(ppos(a.x(),a.y()));
+    return boards[l_to_u(a.l())][turn(a.t(), color).index()]->umove() & pmask(ppos(a.x(),a.y()));
 }
 
 
@@ -602,9 +592,9 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         // en passant
         bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->lpawn();
         bitboard_t s = shift_north(shift_north(r)) & empty;
-        if(s)
+        if(s && (p.t() > 0 || C))
         {
-            const auto [previous_t, previous_color] = previous_turn({p.t(), C});
+            const auto [previous_t, previous_color] = turn{p.t(), C}.previous_turn().get();
             const board *b1_ptr = get_board_ptr(p.l(), previous_t, previous_color);
             if(b1_ptr)
             {
@@ -626,9 +616,9 @@ bitboard_t multiverse::gen_physical_moves_impl(vec4 p) const
         // en passant
         bitboard_t r = (shift_west(z) | shift_east(z)) & hostile & b_ptr->lpawn();
         bitboard_t s = shift_south(shift_south(r)) & empty;
-        if(s)
+        if(s && (p.t() > 0 || C))
         {
-            const auto [previous_t, previous_color] = previous_turn({p.t(), C});
+            const auto [previous_t, previous_color] = turn{p.t(), C}.previous_turn().get();
             const board *b1_ptr = get_board_ptr(p.l(), previous_t, previous_color);
             if(b1_ptr)
             {

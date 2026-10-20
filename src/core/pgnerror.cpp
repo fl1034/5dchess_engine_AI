@@ -82,10 +82,7 @@ std::string parse_error::generate_errmsg(const error_type_t &error_type,
                 + std::to_string(reason.minimum) + " to " + std::to_string(reason.maximum) + ".";
         }
         else if constexpr(std::is_same_v<T, nonconsecutive_turn>) {
-            const auto turn = [](turn_t value) {
-                return std::to_string(value.first) + (value.second ? "b" : "w");
-            };
-            return "Expected turn " + turn(reason.expected) + "; found " + turn(reason.actual) + ".";
+            return "Expected turn " + reason.expected.to_string() + "; found " + reason.actual.to_string() + ".";
         }
         else if constexpr(std::is_same_v<T, duplicate_header>)
             return "Duplicate header key: " + reason.key + ".";

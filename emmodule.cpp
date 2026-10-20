@@ -396,7 +396,7 @@ EMSCRIPTEN_BINDINGS(engine) {
             switch(status)
             {
                 case game::match_status_t::PLAYING:
-                    if(self.get_unmoved_state().get_present().second)
+                    if(self.get_unmoved_state().get_present().c())
                         return std::string("Black's Move");
                     else
                         return std::string("White's Move");
@@ -407,7 +407,7 @@ EMSCRIPTEN_BINDINGS(engine) {
                 case game::match_status_t::STALEMATE:
                     return std::string("Stalemate");
                 case game::match_status_t::ILLEGAL_HISTORY:
-                    return self.get_unmoved_state().get_present().second
+                    return self.get_unmoved_state().get_present().c()
                         ? std::string("Black's Move (Illegal History)")
                         : std::string("White's Move (Illegal History)");
                 default:

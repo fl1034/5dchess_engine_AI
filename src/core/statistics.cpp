@@ -14,7 +14,7 @@ int interval_size(int a_min, int a_max, int b_min, int b_max)
 
 timeline_data count_timelines(const state &s)
 {
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     const auto [l_min, l_max] = s.get_lines_range();
     const auto [l0_min, l0_max] = s.get_initial_lines_range();
     const auto [active_min, active_max] = s.get_active_range();
@@ -114,7 +114,7 @@ material_data<int> count_material_sum(const state &s)
     }
     for(int line: lines)
     {
-        auto [t, c] = s.get_timeline_end(line);
+        auto [t, c] = s.get_timeline_end(line).get();
         const board *b = s.get_board_ptr(line, t, c);
         lpawn += std::popcount(b->lpawn());
         lknight += std::popcount(b->lknight());
@@ -157,7 +157,7 @@ material_data<int> count_material_diff(const state &s)
     }
     for(int line: lines)
     {
-        auto [t, c] = s.get_timeline_end(line);
+        auto [t, c] = s.get_timeline_end(line).get();
         const board *b = s.get_board_ptr(line, t, c);
         bitboard_t friendly = c ? b->black() : b->white();
         bitboard_t hostile = c ? b->white() : b->black();

@@ -51,7 +51,7 @@ void test_moves()
     // Initial-position loading must not interpret the move history.
     const auto [initial, setup_error] = pgn_loading::load_initial_position<false>(*pgnparser(pgn).parse_game());
     assert(!setup_error);
-    assert(initial.get_present() == (turn_t{1, false}));
+    assert(initial.get_present() == (turn{1, false}));
 
     const auto ambiguous = failure([&] { state::from_pgn(knights + "1. Nf3"); });
     const auto &candidates = std::get<error::ambiguous_move>(ambiguous.get_error_type()).candidates;

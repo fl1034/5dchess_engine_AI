@@ -78,7 +78,7 @@ std::optional<action> basic_flat_ucb_engine<DefaultPolicy>::find_best_move(
     }
 
     flat_ucb_observer observer;
-    const bool maximizing_player = !root.get_present().second;
+    const bool maximizing_player = !root.get_present().c();
     std::size_t total_visits = 0;
     while(!stop_token.stop_requested()
           && (!iteration_limit.has_value() || total_visits < *iteration_limit)

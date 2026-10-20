@@ -13,10 +13,8 @@
 
 
 state::state(multiverse mtv, promotion_options promotion_rules) noexcept
-    : m(std::move(mtv)), promotions(promotion_rules)
-{
-    std::tie(present, player) = m.get_present();
-}
+    : m(std::move(mtv)), present(m.get_present()), promotions(promotion_rules)
+{}
 
 template<bool UNSAFE>
 state state::from_pgn(const std::string &pgn)
@@ -73,7 +71,7 @@ template state state::from_ast<true>(const pgnparser_ast::game &g);
 int state::new_line() const noexcept
 {
     auto [l_min, l_max] = m.get_lines_range();
-    if(player == 0)
+    if(present.c() == 0)
         return l_max + 1;
     else
         return l_min - 1;
@@ -81,7 +79,7 @@ int state::new_line() const noexcept
 
 bool state::test_present() const
 {
-    return m.get_present().second != player;
+    return m.get_present().c() != present.c();
 }
 
 std::optional<state> state::can_submit() const
@@ -155,12 +153,12 @@ bool state::apply_move(ext_move mv)
             return false;
         }
         auto te = m.get_timeline_end(p.l());
-        if(std::make_pair(p.t(), player) != te)
+        if(turn{p.t(), present.c()} != te)
             return false;
-        const piece_t piece = get_piece(p, player);
-        if(piece == NO_PIECE || piece_color(piece) != player)
+        const piece_t piece = get_piece(p, present.c());
+        if(piece == NO_PIECE || piece_color(piece) != present.c())
             return false;
-        auto mvs = player ? m.gen_moves<true>(p) : m.gen_moves<false>(p);
+        auto mvs = present.c() ? m.gen_moves<true>(p) : m.gen_moves<false>(p);
         //auto it = mvbbs.find(q.tl());
         const auto &res = mvs.find([&q](const auto &pair){
             const auto &[tl, bb] = pair;
@@ -188,7 +186,7 @@ bool state::apply_move(ext_move mv)
     // physical move, no time travel
     if(d.tl() == vec4(0,0,0,0))
     {
-        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), present.c());
         bitboard_t z = pmask(p.xy());
         const auto &[size_x, size_y] = m.get_board_size();
         // en passant
@@ -200,7 +198,7 @@ bool state::apply_move(ext_move mv)
                             ->move_piece(p.xy(), q.xy()));
         }
         // promotion
-        else if((b_ptr->lpawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
+        else if((b_ptr->lpawn()&z) && (q.y() == (present.c() ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -210,7 +208,7 @@ bool state::apply_move(ext_move mv)
             else
             {
                 dprint(" ... promotion");
-                piece_t promoted = player ? to_black(promote_to) : promote_to;
+                piece_t promoted = present.c() ? to_black(promote_to) : promote_to;
                 m.append_board(p.l(), b_ptr
                                 ->replace_piece(p.xy(), NO_PIECE)
                                 ->replace_piece(q.xy(), promoted));
@@ -221,7 +219,7 @@ bool state::apply_move(ext_move mv)
         {
             dprint(" ... castling");
             const bitboard_t side = d.x() < 0 ? z - 1 : ~(z - 1);
-            const int rook_from = bb_get_pos(b_ptr->castling_rooks(p.xy(), player) & side);
+            const int rook_from = bb_get_pos(b_ptr->castling_rooks(p.xy(), present.c()) & side);
             int rook_x2 = q.x() + (d.x() < 0 ? 1 : -1); //rook's new x coordinate
             m.append_board(p.l(),b_ptr
                             ->move_piece(rook_from, ppos(rook_x2,q.y()))
@@ -235,18 +233,18 @@ bool state::apply_move(ext_move mv)
         }
     }
     // non-branching superphysical move
-    else if (std::make_pair(q.t(), player) == m.get_timeline_end(q.l()))
+    else if (turn{q.t(), present.c()} == m.get_timeline_end(q.l()))
     {
-        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), present.c());
         const piece_t &pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
         
         bitboard_t z = pmask(p.xy());
         const auto &[size_x, size_y] = m.get_board_size();
-        const board *c_ptr = m.get_board_ptr(q.l(), q.t(), player);
+        const board *c_ptr = m.get_board_ptr(q.l(), q.t(), present.c());
         
         // promotion (only brawns can do)
-        if ((b_ptr->lrawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
+        if ((b_ptr->lrawn()&z) && (q.y() == (present.c() ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -256,7 +254,7 @@ bool state::apply_move(ext_move mv)
             else
             {
                 dprint(" ... nonbranching brawn promotion");
-                piece_t promoted = player ? to_black(promote_to) : promote_to;
+                piece_t promoted = present.c() ? to_black(promote_to) : promote_to;
                 m.append_board(q.l(), c_ptr->replace_piece(q.xy(), promoted));
             }
         }
@@ -270,17 +268,17 @@ bool state::apply_move(ext_move mv)
     //branching move
     else
     {
-        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), player);
+        const board *b_ptr = m.get_board_ptr(p.l(), p.t(), present.c());
         const piece_t &pic = static_cast<piece_t>(piece_name(b_ptr->get_piece(p.xy())));
         m.append_board(p.l(), b_ptr->replace_piece(p.xy(), NO_PIECE));
-        const board *x_ptr = m.get_board_ptr(q.l(), q.t(), player);
-        auto [t, c] = next_turn({q.t(), player});
+        const board *x_ptr = m.get_board_ptr(q.l(), q.t(), present.c());
+        auto [t, c] = turn{q.t(), present.c()}.next_turn().get();
         
         bitboard_t z = pmask(p.xy());
         const auto &[size_x, size_y] = m.get_board_size();
         
         // promotion (only brawns can do)
-        if ((b_ptr->lrawn()&z) && (q.y() == (player ? 0 : size_y - 1)))
+        if ((b_ptr->lrawn()&z) && (q.y() == (present.c() ? 0 : size_y - 1)))
         {
             if(promotions == promotion_options::NONE)
             {
@@ -290,7 +288,7 @@ bool state::apply_move(ext_move mv)
             else
             {
                 dprint(" ... branching brawn promotion");
-                piece_t promoted = player ? to_black(promote_to) : promote_to;
+                piece_t promoted = present.c() ? to_black(promote_to) : promote_to;
                 m.insert_board(new_line(), t, c, x_ptr->replace_piece(q.xy(), promoted));
             }
         }
@@ -300,11 +298,11 @@ bool state::apply_move(ext_move mv)
             dprint(" ... branching jump");
             m.insert_board(new_line(), t, c, x_ptr->replace_piece(q.xy(), pic));
         }
-        auto [new_present, _] = m.get_present();
-        if(new_present < present)
+        const int new_present = m.get_present().t();
+        if(new_present < present.t())
         {
             // if a historical board is activated by this travel, go back
-            present = new_present;
+            present = turn{new_present, present.c()};
         }
     }
     return true;
@@ -326,18 +324,18 @@ std::optional<ext_move> state::normalize_promotion(full_move move, piece_t reque
         };
         if(!in_bounds(p) || !in_bounds(q))
             return std::nullopt;
-        source = get_board_ptr(p.l(), p.t(), player);
+        source = get_board_ptr(p.l(), p.t(), present.c());
         if(!source)
             return std::nullopt;
     }
-    const bool last_rank = q.y() == (player ? 0 : size_y - 1);
+    const bool last_rank = q.y() == (present.c() ? 0 : size_y - 1);
     if(!last_rank)
     {
         return ext_move(move, NO_PIECE);
     }
     const piece_t piece = piece_name([&] {
         if constexpr (UNSAFE)
-            return get_piece(p, player);
+            return get_piece(p, present.c());
         else
             return source->get_piece(p.xy());
     }());
@@ -374,22 +372,21 @@ std::optional<ext_move> state::normalize_promotion(full_move move, piece_t reque
 template <bool UNSAFE>
 bool state::submit()
 {
-    auto [t, c] = m.get_present();
+    const turn next_present = m.get_present();
     if constexpr (!UNSAFE)
     {
-        if(!test_present() || check_position(*this).first_check(c))
+        if(!test_present() || check_position(*this).first_check(next_present.c()))
         {
             return false;
         }
     }
-    present = t;
-    player  = c;
+    present = next_present;
     return true;
 }
 
 bool state::has_phantom_check() const
 {
-    return check_position::for_phantom(*this).first_check(!player).has_value();
+    return check_position::for_phantom(*this).first_check(!present.c()).has_value();
 }
 
 std::optional<pgn_validation_error::royal_exposed> state::find_royal_exposure(
@@ -398,7 +395,7 @@ std::optional<pgn_validation_error::royal_exposed> state::find_royal_exposure(
 {
     const check_position checks(*this);
     // After submit(), player is the opponent of the player who just moved.
-    bool attacker = is_from_initial_setup ? false : player;
+    bool attacker = is_from_initial_setup ? false : present.c();
     auto capture = checks.first_check(attacker);
     if(is_from_initial_setup && !capture) {
         attacker = true;
@@ -414,7 +411,7 @@ std::optional<pgn_validation_error::royal_exposed> state::find_royal_exposure(
         << static_cast<char>(to_white(piece_name(get_piece(from, attacker))))
         << static_cast<char>('a' + from.x()) << static_cast<char>('1' + from.y());
     if(from.tl() != to.tl()) {
-        const bool branching = turn_t{to.t(), attacker} < get_timeline_end(to.l());
+        const bool branching = turn{to.t(), attacker} < get_timeline_end(to.l());
         notation << (branching ? ">>x" : ">x") << pretty_lt(to.tl());
     }
     else notation << 'x';
@@ -437,7 +434,7 @@ state state::phantom() const
         auto turn = get_timeline_end(l);
         if(turn == get_present())
         {
-            auto [t, c] = turn;
+            auto [t, c] = turn.get();
             s.m.append_board(l, m.get_board(l, t, c));
         }
     }
@@ -446,25 +443,25 @@ state state::phantom() const
 
 std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> state::get_timeline_status() const
 {
-    return get_timeline_status(present, player);
+    return get_timeline_status(present.t(), present.c());
 }
 
 std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> state::get_timeline_status(int present_t, bool present_c) const
 {
     auto [l_min, l_max] = m.get_lines_range();
     auto [active_min, active_max] = m.get_active_range();
-    turn_t present_tc = std::make_pair(present_t, present_c);
+    turn present_tc{present_t, present_c};
     std::vector<int> mandatory_timelines, optional_timelines, unplayable_timelines;
     for(int l = l_min; l <= l_max; l++)
     {
-        turn_t tc = m.get_timeline_end(l);
+        turn tc = m.get_timeline_end(l);
         if (active_min <= l && active_max >= l && tc == present_tc)
         {
             mandatory_timelines.push_back(l);
         }
         else
         {
-            auto [t, c] = tc;
+            auto [t, c] = tc.get();
             if(present_c==c)
             {
                 optional_timelines.push_back(l);
@@ -496,7 +493,7 @@ generator<full_move> state::find_checks(bool attacker) const &
     std::vector<int> lines;
     for(int i = l_min; i <= l_max; i++)
     {
-        auto [t, color] = m.get_timeline_end(i);
+        const bool color = m.get_timeline_end(i).c();
         if(color == attacker)
         {
             lines.push_back(i);
@@ -519,7 +516,7 @@ generator<full_move> state::find_checks_impl(std::vector<int> lines) const &
     for (int l : lines)
     {
         // take the active board
-        auto [t, c] = m.get_timeline_end(l);
+        auto [t, c] = m.get_timeline_end(l).get();
         assert(c == C);
         const board *b_ptr = m.get_board_ptr(l, t, C);
         bitboard_t b_pieces = b_ptr->friendly<C>() & ~b_ptr->wall();
@@ -555,14 +552,14 @@ generator<full_move> state::find_checks_impl(std::vector<int> lines) const &
 
 std::vector<vec4> state::get_movable_pieces() const
 {
-    auto [mandatory_timelines, optional_timelines, unplayable_timelines] = get_timeline_status(present, player);
+    auto [mandatory_timelines, optional_timelines, unplayable_timelines] = get_timeline_status(present.t(), present.c());
     auto lines = concat_vectors(mandatory_timelines, optional_timelines);
     return get_movable_pieces(lines);
 }
 
 std::vector<vec4> state::get_movable_pieces(const std::vector<int> &lines) const
 {
-    if (player == 0)
+    if (present.c() == 0)
     {
         return gen_movable_pieces_impl<false>(lines);
     }
@@ -577,10 +574,10 @@ std::vector<vec4> state::get_all_pieces(const std::vector<int> &lines) const
     std::vector<vec4> result;
     for(int l : lines)
     {
-        const int t = get_timeline_end(l).first;
+        const int t = get_timeline_end(l).t();
         const vec4 p0(0, 0, t, l);
-        const board *b = m.get_board_ptr(l, t, player);
-        const bitboard_t pieces = (player ? b->black() : b->white()) & ~b->wall();
+        const board *b = m.get_board_ptr(l, t, present.c());
+        const bitboard_t pieces = (present.c() ? b->black() : b->white()) & ~b->wall();
         for(int pos : marked_pos(pieces))
         {
             result.emplace_back(pos, p0);
@@ -597,9 +594,8 @@ std::vector<vec4> state::gen_movable_pieces_impl(const std::vector<int> &lines) 
     for (int l : lines)
     {
         // take the active board
-        auto [t, c] = get_timeline_end(l);
+        const int t = get_timeline_end(l).t();
         const vec4 p0 = vec4(0,0,t,l);
-//        assert(c == C);
         const board *b_ptr = m.get_board_ptr(l, t, C);
         bitboard_t b_pieces = b_ptr->friendly<C>() & ~b_ptr->wall();
         // for each friendly piece on this board
@@ -638,7 +634,7 @@ mate_type state::get_mate_type(bool legal_action_witness) const
     const auto [l_min, l_max] = get_lines_range();
     int whites_lines = l_max - l0_max;
     int blacks_lines = l0_min - l_min;
-    int timeline_advantage = player ? (whites_lines - blacks_lines) : (blacks_lines - whites_lines);
+    int timeline_advantage = present.c() ? (whites_lines - blacks_lines) : (blacks_lines - whites_lines);
     /* Build the search space `ss2` from `ss` so that
     1. On new lines that are active, erase all moves traveling back in time
     2. On other lines, do nothing */
@@ -648,7 +644,7 @@ mate_type state::get_mate_type(bool legal_action_witness) const
         int max_axis = std::min(w.first_branch_axis()+timeline_advantage+1, w.dimension()-1);
         for(int n = w.first_branch_axis(); n <= max_axis; n++)
         {
-            hc[n].erase_if([&w, n, old_t=present](int i){
+            hc[n].erase_if([&w, n, old_t=present.t()](int i){
                 semimove sm = w.get_semimove(n, i);
                 if(sm.is<arriving_move>())
                 {
@@ -718,12 +714,12 @@ std::string state::pretty_lt(vec4 p0) const
     return m.pretty_lt(p0);
 }
 
-turn_t state::get_present() const noexcept
+turn state::get_present() const noexcept
 {
-    return std::make_pair(present, player);
+    return present;
 }
 
-turn_t state::apparent_present() const noexcept
+turn state::apparent_present() const noexcept
 {
     return m.get_present();
 }
@@ -743,12 +739,12 @@ std::pair<int, int> state::get_active_range() const noexcept
     return m.get_active_range();
 }
 
-turn_t state::get_timeline_start(int l) const
+turn state::get_timeline_start(int l) const
 {
     return m.get_timeline_start(l);
 }
 
-turn_t state::get_timeline_end(int l) const
+turn state::get_timeline_end(int l) const
 {
     return m.get_timeline_end(l);
 }
@@ -770,13 +766,13 @@ std::vector<std::tuple<int, int, bool, std::string>> state::get_boards() const
 
 generator<vec4> state::gen_piece_move(vec4 p) const &
 {
-    return m.gen_piece_move(p, player);
+    return m.gen_piece_move(p, present.c());
 }
 
 std::string state::to_string() const
 {
     std::ostringstream ss;
-    ss << "State(present=" << present << ", player=" << player << "):\n";
+    ss << "State(present=" << present.t() << ", player=" << present.c() << "):\n";
     return ss.str() + m.to_string();
 }
 
@@ -837,8 +833,8 @@ state::parse_pgn_res state::parse_move(const pgnparser_ast::move &move) const
         // for all physical moves avilable in current state
         for(vec4 p : get_movable_pieces())
         {
-            char piece = to_white(piece_name(get_piece(p, player)));
-            bitboard_t bb = player ? m.gen_physical_moves<true>(p) : m.gen_physical_moves<false>(p);
+            char piece = to_white(piece_name(get_piece(p, present.c())));
+            bitboard_t bb = present.c() ? m.gen_physical_moves<true>(p) : m.gen_physical_moves<false>(p);
             for(int pos : marked_pos(bb))
             {
                 vec4 q(pos, p.tl());
@@ -889,8 +885,8 @@ state::parse_pgn_res state::parse_move(const pgnparser_ast::move &move) const
         bool is_relative = std::holds_alternative<pgnparser_ast::relative_board>(spm.to_board);
         for(vec4 p : get_movable_pieces())
         {
-            char piece = to_white(piece_name(get_piece(p, player)));
-            auto gen = player ? m.gen_superphysical_moves<true>(p) : m.gen_superphysical_moves<false>(p);
+            char piece = to_white(piece_name(get_piece(p, present.c())));
+            auto gen = present.c() ? m.gen_superphysical_moves<true>(p) : m.gen_superphysical_moves<false>(p);
             for(const auto &[p0, bb] : gen)
             {
                 for(int pos : marked_pos(bb))

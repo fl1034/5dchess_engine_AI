@@ -54,18 +54,18 @@ void append_multiverse(accumulator &hash, const multiverse &m)
     const auto [l_min, l_max] = m.get_lines_range();
     for(int l = l_min; l <= l_max; ++l)
     {
-        const turn_t start = m.get_timeline_start(l);
-        const turn_t end = m.get_timeline_end(l);
-        for(turn_t at = start; at <= end; at = next_turn(at))
+        const turn start = m.get_timeline_start(l);
+        const turn end = m.get_timeline_end(l);
+        for(turn at = start; at <= end; at = at.next_turn())
         {
-            const board *b = m.get_board_ptr(l, at.first, at.second);
+            const board *b = m.get_board_ptr(l, at.t(), at.c());
             if(b == nullptr)
                 continue;
             // Signed-to-uint64_t conversion is defined modulo 2^64, including
             // for negative timeline coordinates, independently of byte order.
             hash.add(static_cast<std::uint64_t>(l));
-            hash.add(static_cast<std::uint64_t>(at.first));
-            hash.add(at.second);
+            hash.add(static_cast<std::uint64_t>(at.t()));
+            hash.add(at.c());
             append_board(hash, *b);
         }
     }
@@ -91,7 +91,7 @@ std::uint64_t hash_state(const state &s)
     accumulator hash;
     hash.add(UINT64_C(0x73746174652d7632)); // "state-v2"
     append_multiverse(hash, s.m);
-    const auto [present, player] = s.get_present();
+    const auto [present, player] = s.get_present().get();
     hash.add(static_cast<std::uint64_t>(present));
     hash.add(player);
     hash.add(static_cast<std::uint8_t>(s.get_promotion_options()));

@@ -26,7 +26,9 @@ private:
         char piece;
         char file;
         unsigned number;
-        turn_t turn;
+        ::turn turn;
+        // A requested first turn of 0w has no representable predecessor.
+        bool before_turn_zero = false;
         std::string_view comment;
     } buffer{};
     std::optional<parse_error> furthest_error;
@@ -35,7 +37,7 @@ private:
     void record_expected(std::vector<std::string> expected);
 public:
     
-    pgnparser(std::string msg, bool check_turn_number=true, turn_t start_turn=std::make_pair(1,false));
+    pgnparser(std::string msg, bool check_turn_number=true, turn start_turn={1,false});
     void next_token();
     void test_lexer();
      

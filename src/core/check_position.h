@@ -19,16 +19,16 @@ class check_position {
     struct line_view {
         bool exists = false;
         bool in_base = false;
-        turn_t start{};
-        turn_t end{};
-        turn_t added_start{};
+        turn start{};
+        turn end{};
+        turn added_start{};
         const board *added = nullptr;
     };
     const state &base;
     int first_line;
     std::vector<line_view> lines;
 
-    static check_position for_present(const state &s, turn_t present);
+    static check_position for_present(const state &s, turn present);
 
     template<bool C, check_emitter Emit>
     bool scan_physical(vec4 p0, const board &source,
@@ -80,7 +80,7 @@ public:
     static check_position for_move_candidates(const state &&) = delete;
 
     /* Borrowed result board first visible at (l,t,c). gives_check() also uses
-       it at next_turn({t,c}). */
+       it at turn{t,c}.next_turn(). */
     struct board_overlay {
         int l;
         int t;
@@ -99,8 +99,8 @@ public:
 
     /* Extend a timeline by one turn, or start a reserved empty one. The borrowed
        board stays in this view; each timeline accepts at most one added board. */
-    void add_board(int l, turn_t at, const board &b);
-    void add_board(int, turn_t, const board &&) = delete;
+    void add_board(int l, turn at, const board &b);
+    void add_board(int, turn, const board &&) = delete;
 
     /* Return nullptr when the turn is absent from this view. */
     const board *get_board_ptr(int l, int t, bool c) const;

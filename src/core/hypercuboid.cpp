@@ -115,7 +115,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     auto [mandatory_timelines, optional_timelines, unplayable_timelines] = s.get_timeline_status();
     auto playable_timelines = concat_vectors(mandatory_timelines, optional_timelines);
     assert(!s.test_present());
-    auto [present_t, player] = s.get_present();
+    const bool player = s.get_present().c();
 
     for(index_t axis = 0; axis < static_cast<index_t>(playable_timelines.size()); axis++)
     {
@@ -333,7 +333,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
             for(full_move m : *arriving_moves)
             {
                 // only store (possible) non-branching jump arrives
-                auto [last_t, last_c] = s.get_timeline_end(m.to.l());
+                auto [last_t, last_c] = s.get_timeline_end(m.to.l()).get();
                 if(m.to.t() == last_t &&player == last_c)
                 {
                     assert(m.from.tl()!=m.to.tl());
@@ -520,7 +520,7 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
     remember t, l are stored as the higher part of a vec4
      */
     std::map<vec4, index_t> jump_map;
-    auto [t, c] = s.get_present();
+    const bool c = s.get_present().c();
     
     for(index_t n = new_axis; n < dimension(); n++)
     {
@@ -544,7 +544,7 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
             const index_t im = p[m];
             const entry &loc2 = axis_coords[m][im];
             if(std::holds_alternative<null_entry>(loc2)
-               && s.get_timeline_end(to.l()) == std::make_pair(to.t(), c))
+               && s.get_timeline_end(to.l()) == turn{to.t(), c})
             {
                 /* ban these combinations:
                  -[m,xm] the null_entry on (l', t'); with
@@ -626,7 +626,7 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
 
 std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
 {
-    const bool c = s.get_present().second;
+    const bool c = s.get_present().c();
     const auto [l0_min, l0_max] = s.get_initial_lines_range();
     const auto [l_min, l_max] = s.get_lines_range();
     index_t branches = 0;
@@ -649,19 +649,19 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
         return c ? l_min - offset : l_max + offset;
     };
     const auto branch_end = [&](const entry &loc) {
-        return next_turn(turn_t{std::get<arriving_entry>(loc).m.to.t(), c});
+        return turn{std::get<arriving_entry>(loc).m.to.t(), c}.next_turn();
     };
 
-    turn_t present{std::numeric_limits<int>::max(), true};
+    turn present = turn::max;
     std::optional<index_t> pass_axis;
     int witness_line = 0;
     for(int l = std::max(l_min, active_min); l <= std::min(l_max, active_max); ++l)
     {
-        turn_t end = s.get_timeline_end(l);
+        turn end = s.get_timeline_end(l);
         const auto axis = line_axes.find(l);
         const bool moved = axis != line_axes.end()
             && !std::holds_alternative<null_entry>(axis_coords[axis->second][p[axis->second]]);
-        if(moved) end = next_turn(end);
+        if(moved) end = end.next_turn();
         if(end <= present)
         {
             witness_line = l;
@@ -674,14 +674,14 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
     {
         const int l = branch_line(n);
         if(l < active_min || l > active_max) continue;
-        const turn_t end = branch_end(axis_coords[n][p[n]]);
+        const turn end = branch_end(axis_coords[n][p[n]]);
         if(end < present)
         {
             present = end;
             pass_axis = std::nullopt;
         }
     }
-    if(present.second != c)
+    if(present.c() != c)
     {
         return std::nullopt;
     }
@@ -747,7 +747,7 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
 std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
 {
     dprint("HC_info::find_checks()");
-    auto [t, c] = s.get_present();
+    const bool c = s.get_present().c();
     auto [lo, hi] = s.get_lines_range();
     if (!line_axes.empty()) {
         lo = std::min(lo, line_axes.begin()->first);
@@ -760,7 +760,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
         const auto [old_t, old_l] = extract_tl(loc);
         (void)old_l;
         // Branch arrivals use the axis's new line, not their old hotspot line.
-        newstate.add_board(l, next_turn({old_t,c}), extract_board(loc));
+        newstate.add_board(l, turn{old_t,c}.next_turn(), extract_board(loc));
     }
     // HC construction has already filtered physical checks on resulting boards.
     if(auto maybe_check = newstate.first_check(!c, false))
@@ -1035,7 +1035,7 @@ moveseq HC_info::to_action(const point &p) const
             mvs.push_back(std::get<arriving_entry>(loc).m);
         }
     }
-    auto [t,c] = s.get_present();
+    const bool c = s.get_present().c();
     if(c)
     {
         std::reverse(mvs.begin(), mvs.end());

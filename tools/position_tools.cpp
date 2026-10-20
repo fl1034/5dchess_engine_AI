@@ -327,7 +327,7 @@ int run_stats(int argc, const char *argv[])
         const auto move_space = count_move_space(s);
         const auto [width, height] = s.get_board_size();
         const std::size_t boards = s.get_boards().size();
-        const bool black = s.get_present().second;
+        const bool black = s.get_present().c();
         if(format == output_format::json)
         {
             std::cout << std::setprecision(std::numeric_limits<float>::max_digits10)
@@ -490,8 +490,7 @@ int run_checkmate(int argc, const char *argv[])
     (void)maximum;
     return with_position([&](const parsed_position &position) {
         state s = *position.value;
-        const auto [present, player] = s.get_present();
-        (void)present;
+        const bool player = s.get_present().c();
         if(auto moves = find_first_action(s, mode))
         {
             std::cout << "Not checkmate: ";

@@ -136,7 +136,7 @@ float linear_cutoff_evaluation::evaluate(const state &position) const
         weights.begin(),
         0.0f);
     const float player_score = WINNING_SCORE * std::tanh(linear_score);
-    return position.get_present().second ? -player_score : player_score;
+    return position.get_present().c() ? -player_score : player_score;
 }
 
 linear_cutoff_evaluation::result_type linear_cutoff_evaluation::mate_reward(

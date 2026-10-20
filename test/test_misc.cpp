@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <set>
 #include <type_traits>
@@ -12,6 +13,7 @@
 #include "generator.h"
 #include <cassert>
 #include "ordering.h"
+#include "turn.h"
 
 namespace integer_set_tests
 {
@@ -379,8 +381,55 @@ int run()
 }
 } /* namespace ordering_tests */
 
+namespace turn_tests
+{
+static_assert(sizeof(turn) == sizeof(int));
+static_assert(std::is_trivially_copyable_v<turn>);
+static_assert(turn{} == turn(0, false));
+static_assert(turn(0, false) < turn(0, true));
+static_assert(turn(0, true) < turn(1, false));
+static_assert(turn(1, false).next_turn() == turn(1, true));
+static_assert(turn(1, true).next_turn() == turn(2, false));
+static_assert(turn(1, false).previous_turn() == turn(0, true));
+static_assert(turn(0, true).previous_turn() == turn{});
+static_assert(turn::max.index() == std::numeric_limits<int>::max());
+static_assert(turn::max.t() == std::numeric_limits<int>::max() / 2);
+static_assert(turn::max.c());
+static_assert(turn(turn::max.t(), true) == turn::max);
+static_assert(turn::max.previous_turn().next_turn() == turn::max);
+
+constexpr bool increment_and_decrement()
+{
+    turn at{0, true};
+    if(at++ != turn(0, true) || at != turn(1, false)) return false;
+    if(&(++at) != &at || at != turn(1, true)) return false;
+    if(at-- != turn(1, true) || at != turn(1, false)) return false;
+    return &(--at) == &at && at == turn(0, true);
+}
+static_assert(increment_and_decrement());
+
+int run()
+{
+    for(int t = 0; t < 100; ++t)
+    {
+        for(bool c : {false, true})
+        {
+            const turn at{t, c};
+            assert(turn::from_index(at.index()) == at);
+            assert(at.get() == std::make_pair(t, c));
+            assert(at.to_string() == std::to_string(t) + (c ? "b" : "w"));
+        }
+    }
+    assert(turn::max.to_string() == std::to_string(turn::max.t()) + "b");
+    return 0;
+}
+} /* namespace turn_tests */
+
 int main()
 {
+    std::cerr << "Running turn tests\n";
+    if(const int result = turn_tests::run(); result != 0)
+        return result;
     std::cerr << "Running integer_set tests\n";
     if(const int result = integer_set_tests::run(); result != 0)
         return result;

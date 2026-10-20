@@ -59,7 +59,7 @@ int run_perftest(int argc, const char *argv[])
     pgnparser_ast::gametree *gt = &gt_root;
 
     state current_state = state::from_ast(g);
-    turn_t turn = {1,false};
+    turn turn = {1,false};
     while (true)
     {
         std::optional<moveseq> mvs;
@@ -155,15 +155,15 @@ int run_perftest(int argc, const char *argv[])
             std::cout << "0\n";
             if(current_state.has_phantom_check())
             {
-                std::cout << "Turn " << show_turn(turn) << ": Checkmate";
+                std::cout << "Turn " << turn.to_string() << ": Checkmate";
             }
             else
             {
-                std::cout << "Turn " << show_turn(turn) << ": Stalemate";
+                std::cout << "Turn " << turn.to_string() << ": Stalemate";
             }
             break;
         }
-        turn = next_turn(turn);
+        turn = turn.next_turn();
     }
     std::cout << "\n";
     return 0;

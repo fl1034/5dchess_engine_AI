@@ -94,21 +94,21 @@ std::string full_move::to_string() const
 
 vec4 full_move::new_position(const state &s) const
 {
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     const bool branching = from.tl() != to.tl()
-        && s.get_timeline_end(to.l()) != turn_t{to.t(), player};
+        && s.get_timeline_end(to.l()) != turn{to.t(), player};
     return vec4(to.x(), to.y(), to.t() + 1,
                 branching ? s.new_line() : to.l());
 }
 
 piece_t full_move::moved_piece(const state &s) const
 {
-    return s.get_piece(from, s.get_present().second);
+    return s.get_piece(from, s.get_present().c());
 }
 
 piece_t full_move::captured_piece(const state &s) const
 {
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     if (from.tl() == to.tl()) {
         const board *source = s.get_board_ptr(from.l(), from.t(), player);
         const bitboard_t origin = pmask(from.xy());
@@ -132,7 +132,7 @@ piece_t full_move::captured_piece(const state &s) const
 special_move_t full_move::move_type(const state &s) const
 {
     special_move_t result = special_move_t::NONE;
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     const board *source = s.get_board_ptr(from.l(), from.t(), player);
     const bitboard_t origin = pmask(from.xy());
     const auto height = s.get_board_size().second;
@@ -140,7 +140,7 @@ special_move_t full_move::move_type(const state &s) const
     if (!physical)
     {
         result |= special_move_t::SUPERPHYSICAL;
-        if (s.get_timeline_end(to.l()) != turn_t{to.t(), player})
+        if (s.get_timeline_end(to.l()) != turn{to.t(), player})
             result |= special_move_t::BRANCHING;
     }
     if (captured_piece(s) != NO_PIECE)
@@ -171,7 +171,7 @@ special_move_t full_move::move_type(const state &s) const
 
 std::string full_move::lan(const state &s, piece_t promote_to) const
 {
-    const bool player = s.get_present().second;
+    const bool player = s.get_present().c();
     const piece_t pic = to_white(piece_name(s.get_piece(from, player)));
     std::string result = to_string();
     if(promote_to != NO_PIECE
@@ -241,13 +241,13 @@ std::string ext_move::lan(const state &s) const
 int action::sort(std::vector<ext_move> &mvs, const state &s)
 {
     size_t rbranching_index = 0;
-    auto [present, player] = s.get_present();
+    const bool player = s.get_present().c();
     std::set<int> moved_lines;
     for(size_t i=0; i<mvs.size(); i++)
     {
         vec4 p = mvs[i].fm.from;
         vec4 q = mvs[i].fm.to;
-        auto tc1 = std::make_pair(q.t(), player);
+        const turn tc1{q.t(), player};
         auto tc2 = s.get_timeline_end(q.l());
         bool branching =  tc1 < tc2 || (tc1 == tc2 && moved_lines.contains(q.l()));
         moved_lines.insert(p.l());
@@ -362,7 +362,7 @@ std::string full_move::pgn(const state &s, piece_t pt, pgn_options options) cons
         const bool applied = after.apply_move<true>(prepared);
         if (applied)
         {
-            const bool moving_player = s.get_present().second;
+            const bool moving_player = s.get_present().c();
             const auto check_view = check_position::for_check_symbols(after);
             if (check_view.first_check(moving_player)) check_symbol = '+';
         }
@@ -375,7 +375,7 @@ std::string full_move::pgn_impl(const state &s, piece_t pt, pgn_options options,
 {
     std::ostringstream oss;
     vec4 p = from, q = to;
-    bool player = s.get_present().second;
+    bool player = s.get_present().c();
     piece_t pic = to_white(piece_name(s.get_piece(p, player)));
     auto display_from_tl = [&](bool from_tl) -> std::string {
         std::ostringstream oss;
@@ -443,7 +443,7 @@ std::string full_move::pgn_impl(const state &s, piece_t pt, pgn_options options,
         if(p.tl() != q.tl())
         {
             //        std::cout << "p=" << p << "\t q=" << q << "\t";        // superphysical move
-            if(std::pair{q.t(), player} < s.get_timeline_end(q.l()))
+            if(turn{q.t(), player} < s.get_timeline_end(q.l()))
             {
                 oss << ">>";
             }
@@ -652,7 +652,7 @@ std::pair<std::string, std::optional<mate_type>> action::pgn_advanced(
         for(size_t i = 0; i < mvs.size(); ++i)
         {
             const auto &[move, promote_to] = mvs[i];
-            const bool moving_player = final_state.get_present().second;
+            const bool moving_player = final_state.get_present().c();
             const ext_move prepared = promote_to == NO_PIECE
                 ? ext_move(move, final_state) : ext_move(move, promote_to);
             if(!final_state.apply_move<false>(prepared))
