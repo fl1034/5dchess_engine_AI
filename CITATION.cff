@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+type: software
+message: >-
+  If you use this software in research, please cite it using the metadata
+  in this file. If you reuse or substantially adapt this project's code,
+  including through AI-assisted rewriting or translation, please link to
+  https://github.com/ftxi/5dchess_engine in your project's README or 
+  acknowledgments.
+title: "5D Chess Engine"
+authors:
+  - family-names: "ftxi"
+repository-code: "https://github.com/ftxi/5dchess_engine"
+url: "https://ftxi.github.io/5dchess_engine/"
+license: BSD-2-Clause
+abstract: >-
+  A C++ engine and game logic library for 5D Chess With Multiverse
+  Time Travel, with Monte Carlo tree search, legal action generation,
+  checkmate detection, a web analyzer, and Python and JavaScript bindings.
+keywords:
+  - "5D Chess With Multiverse Time Travel"
+  - "5D chess"
+  - "chess engine"
+  - "Monte Carlo tree search"
+  - "split moves"
+  - "legal action generation"
+  - "game analysis"
