@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory_resource>
 #include <random>
 
@@ -57,7 +58,8 @@ std::optional<HC_info::move_boards> HC_info::get_move_boards(index_t axis, index
     if (const auto *physical = std::get_if<physical_entry>(&loc))
         return move_boards{physical->m, &physical->b, nullptr};
     if (const auto *arrival = std::get_if<arriving_entry>(&loc)) {
-        const auto source_axis = line_axes.at(arrival->m.from.l());
+        const auto source_axis = line_to_axis_unsafe(arrival->m.from.l());
+        assert(source_axis != no_axis);
         const auto &departure = std::get<departing_entry>(axis_coords[source_axis].at(arrival->idx));
         return move_boards{arrival->m, &arrival->b, &departure.b};
     }
@@ -107,19 +109,21 @@ std::tuple<std::vector<vec4>, int> get_move_path(const check_position &s, full_m
 std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
 {
     dprint("HC_info::build_HC()");
-    std::map<int, index_t> line_axes; // map from timeline index to axis index
-    std::vector<std::vector<entry>> axis_coords; // axis_coords[i] is the set of all moves on i-th playable board
-    std::vector<integer_set> universe_axes;
-    index_t new_axis, dimension;
-    std::vector<integer_set> nonbranching_axes, branching_axes;
-    auto [mandatory_timelines, optional_timelines, unplayable_timelines] = s.get_timeline_status();
-    auto playable_timelines = concat_vectors(mandatory_timelines, optional_timelines);
+    HC_info info(s);
+    std::vector<int> optional_timelines, unplayable_timelines;
+    std::tie(info.mandatory_lines, optional_timelines, unplayable_timelines)
+        = s.get_timeline_status();
+    auto playable_timelines = concat_vectors(info.mandatory_lines, optional_timelines);
     assert(!s.test_present());
     const bool player = s.get_present().c();
 
+    const auto [l_min, l_max] = s.get_lines_range();
+    // At most one branch axis is needed per existing playable timeline.
+    info.line_axes.reserve(static_cast<size_t>(l_max - l_min + 1) + playable_timelines.size());
+    info.line_axes.resize(l_max - l_min + 1, no_axis);
     for(index_t axis = 0; axis < static_cast<index_t>(playable_timelines.size()); axis++)
     {
-        line_axes.emplace(playable_timelines[axis], axis);
+        info.line_axes[playable_timelines[axis] - info.l0_offset] = axis;
     }
 
     std::array<std::byte, 32 * 1024> temporary_storage;
@@ -147,7 +151,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
 
     std::pmr::vector<arrival_bucket> arrivals(&temporary_resource);
     arrivals.reserve(
-        mandatory_timelines.size()
+        info.mandatory_lines.size()
         + optional_timelines.size()
         + unplayable_timelines.size());
     std::pmr::vector<axis_moves> moves_by_axis(&temporary_resource);
@@ -191,7 +195,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     
     for(vec4 from : s.get_all_pieces(playable_timelines))
     {
-        const index_t source_axis = line_axes.at(from.l());
+        const index_t source_axis = info.line_to_axis_unsafe(from.l());
         bool has_depart = false;
         for(const vec4 &to : s.gen_piece_move(from))
         {
@@ -239,15 +243,26 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
         departure_count += moves.departures.size();
         if(!moves.departures.empty()) max_branch++;
     }
+    assert(playable_timelines.size() + max_branch <= no_axis);
+    if(player)
+    {
+        info.line_axes.insert(info.line_axes.begin(), max_branch, no_axis);
+        info.l0_offset -= static_cast<int>(max_branch);
+    }
+    else
+    {
+        info.line_axes.resize(info.line_axes.size() + max_branch, no_axis);
+    }
     jump_indices.reserve(departure_count);
-    axis_coords.reserve(playable_timelines.size() + max_branch);
+    info.axis_coords.reserve(playable_timelines.size() + max_branch);
 
     // build nonbranching axes
     for(index_t axis = 0; axis < static_cast<index_t>(playable_timelines.size()); axis++)
     {
         const int l = playable_timelines[axis];
         const auto *arriving_moves = find_arrivals(l);
-        std::vector<entry> locs;
+        assert(info.line_to_axis_unsafe(l) == info.axis_coords.size());
+        auto &locs = info.axis_coords.emplace_back();
         locs.reserve(
             1 + moves_by_axis[axis].stays.size()
             + moves_by_axis[axis].departures.size()
@@ -362,13 +377,10 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
                 }
             }
         }
-        // save this axis
-        assert(line_axes.at(l) == axis_coords.size());
-        dprint("above in axis", line_axes.at(l));
-        axis_coords.push_back(std::move(locs));
+        dprint("above in axis", info.line_to_axis_unsafe(l));
     }
     
-    new_axis = static_cast<int>(axis_coords.size());
+    info.new_axis = info.dimension();
 
     // build branching axes
     // collect all branching moves
@@ -411,48 +423,47 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     const int sign = signum(s.new_line()); // sign for the new lines
     for(index_t i = 0; i < max_branch; i++)
     {
-        assert(!line_axes.contains(new_l+sign*i));
-        line_axes[new_l+sign*i] = new_axis + i;
-        axis_coords.push_back(locs);
+        const int line = new_l + sign * static_cast<int>(i);
+        assert(info.line_axes[line - info.l0_offset] == no_axis);
+        info.line_axes[line - info.l0_offset] = info.new_axis + i;
+        info.axis_coords.push_back(locs);
     }
-    dimension = static_cast<index_t>(axis_coords.size());
+    const index_t dimension = info.dimension();
     
     // build the whole space
-    universe_axes.reserve(dimension);
+    info.universe = HC(std::vector<integer_set>(dimension));
     for(index_t n = 0; n < dimension; n++)
     {
-        integer_set coords;
+        auto &coords = info.universe[n];
         // on nth dimension, the hypercube has coordinates 0, 1, ..., m avialible
-        // which corresponds to axis_coords[n][0], axis_coords[n][1], ...
-        for(index_t i = 0; i < static_cast<index_t>(axis_coords[n].size()); i++)
+        // which corresponds to info.axis_coords[n][0], info.axis_coords[n][1], ...
+        for(index_t i = 0; i < static_cast<index_t>(info.axis_coords[n].size()); i++)
         {
             coords.insert(i);
         }
-        universe_axes.push_back(std::move(coords));
     }
-    HC universe(std::move(universe_axes));
     
     // fill the idx of arriving moves
-    for(index_t n = 0; n < static_cast<index_t>(axis_coords.size()); n++)
+    for(index_t n = 0; n < static_cast<index_t>(info.axis_coords.size()); n++)
     {
-        for(index_t i = 0; i < static_cast<index_t>(axis_coords[n].size()); i++)
+        for(index_t i = 0; i < static_cast<index_t>(info.axis_coords[n].size()); i++)
         {
-            entry &loc = axis_coords[n][i];
+            entry &loc = info.axis_coords[n][i];
             if(auto *p = std::get_if<arriving_entry>(&loc))
             {
                 if(const index_t *departure = find_jump_index(p->m.from))
                 {
                     p->idx = *departure;
 #ifndef NDEBUG
-                    assert(line_axes.contains(p->m.from.l()));
-                    index_t nfrom = line_axes[p->m.from.l()];
-                    assert(p->m.from == std::get<departing_entry>(axis_coords[nfrom][p->idx]).from);
+                    index_t nfrom = info.line_to_axis_unsafe(p->m.from.l());
+                    assert(nfrom != no_axis);
+                    assert(p->m.from == std::get<departing_entry>(info.axis_coords[nfrom][p->idx]).from);
 #endif
                 }
                 else
                 {
                     dprint("ghost arrive at axis:", n, ";no:", i,";move pruned:", p->m);
-                    [[maybe_unused]] auto flag = universe[n].erase(i);
+                    [[maybe_unused]] auto flag = info.universe[n].erase(i);
                     assert(flag);
                 }
             }
@@ -460,38 +471,36 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     }
     
 #ifdef DEBUGMSG
-    for(const auto [k, v]: line_axes)
+    for(size_t offset = 0; offset < info.line_axes.size(); ++offset)
     {
-        dprint("line", k, "=>", "axis", v);
+        const index_t axis = info.line_axes[offset];
+        if(axis == no_axis) continue;
+        dprint("line", info.l0_offset + static_cast<int>(offset), "=>", "axis", axis);
     }
 #endif
     
     // split the search space by number of branches
-    HC hc_n_lines = universe;
+    HC hc_n_lines = info.universe;
     integer_set singleton = {0}, non_null;
-    if(new_axis < dimension)
+    if(info.new_axis < dimension)
     {
-        for(index_t i = 1; i < static_cast<index_t>(axis_coords[new_axis].size()); i++)
+        for(index_t i = 1; i < static_cast<index_t>(info.axis_coords[info.new_axis].size()); i++)
         {
             non_null.insert(i);
         }
         // non_null = {1,2,...,number of branching moves}
-        for(index_t n = new_axis; n < dimension; n++)
+        for(index_t n = info.new_axis; n < dimension; n++)
         {
             hc_n_lines[n] = singleton;
         }
     }
     search_space ss{{hc_n_lines}};
-    for(index_t n = new_axis; n < dimension; n++)
+    for(index_t n = info.new_axis; n < dimension; n++)
     {
         hc_n_lines[n] = non_null;
         ss.push_front(hc_n_lines); // prefer lesser branching moves
     }
-    return {
-        HC_info(s, std::move(line_axes), std::move(axis_coords),
-                std::move(universe), new_axis, std::move(mandatory_timelines)),
-        std::move(ss)
-    };
+    return {std::move(info), std::move(ss)};
 }
 
 
@@ -538,9 +547,8 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
         /* case one: there is a branching move (l0,t0) >> (l',t') ~> new_l, but
          (l',t') is a playable board in which the corresponding played move
          is a pass */
-        if(line_axes.contains(to.l()))
+        if(const index_t m = line_to_axis_unsafe(to.l()); m != no_axis)
         {
-            const index_t m = line_axes.at(to.l());
             const index_t im = p[m];
             const entry &loc2 = axis_coords[m][im];
             if(std::holds_alternative<null_entry>(loc2)
@@ -658,16 +666,16 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
     for(int l = std::max(l_min, active_min); l <= std::min(l_max, active_max); ++l)
     {
         turn end = s.get_timeline_end(l);
-        const auto axis = line_axes.find(l);
-        const bool moved = axis != line_axes.end()
-            && !std::holds_alternative<null_entry>(axis_coords[axis->second][p[axis->second]]);
+        const index_t axis = line_to_axis_unsafe(l);
+        const bool moved = axis != no_axis
+            && !std::holds_alternative<null_entry>(axis_coords[axis][p[axis]]);
         if(moved) end = end.next_turn();
         if(end <= present)
         {
             witness_line = l;
             present = end;
-            pass_axis = axis != line_axes.end() && !moved
-                ? std::optional<index_t>{axis->second} : std::nullopt;
+            pass_axis = axis != no_axis && !moved
+                ? std::optional<index_t>{axis} : std::nullopt;
         }
     }
     for(index_t n = new_axis; n < new_axis + branches; ++n)
@@ -748,13 +756,12 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
 {
     dprint("HC_info::find_checks()");
     const bool c = s.get_present().c();
-    auto [lo, hi] = s.get_lines_range();
-    if (!line_axes.empty()) {
-        lo = std::min(lo, line_axes.begin()->first);
-        hi = std::max(hi, line_axes.rbegin()->first);
-    }
-    check_position newstate(s, lo, hi);
-    for (const auto &[l, axis] : line_axes) {
+    check_position newstate(s, l0_offset,
+        l0_offset + static_cast<int>(line_axes.size()) - 1);
+    for(size_t offset = 0; offset < line_axes.size(); ++offset) {
+        const index_t axis = line_axes[offset];
+        if(axis == no_axis) continue;
+        const int l = l0_offset + static_cast<int>(offset);
         const entry &loc = axis_coords[axis][p[axis]];
         if (std::holds_alternative<null_entry>(loc)) continue;
         const auto [old_t, old_l] = extract_tl(loc);
@@ -780,9 +787,8 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
          ban all moves that allows the same piece hostile piece remain in that position
          */
         slice problem;
-        if(line_axes.contains(check.from.l()))
+        if(const index_t n1 = line_to_axis_unsafe(check.from.l()); n1 != no_axis)
         {
-            index_t n1 = line_axes.at(check.from.l());
             integer_set not_taking;
             for(index_t i : hc[n1])
             {
@@ -836,9 +842,8 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
          Otherwise, don't alter that axis futher.
          */
         int l2 = check.to.l();
-        if(line_axes.contains(l2))
+        if(const index_t n2 = line_to_axis_unsafe(l2); n2 != no_axis)
         {
-            index_t n2 = line_axes.at(l2);
             const entry &loc0 = axis_coords[n2][p[n2]];
             if(std::holds_alternative<null_entry>(loc0) || !is_next(extract_tl(loc0).first, check.to.t()))
             {
@@ -880,9 +885,8 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
         for(vec4 crossed : path)
         {
 //            dprint("should cross", crossed.l());
-            if(line_axes.contains(crossed.l()))
+            if(const index_t n = line_to_axis_unsafe(crossed.l()); n != no_axis)
             {
-                index_t n = line_axes.at(crossed.l());
                 const entry &loc0 = axis_coords[n][p[n]];
                 if(std::holds_alternative<null_entry>(loc0) || !is_next(extract_tl(loc0).first, crossed.t()))
                 {
@@ -1023,9 +1027,10 @@ generator<moveseq> HC_info::iterative_search(search_space ss) const &
 moveseq HC_info::to_action(const point &p) const
 {
     std::vector<full_move> mvs;
-    for(const auto &[l,i] : line_axes)
+    for(const index_t axis : line_axes)
     {
-        const entry &loc = axis_coords[i][p[i]];
+        if(axis == no_axis) continue;
+        const entry &loc = axis_coords[axis][p[axis]];
         if(std::holds_alternative<physical_entry>(loc))
         {
             mvs.push_back(std::get<physical_entry>(loc).m);

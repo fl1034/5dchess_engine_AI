@@ -4,7 +4,8 @@
 #ifndef HYPERCUBOID_H
 #define HYPERCUBOID_H
 
-#include <map>
+#include <cassert>
+#include <limits>
 #include <set>
 #include <vector>
 #include <variant>
@@ -124,18 +125,25 @@ class HC_info
     const static board &extract_board(const entry &e);
     static std::pair<int, int> extract_tl(const entry &e);
     state s;
-    std::map<int, index_t> line_axes;
+    constexpr static index_t no_axis = std::numeric_limits<index_t>::max();
+    int l0_offset;
+    std::vector<index_t> line_axes;
     std::vector<std::vector<entry>> axis_coords;
     HC universe;
     index_t new_axis;
     std::vector<int> mandatory_lines;
 
-    HC_info(state position, std::map<int, index_t> lines,
-            std::vector<std::vector<entry>> coordinates, HC uni,
-            index_t first_branch, std::vector<int> mandatory) noexcept
-        : s(std::move(position)), line_axes(std::move(lines)),
-          axis_coords(std::move(coordinates)), universe(std::move(uni)),
-          new_axis(first_branch), mandatory_lines(std::move(mandatory)) {}
+    // The caller must establish that line is in range; missing axes return no_axis.
+    index_t line_to_axis_unsafe(int line) const noexcept {
+        assert(line >= l0_offset
+            && static_cast<unsigned int>(line) - static_cast<unsigned int>(l0_offset)
+                < line_axes.size());
+        return line_axes[line - l0_offset];
+    }
+
+    explicit HC_info(const state &position)
+        : s(position), l0_offset(position.get_lines_range().first),
+          universe({}), new_axis(0) {}
 
 public:
     const state &get_state() const & noexcept { return s; }
@@ -146,9 +154,14 @@ public:
     index_t first_branch_axis() const noexcept { return new_axis; }
     // Includes prospective branching lines; absent timelines have no axis.
     std::optional<index_t> line_to_axis(int line) const noexcept {
-        const auto it = line_axes.find(line);
-        if(it == line_axes.end()) return std::nullopt;
-        return it->second;
+        if(line < l0_offset) return std::nullopt;
+        // Unsigned subtraction also handles arbitrary int inputs without overflow.
+        const auto offset = static_cast<unsigned int>(line)
+                          - static_cast<unsigned int>(l0_offset);
+        if(offset >= line_axes.size()) return std::nullopt;
+        const index_t axis = line_axes[offset];
+        if(axis == no_axis) return std::nullopt;
+        return axis;
     }
 
     semimove get_semimove(index_t n, index_t i) const;

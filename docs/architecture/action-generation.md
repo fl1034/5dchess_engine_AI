@@ -18,6 +18,7 @@ see [move-generation.md](move-generation.md).
 
 - `HC_info::build_HC(state)`: returns the search context and its matching search space.
 - `info.search(space)`, `iterative_search(space)`, and `stable_search(space)`: lazily enumerate legal `moveseq` results. `search` and `iterative_search` also accept an ordering object.
+- `info.line_to_axis(line)`: returns the axis for an existing playable timeline or a prospective branch timeline, or `std::nullopt` if none exists.
 - `info.get_semimove(axis, coordinate)` and `get_move_boards(axis, coordinate)`: inspect candidates and their result boards.
 - `info.take_point(hc)`, `find_problem(point, hc)`, and `to_action(point)`: select a candidate, identify invalid regions, and convert a consistent candidate to a move sequence.
 - `graph::add_edge(u, v)` and `find_matching(include)`: construct pairings and find a matching covering the required vertices.

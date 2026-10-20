@@ -33,7 +33,8 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
                     }
                 },
                 [&](const arriving_entry &arriving) {
-                    index_t from_axis = line_axes.at(arriving.m.from.l());
+                    index_t from_axis = line_to_axis_unsafe(arriving.m.from.l());
+                    assert(from_axis != no_axis);
                     if(!hc[from_axis].contains(arriving.idx))
                     {
                         ghost_arrive_indices.insert(i);

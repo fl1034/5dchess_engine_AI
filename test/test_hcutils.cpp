@@ -226,6 +226,43 @@ void test_search_branch_order()
     }
 }
 
+void test_line_axis_lookup()
+{
+    for(const auto layout : {timeline_layout::odd, timeline_layout::even})
+    {
+        for(bool player : {false, true})
+        {
+            std::vector<boards_info_t> boards;
+            for(int l = -2; l <= 2; ++l)
+                boards.emplace_back(l, l == -1 ? 4 : 3,
+                    l == -1 ? !player : player, "2nk/4/4/KN2");
+            const state s(multiverse(layout, boards, 4, 4));
+            assert(s.get_present().c() == player);
+            auto [info, space] = HC_info::build_HC(s);
+            const auto [mandatory, optional, unplayable] = s.get_timeline_status();
+            index_t axis = 0;
+            for(const auto &lines : {mandatory, optional})
+                for(int line : lines)
+                    assert(info.line_to_axis(line) == axis++);
+            assert(axis == info.first_branch_axis());
+            assert(!unplayable.empty());
+            for(int line : unplayable) assert(!info.line_to_axis(line));
+
+            const int branch_count = static_cast<int>(info.dimension() - axis);
+            assert(branch_count > 0);
+            const int first_branch = s.new_line();
+            for(int i = 0; i < branch_count; ++i)
+                assert(info.line_to_axis(first_branch + (player ? -i : i)) == axis++);
+            const int lo = -2 - (player ? branch_count : 0);
+            const int hi = 2 + (player ? 0 : branch_count);
+            assert(!info.line_to_axis(lo - 1));
+            assert(!info.line_to_axis(hi + 1));
+            assert(!info.line_to_axis(std::numeric_limits<int>::min()));
+            assert(!info.line_to_axis(std::numeric_limits<int>::max()));
+        }
+    }
+}
+
 void test_reactivated_present()
 {
     // Earlier reactivated endpoints excuse the pass on L0; endpoints on the
@@ -319,6 +356,7 @@ int run()
     test_backward_slice_removal();
     test_backward_slice_order();
     test_search_branch_order();
+    test_line_axis_lookup();
     test_reactivated_present();
     //test_remove();
 //    HC h2 = {{{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}}};
