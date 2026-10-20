@@ -423,7 +423,9 @@ EMSCRIPTEN_BINDINGS(engine) {
         }))
         .function("can_undo", &game::can_undo)
         .function("can_redo", &game::can_redo)
-        .function("can_submit", &game::can_submit)
+        .function("can_submit", optional_override([](const game &g, val allow) {
+            return g.can_submit(!allow.isUndefined() && !allow.isNull() && allow.as<bool>());
+        }))
         .function("undo", &game::undo)
         .function("redo", &game::redo)
         .function("apply_move", optional_override([](game &g, val obj) {
@@ -435,7 +437,9 @@ EMSCRIPTEN_BINDINGS(engine) {
             );
             return g.apply_move(m);
         }))
-        .function("submit", &game::submit)
+        .function("submit", optional_override([](game &g, val allow) {
+            return g.submit(!allow.isUndefined() && !allow.isNull() && allow.as<bool>());
+        }))
         .function("preview_move", optional_override([](game &g, val obj) {
             piece_t pt = obj.hasOwnProperty("promote_to") ? static_cast<piece_t>(obj["promote_to"].as<int>()) : NO_PIECE;
             return g.preview_move(ext_move(

@@ -225,7 +225,7 @@ void engine::mainloop()
                         {
                             best_move_str += ' ';
                             best_move_str += ext_mv.lan(output_state);
-                            output_state.apply_move(ext_mv);
+                            output_state.apply_move<true>(ext_mv);
                         }
                         return best_move_str;
                     }
@@ -433,6 +433,12 @@ void engine::set_position(const std::string &position, const std::string &moves)
         candidate.emplace(create_multiverse_from_variant_setup(vs));
     }
 
+    if(candidate->find_royal_exposure(true))
+    {
+        send_info("position error: initial setup exposes a royal");
+        return;
+    }
+
     // apply moves if any
     std::istringstream iss(moves);
     std::string move_str;
@@ -451,7 +457,7 @@ void engine::set_position(const std::string &position, const std::string &moves)
             try
             {
                 const ext_move move{move_str};
-                const auto normalized = candidate->normalize_promotion(move);
+                const auto normalized = candidate->normalize_promotion(move.fm, move.promote_to);
                 if(!normalized || !candidate->apply_move(*normalized))
                 {
                     send_info("position error: cannot apply move " + move_str);

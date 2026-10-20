@@ -94,12 +94,20 @@ int run_perftest(int argc, const char *argv[])
                     const auto &[act, last_gt] = *(variations.end() - 1);
                     for(const auto &mv: act.moves)
                         current_state.apply_move_ast(mv, g.source_text);
+                    const auto submit_action = [&] {
+                        if(!current_state.test_present()) return false;
+                        current_state.submit<true>();
+                        if(auto exposure = current_state.find_royal_exposure(false))
+                            throw pgn_validation_error(*exposure,
+                                pgn_validation_error::make_subject(act, g.source_text));
+                        return true;
+                    };
                     if(std::holds_alternative<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome))
                     {
                         const auto &last_variations = std::get<pgnparser_ast::gametree::variations_t>(last_gt->variations_or_outcome);
                         if(!last_variations.empty())
                         {
-                            bool flag = current_state.submit();
+                            bool flag = submit_action();
                             if(!flag)
                             {
                                 throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
@@ -108,7 +116,7 @@ int run_perftest(int argc, const char *argv[])
                         }
                         else
                         {
-                            bool flag = current_state.submit();
+                            bool flag = submit_action();
                             if(!flag)
                             {
                                 const pgn_validation_error error(pgn_validation_error::present_not_advanced{},
@@ -121,7 +129,7 @@ int run_perftest(int argc, const char *argv[])
                     {
                         pgnparser_ast::token_t outcome = std::get<pgnparser_ast::token_t>(last_gt->variations_or_outcome);
                         (void)outcome;
-                        bool flag = current_state.submit();
+                        bool flag = submit_action();
                         if(!flag)
                         {
                             throw pgn_validation_error(pgn_validation_error::present_not_advanced{},

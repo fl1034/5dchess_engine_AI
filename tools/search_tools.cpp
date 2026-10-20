@@ -23,7 +23,7 @@ generator<moveseq> naive_search_impl(state s, moveseq mvs, int k, bool b)
 {
     if(s.find_checks(!C).first().has_value())
         co_return;
-    if(s.can_submit())
+    if(s.test_present())
         co_yield mvs;
     for(vec4 p : s.get_movable_pieces())
     {
@@ -61,7 +61,7 @@ std::size_t count_balanced(state s, int limit)
             for(full_move m : x)
             {
                 std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
-                t.apply_move(m);
+                t.apply_move<true>(m);
             }
             std::cout << "\n";
         }
@@ -84,7 +84,7 @@ std::size_t count_stable(state s, int limit)
             for(full_move m : x)
             {
                 std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
-                t.apply_move(m);
+                t.apply_move<true>(m);
             }
             std::cout << "\n";
         }
@@ -107,7 +107,7 @@ std::size_t count_iterative(state s, int limit)
             for(full_move m : x)
             {
                 std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
-                t.apply_move(m);
+                t.apply_move<true>(m);
             }
             std::cout << "\n";
         }
@@ -129,7 +129,7 @@ std::size_t count_naive(state s, int limit)
             for(full_move m : x)
             {
                 std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
-                t.apply_move(m);
+                t.apply_move<true>(m);
             }
             std::cout << "\n";
         }

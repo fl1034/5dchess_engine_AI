@@ -403,7 +403,9 @@ void test_royal_exposure()
         // An unresolved check is detected both before and after submission.
         assert(ordinary.apply_move<true>(full_move(vec4(3,3,1,0),vec4(3,4,1,0))));
         assert(ordinary.find_royal_exposure(true));
-        assert(ordinary.submit());
+        assert(ordinary.test_present());
+        assert(!ordinary.submit());
+        assert(ordinary.submit<true>());
         assert(ordinary.find_royal_exposure(false));
 
         // Action validation also detects cross-board captures.

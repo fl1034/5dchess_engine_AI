@@ -204,7 +204,7 @@ std::ostream &operator<<(std::ostream &os, const full_move &fm)
 ext_move::ext_move(full_move move, const state &s)
     : fm(move), promote_to(NO_PIECE)
 {
-    const auto normalized = s.normalize_promotion(*this);
+    const auto normalized = s.normalize_promotion(move);
     if(!normalized)
         throw std::invalid_argument("ext_move: cannot normalize promotion");
     *this = *normalized;
@@ -230,7 +230,7 @@ std::string ext_move::to_string() const
 
 std::string ext_move::lan(const state &s) const
 {
-    const auto normalized = s.normalize_promotion(*this);
+    const auto normalized = s.normalize_promotion(fm, promote_to);
     return normalized
         ? fm.lan(s, normalized->promote_to)
         : "---INVALID MOVE---";
@@ -289,7 +289,7 @@ action action::from_vector(const std::vector<ext_move> &mvs, const state &s)
     a.branching_index = sort(a.mvs, s);
     for(ext_move &move : a.mvs)
     {
-        const auto normalized = s.normalize_promotion(move);
+        const auto normalized = s.normalize_promotion(move.fm, move.promote_to);
         if(!normalized)
         {
             throw std::runtime_error(
@@ -325,7 +325,7 @@ std::string action::lan(const state &initial_state) const
     std::string result;
     for(const auto &raw_move : mvs)
     {
-        const auto normalized = s.normalize_promotion(raw_move);
+        const auto normalized = s.normalize_promotion(raw_move.fm, raw_move.promote_to);
         if(!normalized)
         {
             return "---INVALID ACTION---";
@@ -581,7 +581,7 @@ std::string full_move::pgn_impl(const state &s, piece_t pt, pgn_options options,
 
 std::string ext_move::pgn(const state &s, pgn_options options) const
 {
-    const auto normalized = s.normalize_promotion(*this);
+    const auto normalized = s.normalize_promotion(fm, promote_to);
     return normalized
         ? fm.pgn(s, normalized->promote_to, options)
         : "---INVALID MOVE---";
@@ -598,7 +598,7 @@ std::string action::pgn_impl(
     bool multimove = mvs.size() > 1;
     for(size_t i = 0; i < mvs.size(); i++)
     {
-        const auto normalized = s.normalize_promotion(mvs[i]);
+        const auto normalized = s.normalize_promotion(mvs[i].fm, mvs[i].promote_to);
         if(!normalized)
         {
             return "---INVALID ACTION---";
@@ -690,7 +690,7 @@ std::pair<std::string, std::optional<mate_type>> action::pgn_advanced(
         std::vector<ext_move> witness_moves = witness.mvs;
         const bool has_branching_jump = sort(witness_moves, final_state)
             < static_cast<int>(witness_moves.size());
-        mt = has_branching_jump && final_state.is_softmate()
+        mt = has_branching_jump && final_state.get_mate_type(true) == mate_type::SOFTMATE
             ? mate_type::SOFTMATE
             : mate_type::NONE;
     }

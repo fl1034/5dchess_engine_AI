@@ -114,7 +114,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     std::vector<integer_set> nonbranching_axes, branching_axes;
     auto [mandatory_timelines, optional_timelines, unplayable_timelines] = s.get_timeline_status();
     auto playable_timelines = concat_vectors(mandatory_timelines, optional_timelines);
-    assert(!s.can_submit());
+    assert(!s.test_present());
     auto [present_t, player] = s.get_present();
 
     for(index_t axis = 0; axis < static_cast<index_t>(playable_timelines.size()); axis++)

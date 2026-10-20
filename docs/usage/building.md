@@ -43,7 +43,7 @@ Native regression test executables are grouped by functionality:
 |---|---|
 | `test_action` | Actions, semimoves, move application, and promotions |
 | `test_movegen` | Pawn and brawn movement, captures, en passant, promotion, and castling on small boards and with interior rooks, including move application and physical attack restrictions |
-| `test_game` | Multiverse ownership and layout, indexed game trees, child operations, hashing, and temporary move previews |
+| `test_game` | Multiverse ownership and layout, indexed game trees, child operations, hashing, temporary move previews, submission policy, and illegal history |
 | `test_check_position` | Check views and phantom checks |
 | `test_hcutils` | Hypercuboid geometry and graph matching |
 | `test_move_evaluation` | Move scoring and HC semimove features |
@@ -129,6 +129,12 @@ python -m unittest discover -s scripts/test -v
 ```
 
 To use the graphical interface with python backend, go to the base directory of this project and run `python scripts/host.py`. Then, visit `http://127.0.0.1:5000` with your favourite browser.
+
+When using the Python game API, `game.can_submit()` and `game.submit()` reject
+turns that leave a friendly royal exposed. To inspect such history explicitly,
+pass `allow_submit_with_checks=True` to both methods. This still requires a
+completed turn and marks accepted exposed actions as illegal history. Loading
+such games separately requires `game.from_pgn(pgn, allow_illegal_history=True)`.
 
 ## WebAssembly
 

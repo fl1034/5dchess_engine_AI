@@ -462,6 +462,56 @@ void test_invalid_position_history_recovers()
     assert(recovery_io_ptr->output_lines[4] == "bye");
 }
 
+void test_invalid_source_and_square_rejection()
+{
+    auto io = std::make_unique<scripted_io_handler>(
+        std::vector<scripted_io_handler::scripted_line>{});
+    auto *io_ptr = io.get();
+    dummy_engine eng(std::move(io));
+    const std::string position = "size 4x4 odd fen [3k/P3/4/K*3:0:1:w]";
+    eng.set_position(position, "");
+    const auto before = eng.get_current_state()->get_boards();
+    const auto present = eng.get_current_state()->get_present();
+    for(const std::string &moves : {
+        "(999T1)a3a4", "(999T1)a3a2", "(0T0)a3a4",
+        "(0T1)e3a4", "(0T1)a3e4", "(0T1)b2b3", "(0T1)d4c4",
+        "(0T1)a3a4 (0T1)a1b1"})
+    {
+        const auto outputs = io_ptr->output_lines.size();
+        eng.set_position(position, moves);
+        assert(io_ptr->output_lines.size() == outputs + 1);
+        assert(io_ptr->output_lines.back().starts_with(
+            "info position error: cannot apply move "));
+        assert(eng.get_current_state()->get_boards() == before);
+        assert(eng.get_current_state()->get_present() == present);
+    }
+    eng.set_position(position, "(0T1)a3a4");
+    assert(eng.get_current_state()->get_piece(vec4(0, 3, 1, 0), true) == QUEEN_W);
+}
+
+void test_position_royal_safety()
+{
+    auto io = std::make_unique<scripted_io_handler>(
+        std::vector<scripted_io_handler::scripted_line>{});
+    auto *output = io.get();
+    dummy_engine eng(std::move(io));
+    eng.set_position("startpos", "");
+    const auto before = eng.get_current_state()->get_boards();
+    eng.set_position("size 8x8 odd fen [R6k/8/8/8/8/8/8/K7:0:1:w]", "");
+    assert(output->output_lines.size() == 1);
+    assert(output->output_lines.back() == "info position error: initial setup exposes a royal");
+    assert(eng.get_current_state()->get_boards() == before);
+    const std::string position = "size 8x8 odd fen [r6k/8/8/8/8/8/R7/K7:0:1:w]";
+    eng.set_position(position, "(0T1)a2b2 submit");
+    assert(output->output_lines.size() == 2);
+    assert(output->output_lines.back() == "info position error: cannot submit move history");
+    assert(eng.get_current_state()->get_boards() == before);
+    // An incomplete draft may expose a royal until the action is submitted.
+    eng.set_position(position, "(0T1)a2b2");
+    assert(eng.get_current_state()->test_present());
+    assert(!eng.get_current_state()->can_submit());
+}
+
 void test_debug_output_identifies_option_types()
 {
     // Debug output uses readable type names for every option alternative.
@@ -488,6 +538,8 @@ int main()
     test_scripted_protocol_and_setoption();
     test_position_defaults_to_queen_promotion();
     test_invalid_position_history_recovers();
+    test_invalid_source_and_square_rejection();
+    test_position_royal_safety();
     test_debug_output_identifies_option_types();
     std::cout << "All scripted protocol tests passed.\n";
 

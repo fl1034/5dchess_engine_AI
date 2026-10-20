@@ -67,10 +67,14 @@ public:
 
     /*
      can_apply: Check if the move can be applied to the current state. If yes, return the new state after applying the move; otherwise return std::nullopt.
-     Note that this function is different from `apply_move` in that it does not change the current state as a side effect.
+     Move overloads mirror checked apply_move promotion handling and do not submit.
+     The action overload also performs checked submission. All overloads leave
+     the source state unchanged.
     */
-    std::optional<state> can_apply(full_move fm, piece_t promote_to = NO_PIECE) const;
+    std::optional<state> can_apply(full_move fm) const;
+    std::optional<state> can_apply(ext_move mv) const;
     std::optional<state> can_apply(const action &act) const;
+    bool test_present() const;
     std::optional<state> can_submit() const;
     
     /*
@@ -86,8 +90,8 @@ public:
     bool apply_move(ext_move mv);
     /*
      submit(): Submit the current state as a completed action.
-     + UNSAFE=false validates the action actually pushes the Present foward, it does not
-     detect whether a friendly royal piece is put in check.
+     + UNSAFE=false requires present advancement and royal safety. Failure
+     leaves the state unchanged. test_present() checks only turn completion.
      + UNSAFE=true skips the validation.
      */
     template<bool UNSAFE = false>
@@ -134,18 +138,19 @@ public:
     std::vector<vec4> get_all_pieces(const std::vector<int> &lines) const;
     
     
-    mate_type get_mate_type() const;
-    bool is_softmate() const;
-
-private:
-    mate_type get_mate_type_impl(bool legal_action_witness) const;
-
-public:
+    // A true witness means a legal action has already been established.
+    mate_type get_mate_type(bool legal_action_witness = false) const;
 
     // wrappers for low-level functions
     std::pair<int, int> get_board_size() const noexcept;
     promotion_options get_promotion_options() const noexcept { return promotions; }
-    std::optional<ext_move> normalize_promotion(ext_move move) const;
+    // Resolve the requested promotion; NO_PIECE requests the configured default.
+    // Non-promotion moves return an ext_move with NO_PIECE.
+    // The checked mode rejects out-of-bounds squares
+    // and absent source boards. UNSAFE trusts those structural prerequisites.
+    // Neither mode validates movement or royal safety.
+    template<bool UNSAFE = false>
+    std::optional<ext_move> normalize_promotion(full_move move, piece_t requested = NO_PIECE) const;
     turn_t get_present() const noexcept;
     turn_t apparent_present() const noexcept;
     std::pair<int, int> get_initial_lines_range() const noexcept;

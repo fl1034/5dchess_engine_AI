@@ -58,13 +58,14 @@ public:
     bool is_playable(vec4 p) const;
     bool can_undo() const;
     bool can_redo() const;
-    bool can_submit() const;
+    bool can_submit(bool allow_submit_with_checks = false) const;
     bool undo();
     bool redo();
     bool apply_move(ext_move m);
     bool preview_move(ext_move m);
     void discard_preview();
-    bool submit();
+    bool submit(bool allow_submit_with_checks = false);
+    // Extract a completed draft, including drafts with royal exposure.
     std::optional<action> get_submit_action() const;
     bool currently_check() const;
     std::vector<std::pair<vec4,vec4>> get_current_checks() const;

@@ -47,7 +47,12 @@ The client maintains a separate cache of states and moves for the turn being edi
 
 `apply_move()` normalizes promotion and checks whether the move can be applied using the core logic. On success, it appends the resulting state and move, discarding cached entries after the cursor. `undo()` and `redo()` move through the cache. These operations are distinct from navigating submitted actions in the game tree.
 
-`can_submit()` asks the core whether the current position can complete a turn. `get_submit_action()` returns the canonical submittable action through the current cache cursor, excluding redo moves and previews. `submit()` inserts that action when missing and visits its child node, preserving existing comments and descendants when found. It caches the validated submitted state for a new child. Moving to a history node refreshes the move cache for that node.
+`can_submit(allow_submit_with_checks = false)` tests turn completion and royal
+safety for the real draft. Passing `true` tests only completion.
+`submit(allow_submit_with_checks = false)` uses the same policy; rejected
+submission preserves the recorded draft and history. `get_submit_action()` is a
+completion-only extractor: it returns the canonical action through the current
+cache cursor even if it exposes a royal, excluding redo moves and previews. `submit()` inserts that action when missing and visits its child node, preserving existing comments and descendants when found. It caches the validated submitted state for a new child. Moving to a history node refreshes the move cache for that node.
 
 ## Temporary move previews
 
@@ -96,8 +101,10 @@ and `create_child` accept an optional flag, defaulting to false for trusted lega
 callers. These factories do not repeat legality checks. The `game` insertion and
 loading paths classify positions before passing that flag.
 
-Manual `game::submit()` remains permissive about unresolved checks and records
-the flag independently of any UI checkbox. Reusing a child retains its flag.
+Manual `game::submit()` rejects unresolved royal exposure by default.
+`submit(true)` permits it after requiring turn completion and records the
+illegal-history flag. Existing illegal history does not automatically enable
+this permission. Reusing a child retains its flag.
 `game::add_child()` checks royal safety for unflagged parents; on a flagged branch
 it checks move applicability and propagates the flag without another safety scan.
 Neither path marks temporary drafts or previews as submitted illegal history.
@@ -134,8 +141,9 @@ and leave the position unchanged. When viewing flagged history, the checkbox
 must stay checked and disabled. Returning to legal history unlocks it without
 changing its checked value. Only the user enables or disables the option; there
 is no saved preference or automatic enabling. This permission policy belongs to
-the UI and is not enforced by the C++ navigation methods. Existing manual-submit
-check guards remain applicable. Failed loading must preserve the old game.
+the UI and is not enforced by the C++ navigation methods. For manual submission,
+the worker passes the checkbox value to both `can_submit()` and `submit()`.
+Failed loading must preserve the old game.
 
 ## Deleting continuations
 

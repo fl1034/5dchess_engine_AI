@@ -71,6 +71,20 @@ async function runTest() {
       throw new Error('Illegal root status or Hint is incorrect');
     }
     permissive.game.delete();
+    const policy = engine_wasm.from_pgn('[Board "Standard - Turn Zero"] 1. f3 / e5 2. g4 / Qh4').game;
+    if (policy.can_submit() || policy.can_submit(true) || policy.submit(true)) {
+      throw new Error('Incomplete turns must be rejected in both policies');
+    }
+    if (!policy.apply_move({ from: { x: 0, y: 1, t: 3, l: 0 }, to: { x: 0, y: 2, t: 3, l: 0 } })) {
+      throw new Error('Could not prepare exposed draft');
+    }
+    if (policy.can_submit() || policy.submit() || !policy.can_submit(true) || policy.has_illegal_history()) {
+      throw new Error('Default submission must reject exposed drafts without marking history');
+    }
+    if (!policy.submit(true) || !policy.has_illegal_history()) {
+      throw new Error('Explicit permissive submission must record illegal history');
+    }
+    policy.delete();
     const history = engine_wasm.from_pgn('[Board "Standard - Turn Zero"] 1. f3 / e5 2. g4 / Qh4 3. a3 / a6', true);
     if (!history.success) throw new Error(history.message);
     history.game.visit_parent();

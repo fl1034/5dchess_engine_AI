@@ -60,7 +60,7 @@ createModule().then((engine) => {
         if (data.type === 'prev' && !self.game.has_parent()) return false;
         if (data.type === 'submit') {
             submitted = self.game.get_submit_action();
-            if (!submitted || (!self.settings.allowSubmitWithChecks && self.game.currently_check())) return false;
+            if (!submitted || !self.game.can_submit(self.settings.allowSubmitWithChecks)) return false;
         }
         if (!pendingBranches.keys.size) return true;
         const plan = pendingBranches.plan(children(), submitted);
@@ -318,15 +318,7 @@ createModule().then((engine) => {
             redo: self.game.can_redo(),
             prev: self.game.has_parent(),
             next: self.has_children,
-            submit: (() => {
-                if (self.settings.allowSubmitWithChecks) {
-                    return self.game.can_submit();
-                } else {
-                    return (
-                        self.game.can_submit() && !self.game.currently_check()
-                    );
-                }
-            })(),
+            submit: self.game.can_submit(self.settings.allowSubmitWithChecks),
         });
     }
 
@@ -441,7 +433,7 @@ createModule().then((engine) => {
             const moves = genMoveIfPlayable(data.pos);
             self.postMessage({ type: 'moves', moves: moves, requestId: data.requestId });
         } else if (data.type === 'submit') {
-            if (!self.game.submit()) return;
+            if (!self.game.submit(self.settings.allowSubmitWithChecks)) return;
             positionId++;
             self.postMessage({ type: 'navigated' });
             prepareHint();

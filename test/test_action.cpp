@@ -240,10 +240,23 @@ void compare_overloads(const state &before, full_move move)
     state checked = before, unchecked = before;
     state checked_extended = before, unchecked_extended = before;
     const ext_move prepared(move, before);
+    assert(before.normalize_promotion(move) == prepared);
+    assert(before.normalize_promotion<false>(move, prepared.promote_to)
+           == before.normalize_promotion<true>(move, prepared.promote_to));
     assert(checked.apply_move<false>(move));
     assert(unchecked.apply_move<true>(move));
     assert(checked_extended.apply_move<false>(prepared));
     assert(unchecked_extended.apply_move<true>(prepared));
+    const auto full_result = before.can_apply(move);
+    const auto ext_result = before.can_apply(prepared);
+    assert(full_result && ext_result);
+    assert_same(*full_result, checked);
+    assert_same(*ext_result, checked_extended);
+    assert(full_result->get_present() == before.get_present());
+    if(prepared.promote_to == NO_PIECE)
+        assert(!before.can_apply(ext_move(move, QUEEN_W)));
+    else
+        assert(!before.can_apply(ext_move(move, NO_PIECE)));
     assert_same(checked, unchecked);
     assert_same(checked, checked_extended);
     assert_same(checked, unchecked_extended);
@@ -251,6 +264,36 @@ void compare_overloads(const state &before, full_move move)
 
 int run()
 {
+    const state small(multiverse(timeline_layout::odd,
+        {{0, 1, false, "3k/P3/4/K3"}}, 4, 4));
+    for(const full_move move : {
+        full_move("(999T1)a3a4"), full_move("(999T1)a3a2"),
+        full_move("(0T0)a3a4"), full_move("(0T-1)a3a2"),
+        full_move("(0T1)e3a4"), full_move("(0T1)a3e4"),
+        full_move(vec4(-1, 2, 1, 0), vec4(0, 3, 1, 0)),
+        full_move(vec4(0, 2, 1, 0), vec4(0, -1, 1, 0))})
+    {
+        assert(!small.normalize_promotion(move));
+        assert(!small.can_apply(move));
+        assert(!small.can_apply(ext_move(move, NO_PIECE)));
+        state checked = small;
+        assert(!checked.apply_move<false>(move));
+        assert(!checked.apply_move<false>(ext_move(move, NO_PIECE)));
+        assert_same(checked, small);
+    }
+    for(const full_move move : {full_move("(0T1)b2b3"), full_move("(0T1)d4c4")})
+    {
+        state checked = small;
+        assert(!checked.apply_move<false>(move));
+        assert_same(checked, small);
+    }
+    state historical = small;
+    assert(historical.apply_move(full_move("(0T1)a3a4")));
+    const state after_move = historical;
+    assert(!historical.apply_move<false>(full_move("(0T1)a1b1")));
+    assert(!historical.apply_move<false>(ext_move(full_move("(0T1)a1b1"), NO_PIECE)));
+    assert_same(historical, after_move);
+
     for(bool black : {false, true})
     for(bool brawn : {false, true})
     for(auto rules : {promotion_options::QUEEN, promotion_options::KNIGHT,
@@ -267,6 +310,11 @@ int run()
         compare_overloads(before, full_move(black ? "(0T1)a8b8" : "(0T1)a1b1"));
 
         const ext_move prepared(promotion, before);
+        for(piece_t choice : {NO_PIECE, QUEEN_W, KNIGHT_W, KING_W, KNIGHT_B})
+        {
+            assert(before.normalize_promotion<false>(promotion, choice)
+                   == before.normalize_promotion<true>(promotion, choice));
+        }
         assert(prepared.promote_to == default_promote_to(rules));
         state result = before;
         assert(result.apply_move<true>(promotion));
@@ -294,6 +342,9 @@ int run()
             assert(checked.apply_move<false>(knight));
             assert(unchecked.apply_move<true>(knight));
             assert_same(checked, unchecked);
+            const auto underpromotion = before.can_apply(knight);
+            assert(underpromotion);
+            assert_same(*underpromotion, checked);
         }
     }
     return 0;
@@ -431,8 +482,8 @@ int run()
     const auto rook = action::from_vector({ext_move(*fm, ROOK_W)}, promotion_order_state);
     const auto queen = action::from_vector({ext_move(*fm, QUEEN_W)}, promotion_order_state);
     assert((rook < queen) != (queen < rook));
-    assert(!promotion_state.can_apply(*fm, KNIGHT_W));
-    assert(!promotion_state.can_apply(*fm, KNIGHT_B));
+    assert(!promotion_state.can_apply(ext_move(*fm, KNIGHT_W)));
+    assert(!promotion_state.can_apply(ext_move(*fm, KNIGHT_B)));
 
     const std::string no_promotion_before = R"(
 [Promotions ""]
@@ -455,7 +506,7 @@ int run()
     assert(unchanged_pawn->get_piece(
         vec4(no_fm->to.x(), no_fm->to.y(), pawn_t, no_fm->to.l()), pawn_c)
         == PAWN_W);
-    assert(!no_promotion_state.can_apply(*no_fm, QUEEN_W));
+    assert(!no_promotion_state.can_apply(ext_move(*no_fm, QUEEN_W)));
 
     const action no_promotion_action = action::from_vector(
         {ext_move(*no_fm, no_promotion_state)}, no_promotion_state);

@@ -151,7 +151,24 @@ The moves can be grouped into actions.
 
 Check Detection
 =============
-Check detection is not automatically triggered when applying moves or submitting.
+Applying individual moves does not enforce royal safety. `state::test_present()`
+checks only whether the apparent present has changed to the opponent's turn.
+`state::submit<false>()` (the default) requires that completion condition and
+rejects royal exposure, leaving the state unchanged on failure. The check uses
+the prospective next player as attacker before updating the stored present and
+player. `submit<true>()` skips both checks for trusted actions.
+`can_submit()` and `can_apply(action)` return only fully validated submitted
+states. The `can_apply(full_move)` and `can_apply(ext_move)` overloads return
+individual draft successors without submitting. They mirror checked
+`apply_move`: `full_move` resolves the default promotion, while `ext_move`
+requires an already normalized choice and rejects missing or extraneous
+promotion information. All three `can_apply` overloads are `const` and leave
+the source state unchanged; explicit promotion choices use the `ext_move`
+overload rather than a separate piece argument.
+
+Mate classification uses `get_mate_type()`. Its optional `legal_action_witness`
+argument skips the final action-existence search when a legal continuation has
+already been verified.
 
 For general check detection, use `state::find_checks(attacker)`. It generates every move by `attacker` that captures an enemy royal piece in the current state.
 

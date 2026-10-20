@@ -14,11 +14,16 @@ inline state gnode<T>::get_state()
     }
     else if(parent)
     {
-        auto next_state = parent->get_state().can_apply(act);
-        if(!next_state)
-        {
-            throw std::runtime_error("gnode::get_state(): Stored action is invalid for the parent state");
-        }
+        state next_state = parent->get_state();
+        for(const auto &move : act.get_moves_view())
+            if(!next_state.apply_move<false>(move))
+                throw std::runtime_error("gnode::get_state(): Stored action is invalid for the parent state");
+        if(!next_state.test_present())
+            throw std::runtime_error("gnode::get_state(): Stored action does not complete the turn");
+        if(has_illegal_history())
+            next_state.submit<true>();
+        else if(!next_state.submit<false>())
+            throw std::runtime_error("gnode::get_state(): Stored action exposes a royal");
         s = std::move(next_state);
         return *s;
     }

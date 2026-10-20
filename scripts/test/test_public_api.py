@@ -381,6 +381,23 @@ class RatioContracts(ContractCase):
 class BindingContracts(ContractCase):
     """Real public engine objects: legal/illegal moves, history, and PGN."""
 
+    def test_submission_policy(self):
+        rules = self.bindings()
+        game = rules.game.from_pgn(STANDARD_GAME + " 1. f3 / e5 2. g4 / Qh4")
+        self.assertFalse(game.can_submit())
+        self.assertFalse(game.can_submit(allow_submit_with_checks=True))
+        self.assertFalse(game.submit(allow_submit_with_checks=True))
+        self.assertTrue(game.apply_move(rules.ext_move(rules.vec4(0, 1, 3, 0), rules.vec4(0, 2, 3, 0), rules.Piece.NO_PIECE)))
+        draft = game.get_current_fen()
+        self.assertFalse(game.can_submit())
+        self.assertTrue(game.can_submit(allow_submit_with_checks=True))
+        self.assertFalse(game.submit())
+        self.assertEqual(game.get_current_fen(), draft)
+        self.assertFalse(game.has_illegal_history())
+        self.assertTrue(game.submit(allow_submit_with_checks=True))
+        self.assertTrue(game.has_illegal_history())
+
+
     def test_setup_header_failures_are_value_errors(self):
         rules = self.bindings()
         for pgn, message in [

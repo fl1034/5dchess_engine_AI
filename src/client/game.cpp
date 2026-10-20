@@ -70,13 +70,14 @@ game game::from_pgn(std::string input, game::load_options options)
                 {
                     moves.push_back(s.apply_move_ast(mv_ast, ag->source_text));
                 }
-                if(!s.submit())
+                if(!s.test_present())
                 {
                     throw pgn_validation_error(
                         pgn_validation_error::present_not_advanced{},
                         pgn_validation_error::make_subject(act_ast, ag->source_text)
                     );
                 }
+                s.submit<true>();
                 bool illegal_history = node->has_illegal_history();
                 if(!illegal_history) 
                 {
@@ -264,10 +265,11 @@ bool game::can_redo() const
     return now+1 != cached.end();
 }
 
-bool game::can_submit() const
+bool game::can_submit(bool allow_submit_with_checks) const
 {
     // Submission availability describes the real draft, even during a preview.
-    return now->first.can_submit().has_value();
+    return allow_submit_with_checks ? now->first.test_present()
+        : now->first.can_submit().has_value();
 }
 
 bool game::undo()
@@ -296,13 +298,12 @@ bool game::apply_move(ext_move m)
 {
     // A preview is never committed or used as the starting state of a real move.
     discard_preview();
-    const auto normalized = now->first.normalize_promotion(m);
+    const auto normalized = now->first.normalize_promotion(m.fm, m.promote_to);
     if(!normalized)
     {
         return false;
     }
-    std::optional<state> ans = now->first.can_apply(
-        normalized->fm, normalized->promote_to);
+    std::optional<state> ans = now->first.can_apply(*normalized);
     if(ans)
     {
         state new_state = std::move(ans.value());
@@ -318,10 +319,10 @@ bool game::preview_move(ext_move m)
 {
     // Replacing a preview always starts from the real draft.
     discard_preview();
-    const auto normalized = now->first.normalize_promotion(m);
+    const auto normalized = now->first.normalize_promotion(m.fm, m.promote_to);
     if(!normalized)
         return false;
-    preview = now->first.can_apply(normalized->fm, normalized->promote_to);
+    preview = now->first.can_apply(*normalized);
     return preview.has_value();
 }
 
@@ -332,21 +333,25 @@ void game::discard_preview()
 
 std::optional<action> game::get_submit_action() const
 {
-    if(!can_submit()) return std::nullopt;
+    if(!can_submit(true)) return std::nullopt;
     return action::from_vector(get_cached_moves(), get_unmoved_state());
 }
 
-bool game::submit()
+bool game::submit(bool allow_submit_with_checks)
 {
     discard_preview();
-    auto submitted = now->first.can_submit();
-    if(!submitted) return false;
+    if(!now->first.test_present()) return false;
+    state submitted = now->first;
+    if(allow_submit_with_checks)
+        submitted.submit<true>();
+    else if(!submitted.submit<false>())
+        return false;
     auto act = action::from_vector(get_cached_moves(), get_unmoved_state());
     auto *child = current_node->find_child(act);
     if(!child)
     {
-        // Keep permissive manual submission, but classify the new history once.
-        const bool illegal_history = has_illegal_history() || submitted->find_royal_exposure(false).has_value();
+        const bool illegal_history = has_illegal_history()
+            || (allow_submit_with_checks && submitted.find_royal_exposure(false).has_value());
         child = current_node->add_child(gnode<comments_t>::create_child(
             current_node, std::move(submitted), std::move(act), comments_t{}, illegal_history));
     }
@@ -441,11 +446,14 @@ bool game::add_child(action act)
     {
         return false;
     }
-    auto newstate = current_node->get_state().can_apply(act);
-    if(!newstate || (!has_illegal_history() && newstate->find_royal_exposure(false).has_value()))
-    {
+    state newstate = current_node->get_state();
+    for(const auto &move : act.get_moves_view())
+        if(!newstate.apply_move<false>(move)) return false;
+    if(!newstate.test_present()) return false;
+    if(has_illegal_history())
+        newstate.submit<true>();
+    else if(!newstate.submit<false>())
         return false;
-    }
     auto child = gnode<comments_t>::create_child(current_node, std::move(newstate), std::move(act), comments_t{});
     current_node->add_child(std::move(child));
     if(!has_illegal_history()) nonterminal = true;

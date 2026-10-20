@@ -51,9 +51,10 @@ state state::from_ast(const pgnparser_ast::game &g)
         //std::cout << act;
         for(const auto &mv: act.moves)
             initial.apply_move_ast(mv, g.source_text);
-        if(!initial.submit())
+        if(!initial.test_present())
             throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
                 pgn_validation_error::make_subject(act, g.source_text));
+        initial.template submit<true>();
         if constexpr (!UNSAFE) {
             if(auto exposure = initial.find_royal_exposure(false))
                 throw pgn_validation_error(*exposure,
@@ -78,6 +79,11 @@ int state::new_line() const noexcept
         return l_min - 1;
 }
 
+bool state::test_present() const
+{
+    return m.get_present().second != player;
+}
+
 std::optional<state> state::can_submit() const
 {
     state new_state = *this;
@@ -92,20 +98,18 @@ std::optional<state> state::can_submit() const
     }
 }
 
-std::optional<state> state::can_apply(full_move fm, piece_t promote_to) const
+std::optional<state> state::can_apply(full_move fm) const
 {
     state new_state = *this;
-    const auto normalized = normalize_promotion(ext_move(fm, promote_to));
-    if(!normalized) return std::nullopt;
-    bool flag = new_state.apply_move<false>(*normalized);
-    if(flag)
-    {
-        return std::make_optional<state>(new_state);
-    }
-    else
-    {
-        return std::nullopt;
-    }
+    if(!new_state.apply_move<false>(fm)) return std::nullopt;
+    return new_state;
+}
+
+std::optional<state> state::can_apply(ext_move mv) const
+{
+    state new_state = *this;
+    if(!new_state.apply_move<false>(mv)) return std::nullopt;
+    return new_state;
 }
 
 std::optional<state> state::can_apply(const action &act) const
@@ -130,7 +134,7 @@ std::optional<state> state::can_apply(const action &act) const
 template<bool UNSAFE>
 bool state::apply_move(full_move fm)
 {
-    const auto normalized = normalize_promotion(ext_move(fm, NO_PIECE));
+    const auto normalized = normalize_promotion<UNSAFE>(fm);
     if(!normalized) return false;
     return apply_move<UNSAFE>(*normalized);
 }
@@ -145,13 +149,17 @@ bool state::apply_move(ext_move mv)
     vec4 d = q - p;
     if constexpr (!UNSAFE)
     {
-        const auto normalized = normalize_promotion(ext_move(fm, promote_to));
+        const auto normalized = normalize_promotion(fm, promote_to);
         if(!normalized || *normalized != mv)
         {
             return false;
         }
         auto te = m.get_timeline_end(p.l());
-        assert(std::make_pair(p.t(), player) == te && "moves must be made on an active board");
+        if(std::make_pair(p.t(), player) != te)
+            return false;
+        const piece_t piece = get_piece(p, player);
+        if(piece == NO_PIECE || piece_color(piece) != player)
+            return false;
         auto mvs = player ? m.gen_moves<true>(p) : m.gen_moves<false>(p);
         //auto it = mvbbs.find(q.tl());
         const auto &res = mvs.find([&q](const auto &pair){
@@ -302,20 +310,37 @@ bool state::apply_move(ext_move mv)
     return true;
 }
 
-std::optional<ext_move> state::normalize_promotion(ext_move move) const
+template<bool UNSAFE>
+std::optional<ext_move> state::normalize_promotion(full_move move, piece_t requested) const
 {
-    const vec4 p = move.fm.from;
-    const vec4 q = move.fm.to;
+    const vec4 p = move.from;
+    const vec4 q = move.to;
     const vec4 d = q - p;
     const auto &[size_x, size_y] = get_board_size();
-    (void)size_x;
+    const board *source = nullptr;
+    if constexpr (!UNSAFE)
+    {
+        const auto in_bounds = [size_x, size_y](vec4 square) {
+            return square.x() >= 0 && square.x() < size_x
+                && square.y() >= 0 && square.y() < size_y;
+        };
+        if(!in_bounds(p) || !in_bounds(q))
+            return std::nullopt;
+        source = get_board_ptr(p.l(), p.t(), player);
+        if(!source)
+            return std::nullopt;
+    }
     const bool last_rank = q.y() == (player ? 0 : size_y - 1);
     if(!last_rank)
     {
-        move.promote_to = NO_PIECE;
-        return move;
+        return ext_move(move, NO_PIECE);
     }
-    const piece_t piece = piece_name(get_piece(p, player));
+    const piece_t piece = piece_name([&] {
+        if constexpr (UNSAFE)
+            return get_piece(p, player);
+        else
+            return source->get_piece(p.xy());
+    }());
     const bool physical_promotion = d.l() == 0 && d.t() == 0
         && (piece == PAWN_W || piece == PAWN_B || piece == BRAWN_W || piece == BRAWN_B)
         && last_rank;
@@ -324,27 +349,26 @@ std::optional<ext_move> state::normalize_promotion(ext_move move) const
         && last_rank;
     if(!physical_promotion && !superphysical_promotion)
     {
-        move.promote_to = NO_PIECE;
-        return move;
+        return ext_move(move, NO_PIECE);
     }
 
     if(promotions == promotion_options::NONE)
     {
-        if(move.promote_to != NO_PIECE)
+        if(requested != NO_PIECE)
         {
             return std::nullopt;
         }
-        return move;
+        return ext_move(move, requested);
     }
-    if(move.promote_to == NO_PIECE)
+    if(requested == NO_PIECE)
     {
-        move.promote_to = default_promote_to(promotions);
+        requested = default_promote_to(promotions);
     }
-    if(!can_promote_to(promotions, move.promote_to))
+    if(!can_promote_to(promotions, requested))
     {
         return std::nullopt;
     }
-    return move;
+    return ext_move(move, requested);
 }
 
 template <bool UNSAFE>
@@ -353,7 +377,7 @@ bool state::submit()
     auto [t, c] = m.get_present();
     if constexpr (!UNSAFE)
     {
-        if(player == c)
+        if(!test_present() || check_position(*this).first_check(c))
         {
             return false;
         }
@@ -595,17 +619,7 @@ std::vector<vec4> state::gen_movable_pieces_impl(const std::vector<int> &lines) 
     return result;
 }
 
-mate_type state::get_mate_type() const
-{
-    return get_mate_type_impl(false);
-}
-
-bool state::is_softmate() const
-{
-    return get_mate_type_impl(true) == mate_type::SOFTMATE;
-}
-
-mate_type state::get_mate_type_impl(bool legal_action_witness) const
+mate_type state::get_mate_type(bool legal_action_witness) const
 {
     dprint("state::get_mate_type()");
     auto [w, ss] = HC_info::build_HC(*this);
@@ -795,13 +809,13 @@ ext_move state::apply_move_ast(const pgnparser_ast::move &move,
         reason.candidates.reserve(candidates.size());
         for(const auto &candidate : candidates) {
             const ext_move interpreted(candidate, promote_to);
-            reason.candidates.push_back({normalize_promotion(interpreted).value_or(interpreted),
+            reason.candidates.push_back({normalize_promotion(candidate, promote_to).value_or(interpreted),
                 candidate.pgn(*this, promote_to)});
         }
         throw error(std::move(reason), subject());
     }
     const piece_t requested = promotion.value_or(NO_PIECE);
-    const auto normalized = normalize_promotion(ext_move(*fm, requested));
+    const auto normalized = normalize_promotion(*fm, requested);
     if(!normalized)
         throw error(error::illegal_promotion{requested, promotions}, subject());
     if(!apply_move<false>(*normalized))
@@ -944,6 +958,8 @@ state::parse_pgn_res state::parse_move(const std::string &move) const
     return parse_move(*parsed_move);
 }
 
+template std::optional<ext_move> state::normalize_promotion<false>(full_move, piece_t) const;
+template std::optional<ext_move> state::normalize_promotion<true>(full_move, piece_t) const;
 template bool state::apply_move<false>(full_move);
 template bool state::apply_move<true>(full_move);
 template bool state::apply_move<false>(ext_move);

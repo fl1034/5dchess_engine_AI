@@ -317,7 +317,7 @@ void promotion(bool black, bool brawn)
                         && rules != promotion_options::NONE;
                     const piece_t choice = promotes ? default_promote_to(rules) : NO_PIECE;
                     const piece_t expected = promotes ? (black ? to_black(choice) : choice) : original;
-                    const auto normalized = before.normalize_promotion(ext_move(move,NO_PIECE));
+                    const auto normalized = before.normalize_promotion(move);
                     log_case("promotion application",boards,1);
                     if (!normalized || normalized->promote_to != choice) {
                         ++failures;

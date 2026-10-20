@@ -5,6 +5,13 @@ There are eleven engines: `mcts`, `mcts-weighted`, `zero`, `zero-capture`,
 `flat-ucb`, `flat-ucb-weighted`, and `monkey`. They communicate using the
 [5DUCI protocol](../5duci.md).
 
+Moves supplied with `position` are checked against the current position. Initial setups and completed actions must also pass royal-safety
+validation. A trailing draft is checked for move applicability; its royal safety
+is enforced when `submit` completes the action.
+Out-of-bounds squares, missing source boards, historical source boards, empty
+source squares, and opponent pieces are rejected without changing the engine's
+current position.
+
 The three `*-weighted` engines use move metadata to bias rollout selection
 toward tactically promising moves. `zero` is MCTS with a constant-zero default
 policy.

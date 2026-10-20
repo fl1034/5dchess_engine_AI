@@ -136,8 +136,12 @@ void apply_action(state &current, const pgnparser_ast::actions &act,
 {
     for(const auto &mv : act.moves)
         current.apply_move_ast(mv, source);
-    if(!current.submit())
+    if(!current.test_present())
         throw pgn_validation_error(pgn_validation_error::present_not_advanced{},
+            pgn_validation_error::make_subject(act, source));
+    current.submit<true>();
+    if(auto exposure = current.find_royal_exposure(false))
+        throw pgn_validation_error(*exposure,
             pgn_validation_error::make_subject(act, source));
 }
 
@@ -494,7 +498,7 @@ int run_checkmate(int argc, const char *argv[])
             for(const full_move &move : *moves)
             {
                 std::cout << move.pgn(s, QUEEN_W, pgn_options::SHOW_CAPTURE) << ' ';
-                s.apply_move(move);
+                s.apply_move<true>(move);
             }
         }
         else if(const state phantom_state = s.phantom(); phantom_state.find_checks(!player).first())

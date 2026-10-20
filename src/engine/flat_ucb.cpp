@@ -56,7 +56,7 @@ std::optional<action> basic_flat_ucb_engine<DefaultPolicy>::find_best_move(
         {
             position.apply_move<true>(move);
         }
-        position.submit();
+        position.submit<true>();
         children.push_back({moves, std::move(position)});
     }
     if(children.empty())
