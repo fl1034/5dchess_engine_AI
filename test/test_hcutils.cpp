@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <limits>
 #include <vector>
+#include <set>
 
 namespace hcutils_tests
 {
@@ -225,6 +226,92 @@ void test_search_branch_order()
     }
 }
 
+void test_reactivated_present()
+{
+    // Earlier reactivated endpoints excuse the pass on L0; endpoints on the
+    // same turn do not, because White precedes Black within that turn.
+    for(int reactivated_t : {3, 5})
+    {
+        for(bool playable : {false, true})
+        {
+            const std::string pgn =
+                "[Board \"custom\"]\n[Size \"4x4\"]\n"
+                "[3k/4/4/KN2:-2:" + std::to_string(reactivated_t)
+                + (playable ? ":w]\n" : ":b]\n")
+                + "[3k/4/4/KN2:-1:5:w]\n"
+                  "[3k/4/4/KN2:-1:5:b]\n"
+                  "[3k/4/4/KN2:-1:6:w]\n"
+                  "[3k/4/4/KN2:0:5:w]\n";
+            const state initial = state::from_pgn(pgn);
+            auto [info, space] = HC_info::build_HC(initial);
+            const auto collect = [&](auto actions) {
+                std::set<moveseq> result;
+                for(const moveseq &moves : actions)
+                {
+                    std::vector<ext_move> extended;
+                    for(const full_move &move : moves) extended.emplace_back(move, initial);
+                    assert(initial.can_apply(action::from_vector(extended, initial)));
+                    result.insert(moves);
+                }
+                return result;
+            };
+            const auto expected = collect(info.iterative_search(space));
+            const size_t expected_count = reactivated_t == 3
+                ? (playable ? 784 : 150) : (playable ? 3644 : 146);
+            assert(expected.size() == expected_count);
+            assert(collect(info.search(space)) == expected);
+            assert(collect(info.stable_search(space)) == expected);
+            for(unsigned seed : {0, 1, 2})
+            {
+                std::mt19937 rng(seed);
+                random_HC_ordering order(info.get_universe(), rng);
+                assert(collect(info.search(space, order)) == expected);
+                assert(collect(info.iterative_search(space, order)) == expected);
+            }
+            moveseq witness;
+            if(playable) witness.emplace_back("(-2T" + std::to_string(reactivated_t) + ")a1a2");
+            witness.emplace_back("(-1T6)b1>>(-1T5)b3");
+            assert(expected.contains(witness) == (reactivated_t == 3));
+
+            // Fixed coordinate sets must stay within the current HC so plain
+            // remove_slice() cannot introduce coordinates from other regions.
+            // Keep the effective codimension at one.
+            const point no_moves(info.dimension(), 0);
+            assert(space.back().contains(no_moves));
+            const auto problem = info.test_present(no_moves, space.back());
+            assert(problem);
+            for(const auto &[n, coordinates] : problem->get_fixed_axes())
+                assert(coordinates.is_subset_of(space.back()[n]));
+            assert(space.back().is_slice_good(*problem, 1));
+            point branched = no_moves;
+            for(index_t n = 0; n <= info.first_branch_axis(); ++n)
+            {
+                for(index_t i : info.get_universe()[n])
+                {
+                    const semimove sm = info.get_semimove(n, i);
+                    for(const full_move &move : witness)
+                    {
+                        if(const auto *physical = sm.get_if<physical_move>();
+                           physical && physical->m == move) branched[n] = i;
+                        if(const auto *departure = sm.get_if<departing_move>();
+                           departure && departure->from == move.from
+                           && (move.from.t() != move.to.t() || move.from.l() != move.to.l()))
+                            branched[n] = i;
+                        if(const auto *arrival = sm.get_if<arriving_move>();
+                           arrival && arrival->m == move) branched[n] = i;
+                    }
+                }
+            }
+            assert(!space.back().contains(branched));
+            assert(!info.jump_order_consistent(branched, info.get_universe()));
+            assert(info.to_action(branched) == witness);
+            // Unrestricted axes can cover points outside hc. Such points may
+            // be included when invalid, but a legal witness must be excluded.
+            assert(!problem->contains(branched) || !expected.contains(witness));
+        }
+    }
+}
+
 int run()
 {
     test_hc();
@@ -232,6 +319,7 @@ int run()
     test_backward_slice_removal();
     test_backward_slice_order();
     test_search_branch_order();
+    test_reactivated_present();
     //test_remove();
 //    HC h2 = {{{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}}};
 //    point b = {20};

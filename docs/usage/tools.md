@@ -24,6 +24,11 @@ turn `16b` is submitted. A count equal to its maximum is the cap sentinel;
 for example, `max=10001` and a result of `10001` means 10,000 or more
 actions.
 
+Legal-action searches account for timelines reactivated by branching. An
+action may leave a later board untouched when a reactivated timeline puts the
+apparent present on the opponent's turn, including when the action itself
+advances that timeline to the opponent's turn.
+
 Checkmate and stalemate are distinguished by simulating a pass only on active
 boards at the present. Inactive boards and boards ahead of the present are not
 advanced for this check. PGN check symbols use the same rule from the opponent's

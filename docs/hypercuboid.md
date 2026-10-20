@@ -249,9 +249,20 @@ This is done alongside simulating the movement of the Present. Start from the cu
 1. An active new timeline is created earlier.
 2. After a jump, an existing (inactive) timeline is reactivated.
 
-After we located the Prsent, we check if the semimoves on active boards on that turn are sufficient to move the Prensent. If not, that is, there is a null_semimove on certain timeline l where the last board is on turn t, which is exactly the new Present, then we have a problem. The problem slice is the product of
+After we located the Prsent, we check if the semimoves on active boards on that turn are sufficient to move the Prensent. If not, that is, there is a null_semimove on certain timeline l where the last board is on (colored) turn t, which is exactly the new Present, then we have a problem.
+
+Suppose:
+- the player needs to play at least a branching jumps to keep l active; and
+- b is the maximum number of branching moves, such that after playing them
+    - no inactive timeline, that ends before t, gets reactivated.
+ 
+The problem slice is the product of
 * on axis for l, the null_semimove
-* on axes for newly created timelines, all moves that doesn't create an *active* branch before the new Prensent
+* on first a new axes, all non-null arrival_semimoves that arrives no earlier than t
+* on the next b-a new axes, the null_semimove and arrival_semimoves that arrives no earlier than t
+* on the remaining new axes, the null_semimove
+
+(Optimization hint: if the player can only create `d` active timelines, for new axes with indices larger than `d`, we may ban all semimoves on that axis because no such semimove can reactivate timelines.)
 
 ### Find Checks
 

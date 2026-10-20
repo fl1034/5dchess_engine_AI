@@ -175,7 +175,8 @@ public:
     
     /*
      find_problem(p, hc): find any problem about p and returns the problem 
-     slice in hc or std::nullopt if the point is okay
+     slice containing p or std::nullopt if the point is okay. Each fixed
+     coordinate set is a subset of the corresponding axis in hc.
      There are three layers: if the point passes
      + jump_order_consistent: then the departure semimoves and arrival semimoves are good pairs, thus the point is avialible for to_action to get a moveseq;
      + test_present: then the point actually pushes the Present foward, but may still contain checks

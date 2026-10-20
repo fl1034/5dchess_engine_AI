@@ -626,156 +626,122 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
 
 std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
 {
-    const auto old_tc = s.get_present();
-    const auto [old_present, c] = old_tc;
-    // record the lines range and active range of current state
-    // these values will get updated as we simulate the process of finding new present
+    const bool c = s.get_present().second;
     const auto [l0_min, l0_max] = s.get_initial_lines_range();
     const auto [l_min, l_max] = s.get_lines_range();
-    // the following non-const value will be changed and maintained during the loop
-    auto [l1_min, l1_max] = s.get_lines_range();
-    auto [active_min, active_max] = s.get_active_range();
-    // step one: find the new present
-    int mint = old_present; // mint will be the new present
-    std::optional<std::pair<index_t,index_t>> pass_coord = std::nullopt; // record the axis of the problematic pass
-    for(int l : mandatory_lines)
+    index_t branches = 0;
+    while(new_axis + branches < dimension()
+          && !std::holds_alternative<null_entry>(axis_coords[new_axis + branches][p[new_axis + branches]]))
     {
-        assert(line_axes.contains(l));
-        index_t n = line_axes.at(l);
-        if(std::holds_alternative<null_entry>(axis_coords[n][p[n]]))
+        ++branches;
+    }
+    const auto active_range = [&](index_t count) {
+        const int lo = l_min - (c ? static_cast<int>(count) : 0);
+        const int hi = l_max + (c ? 0 : static_cast<int>(count));
+        // Extents from the initial range handle both odd and even layouts,
+        // matching multiverse::calculate_active_range().
+        const int radius = std::min(l0_min - lo, hi - l0_max) + 1;
+        return std::pair{std::max(lo, l0_min - radius), std::min(hi, l0_max + radius)};
+    };
+    const auto [active_min, active_max] = active_range(branches);
+    const auto branch_line = [&](index_t n) {
+        const int offset = static_cast<int>(n - new_axis) + 1;
+        return c ? l_min - offset : l_max + offset;
+    };
+    const auto branch_end = [&](const entry &loc) {
+        return next_turn(turn_t{std::get<arriving_entry>(loc).m.to.t(), c});
+    };
+
+    turn_t present{std::numeric_limits<int>::max(), true};
+    std::optional<index_t> pass_axis;
+    int witness_line = 0;
+    for(int l = std::max(l_min, active_min); l <= std::min(l_max, active_max); ++l)
+    {
+        turn_t end = s.get_timeline_end(l);
+        const auto axis = line_axes.find(l);
+        const bool moved = axis != line_axes.end()
+            && !std::holds_alternative<null_entry>(axis_coords[axis->second][p[axis->second]]);
+        if(moved) end = next_turn(end);
+        if(end <= present)
         {
-            // if there is a pass in playable line, then it could be problematic
-            pass_coord = {n, p[n]};
+            witness_line = l;
+            present = end;
+            pass_axis = axis != line_axes.end() && !moved
+                ? std::optional<index_t>{axis->second} : std::nullopt;
         }
     }
-    for(index_t n = new_axis; n < dimension(); n++)
+    for(index_t n = new_axis; n < new_axis + branches; ++n)
     {
-        // for all branching moves
-        index_t i = p[n];
-        // present may need to move to the time of this arrive
-        const entry &loc = axis_coords[n][i];
-        if(std::holds_alternative<null_entry>(loc))
+        const int l = branch_line(n);
+        if(l < active_min || l > active_max) continue;
+        const turn_t end = branch_end(axis_coords[n][p[n]]);
+        if(end < present)
         {
-            break;
-        }
-        // update lines range and active range
-        std::optional<int> reactivated = std::nullopt;
-        int l_new;
-        if(c == false)
-        {
-            l1_max++;
-            l_new = l1_max;
-        }
-        else
-        {
-            l1_min--;
-            l_new = l1_min;
-        }
-        int whites_lines = l1_max - l0_max;
-        int blacks_lines = l0_min - l1_min;
-        if(l_new > l0_max && whites_lines <= blacks_lines + 1 && l_new > active_max)
-        {
-            dprint("+");
-            active_max++;
-            if(l1_min < active_min) // check reactivate
-            {
-                active_min--;
-                reactivated = active_min;
-            }
-        }
-        else if(l_new < l0_min && blacks_lines <= whites_lines + 1 && l_new < active_min)
-        {
-            dprint("-");
-            active_min--;
-            if(l1_max > active_max)
-            {
-                active_max++;
-                reactivated = active_max;
-            }
-        }
-        
-        auto [t, l] = extract_tl(loc);
-        dprint(t, mint, active_min, l_new, active_max);
-        // only care when new line is active
-        if(t < mint && active_min <= l_new && l_new <= active_max)
-        {
-            mint = t;
-            // if the move jumps backward, the previous threat is eliminated
-            pass_coord = std::nullopt;
-        }
-        // there is probably a newly activated line after this branching move
-        // which moves the present
-        if(reactivated)
-        {
-            const auto [newline_t, newline_c] = s.get_timeline_end(*reactivated);
-            if(newline_t <= mint && newline_c == c)
-            {
-                mint = newline_t;
-                // could be a problem if played a pass on reactivated line
-                assert(line_axes.contains(*reactivated));
-                index_t n1 = line_axes.at(*reactivated);
-                if(std::holds_alternative<null_entry>(axis_coords[n1][p[n1]]))
-                {
-                    pass_coord = {n1, p[n1]};
-                }
-            }
+            present = end;
+            pass_axis = std::nullopt;
         }
     }
-    if(pass_coord)
-    {
-        slice problem;
-        /* on the axis for pass, ban this pass */
-        const auto [pass_n, pass_i] = *pass_coord;
-        problem.fix_axis(pass_n, integer_set{pass_i});
-        //if(pass_n >= new_axis)
-        
-        /*
-         on new axes:
-         ban all moves that doesn't create an *active* branch before the pass's time
-         i.e. if this_axis - new_axis + 1 <= opponents_timeline - players_timeline + 1, ban every pass/arrives later than this line's time
-         otherwise, ban everything
-         
-         (this_axis - new_axis + 1 <=  opponents_timeline - players_timeline + 1) reduces to
-         this_axis <= opponents_timeline - players_timeline + new_axis
-         */
-        int whites_lines = l_max - l0_max;
-        int blacks_lines = l0_min - l_min;
-        int timeline_advantage = c ? (whites_lines - blacks_lines) : (blacks_lines - whites_lines);
-        
-        for(index_t n = new_axis;
-            static_cast<int>(n) <= std::min<int>(timeline_advantage + static_cast<int>(new_axis), static_cast<int>(dimension()) - 1);
-            n++)
-        {
-            integer_set s;
-            for(index_t i : hc[n])
-            {
-                const entry &loc = axis_coords[n][i];
-                if(std::holds_alternative<null_entry>(loc))
-                {
-                    s.insert(i);
-                    // actually I can just break two loops ...
-                }
-                else
-                {
-                    const auto &am = std::get<arriving_entry>(loc);
-                    if(am.m.to.t() >= mint)
-                    {
-                        s.insert(i);
-                    }
-                }
-            }
-            problem.fix_axis(n, s);
-        
-        }
-        dprint("point:", range_to_string(p));
-        dprint("problem", problem.to_string());
-        assert(problem.contains(p));
-        return problem;
-    }
-    else
+    if(present.second != c)
     {
         return std::nullopt;
     }
+
+    // A current-player endpoint must be an unchanged playable board.
+    assert(pass_axis);
+    slice problem;
+    problem.fix_axis(*pass_axis, integer_set{p[*pass_axis]});
+    // Other playable endpoints already start at or after this current-player
+    // present: advancing one half-turn cannot cross another current-player
+    // endpoint. Their move/pass choices therefore need no restriction.
+    // Bound branch counts by the witness's activation and the first possible
+    // activation of an earlier existing endpoint. The valid counts form an
+    // interval because active ranges only grow as branches are added.
+    index_t min_branches = branches, max_branches = branches;
+    int widest_min = active_min, widest_max = active_max;
+    for(index_t count = 0; count <= dimension() - new_axis; ++count)
+    {
+        const auto [active_lo, active_hi] = active_range(count);
+        if(witness_line < active_lo || witness_line > active_hi) continue;
+        bool safe = true;
+        for(int l = std::max(l_min, active_lo); l <= std::min(l_max, active_hi); ++l)
+            if(s.get_timeline_end(l) < present) safe = false;
+        if(!safe) continue;
+        min_branches = std::min(min_branches, count);
+        max_branches = std::max(max_branches, count);
+        widest_min = std::min(widest_min, active_lo);
+        widest_max = std::max(widest_max, active_hi);
+    }
+    for(index_t n = new_axis; n < dimension(); ++n)
+    {
+        const index_t offset = n - new_axis;
+        const int l = branch_line(n);
+        integer_set allowed;
+        // Identify genuine restrictions against the universe, then clip each
+        // restricted axis to hc to preserve the remove_slice() contract.
+        for(index_t i : universe[n])
+        {
+            const entry &loc = axis_coords[n][i];
+            const bool passed = std::holds_alternative<null_entry>(loc);
+            if(passed)
+            {
+                if(min_branches == 0 || offset != min_branches - 1) allowed.insert(i);
+            }
+            else if(offset != max_branches
+                    && (l < widest_min || l > widest_max || branch_end(loc) >= present))
+            {
+                allowed.insert(i);
+            }
+        }
+        // Branches form a prefix, so only the two boundary axes are needed
+        // to preserve the count interval. Omit every unrestricted axis.
+        if(!universe[n].is_subset_of(allowed))
+        {
+            allowed &= hc[n];
+            problem.fix_axis(n, allowed);
+        }
+    }
+    assert(problem.contains(p));
+    return problem;
 }
 
 std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
