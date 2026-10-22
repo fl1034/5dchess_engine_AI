@@ -13,6 +13,7 @@ enum class search_mode
     naive,
     stable,
     iterative,
+    fine,
 };
 
 std::pair<search_mode, int> parse_search_args(
@@ -30,6 +31,8 @@ template<bool PRINT=false>
 std::size_t count_iterative(state s, int limit);
 template<bool PRINT=false>
 std::size_t count_naive(state s, int limit);
+template<bool PRINT=false>
+std::size_t count_fine(state s, int limit);
 
 void diff(state s);
 

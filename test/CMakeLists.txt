@@ -19,9 +19,20 @@ foreach(TEST_FILE ${TEST_SOURCES})
     # Link against the core engine library
     target_link_libraries(${TEST_NAME} PRIVATE 5dchess_client 5dchess_engine)
 
+    if(TEST_NAME STREQUAL "test_search_tools")
+        target_sources(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../tools/search_tools.cpp")
+        target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../tools")
+    endif()
+
     # Include necessary directories
     target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
     # Register test with ctest
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endforeach()
+
+# Includes the formerly unbounded slow-position legality regression.
+set_tests_properties(test_hcutils PROPERTIES TIMEOUT 30)
+
+# Global propagation must resolve the formerly unbounded engine/fine searches.
+set_tests_properties(test_global_search PROPERTIES TIMEOUT 30)

@@ -94,10 +94,10 @@
  Differences are in how problem slices are removed and propagated through the search space:
  - `iterative_search()` removes a discovered problem only from the currently
    examined hypercuboid.
- - `stable_search()` propagates each problem slice through every remaining
-   hypercuboid, limiting fragmentation with careful removal.
- - `search()` is the default adaptive policy. It propagates a problem through
-   nearby intersecting hypercuboids while those intersections remain dense.
+ - `stable_search()` constructs universe-wide problems and removes them from
+   every remaining hypercuboid with intersection-aware removal.
+ - `search()` uses HC-local problems and adaptive propagation for the first
+   100 problems, then falls back to stable search with the same ordering.
 */
 
 class HC_info
@@ -215,6 +215,10 @@ public:
     generator<moveseq> iterative_search(search_space ss, Order order) const && = delete;
     generator<moveseq> stable_search(search_space ss) const &;
     generator<moveseq> stable_search(search_space ss) const && = delete;
+    template<HCOrdering Order>
+    generator<moveseq> stable_search(search_space ss, Order order) const &;
+    template<HCOrdering Order>
+    generator<moveseq> stable_search(search_space ss, Order order) const && = delete;
     // /* uncomment when debugging */
     //std::vector<moveseq> search1(search_space ss) const;
 };

@@ -208,6 +208,22 @@ void search_space::remove_slice_backwards(
     }
 }
 
+void search_space::remove_slice_globally(const slice &s, std::stop_token stop)
+{
+    for(auto current = hcs.begin(); current != hcs.end();)
+    {
+        if(stop.stop_requested()) return;
+        if(!current->intersects(s))
+        {
+            ++current;
+            continue;
+        }
+        auto pieces = current->remove_slice_carefully(s);
+        current = hcs.erase(current);
+        hcs.splice(current, pieces.hcs);
+    }
+}
+
 std::list<HC>::iterator search_space::begin() & noexcept
 {
     return hcs.begin();

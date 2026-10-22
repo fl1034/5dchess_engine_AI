@@ -124,28 +124,51 @@ generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const
 template<HCOrdering Order>
 generator<moveseq> HC_info::search(search_space ss, Order order) const &
 {
+    constexpr std::size_t adaptive_problem_limit = 100;
+    std::size_t num_problems = 0;
+    while(!ss.empty() && num_problems < adaptive_problem_limit)
+    {
+        HC hc = std::move(ss.back());
+        ss.pop_back();
+        auto pt = take_point(hc, order);
+        if(!pt) continue;
+
+        auto problem = find_problem(*pt, hc);
+        if(!problem)
+        {
+            co_yield to_action(*pt);
+            ss.concat(hc.remove_point(*pt));
+            continue;
+        }
+        ++num_problems;
+        ss.push_back(std::move(hc));
+        ss.remove_slice_backwards(*problem, true, 10);
+    }
+
+    for(auto &&moves : stable_search(std::move(ss), std::move(order)))
+        co_yield std::move(moves);
+}
+
+template<HCOrdering Order>
+generator<moveseq> HC_info::stable_search(search_space ss, Order order) const &
+{
     while(!ss.empty())
     {
         HC hc = std::move(ss.back());
         ss.pop_back();
-        auto pt_opt = take_point(hc, order);
-        if(!pt_opt)
-        {
-            continue;
-        }
+        auto pt = take_point(hc, order);
+        if(!pt) continue;
 
-        const point &pt = *pt_opt;
-        auto problem = find_problem(pt, hc);
-        if(!problem)
+        auto problem = find_problem(*pt, universe);
+        if(problem)
         {
-            co_yield to_action(pt);
-            ss.concat(hc.remove_point(pt));
-            continue;
+            ss.push_back(std::move(hc));
+            ss.remove_slice_globally(*problem);
         }
-
-        // Propagation prunes earlier HCs without moving them ahead of the
-        // current HC's remaining pieces.
-        ss.push_back(std::move(hc));
-        ss.remove_slice_backwards(*problem, true, 10);
+        else
+        {
+            co_yield to_action(*pt);
+            ss.concat(hc.remove_point(*pt));
+        }
     }
 }

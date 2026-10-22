@@ -8,6 +8,58 @@
 #include <vector>
 
 #include "hypercuboid.h"
+#include "finetree.h"
+
+namespace
+{
+generator<fine_node<> *> fine_ceilings(fine_node<> &node)
+{
+    if(node.is_ceiling())
+    {
+        co_yield &node;
+        co_return;
+    }
+
+    // Expansion creates a whole witness branch. Visit those existing children
+    // before searching for additional children at this level.
+    const std::size_t existing = node.get_children().size();
+    for(std::size_t j = 0; j < existing; ++j)
+    {
+        for(auto *ceiling : fine_ceilings(*node.get_children()[j]))
+            co_yield ceiling;
+    }
+    for([[maybe_unused]] index_t i : node.search(natural_HC_ordering{}))
+    {
+        // Separate cells can produce distinct children with the same index.
+        // Search appends the new branch; get_child(i) can find an older one.
+        for(auto *ceiling : fine_ceilings(*node.get_children().back()))
+            co_yield ceiling;
+    }
+}
+}
+
+template<bool PRINT>
+std::size_t count_fine(state s, int limit)
+{
+    auto root = fine_node<>::make_root(s);
+    std::size_t count = 0;
+    for(auto *ceiling : fine_ceilings(*root))
+    {
+        if constexpr(PRINT)
+        {
+            state t = s;
+            for(full_move m : ceiling->to_action())
+            {
+                std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
+                t.apply_move<true>(m);
+            }
+            std::cout << "\n";
+        }
+        ++count;
+        if(count == static_cast<std::size_t>(limit)) break;
+    }
+    return count;
+}
 
 template <typename T>
 std::set<T> set_minus(const std::set<T> &a, const std::set<T> &b)
@@ -198,6 +250,7 @@ std::pair<search_mode, int> parse_search_args(
         else if(arg == "naive") mode = search_mode::naive;
         else if(arg == "stable") mode = search_mode::stable;
         else if(arg == "iterative") mode = search_mode::iterative;
+        else if(arg == "fine") mode = search_mode::fine;
         else max = std::stoi(arg);
     }
     return {mode, max};
@@ -221,6 +274,11 @@ std::optional<moveseq> find_first_action(state &s, search_mode mode)
             auto [w, ss] = HC_info::build_HC(s);
             return w.iterative_search(ss).first();
         }
+        case search_mode::fine: {
+            auto root = fine_node<>::make_root(s);
+            if(root->is_terminal()) return std::nullopt;
+            return finetree_nearby_ceiling(root.get())->to_action();
+        }
     }
     return std::nullopt;
 }
@@ -233,3 +291,5 @@ template std::size_t count_iterative<false>(state, int);
 template std::size_t count_iterative<true>(state, int);
 template std::size_t count_naive<false>(state, int);
 template std::size_t count_naive<true>(state, int);
+template std::size_t count_fine<false>(state, int);
+template std::size_t count_fine<true>(state, int);
