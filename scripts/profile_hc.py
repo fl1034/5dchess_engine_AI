@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -16,7 +17,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = Path(__file__).with_name("profile_hc_games.json")
-POLICIES = ("balanced", "stable", "iterative", "fine", "naive")
+POLICIES = ("balanced", "stable", "deferred", "iterative", "fine", "naive")
 
 
 def nonnegative(value: str) -> int:
@@ -40,7 +41,7 @@ def main() -> int:
     parser.add_argument("--policy", choices=POLICIES)
     parser.add_argument("--warmup-rounds", type=nonnegative)
     parser.add_argument("--rounds", type=positive)
-    parser.add_argument("--workload", choices=("all", "checkmate", "perftest"), default="all")
+    parser.add_argument("--workload", choices=("all", "checkmate", "perftest", "count"), default="all")
     parser.add_argument("--output", type=Path, help="save JSON here (default: logs/hc-profiles/<UTC run id>.json)")
     parser.add_argument("--timeout", type=positive, help="whole-invocation wall-time limit in seconds")
     args = parser.parse_args()
@@ -65,10 +66,33 @@ def main() -> int:
         command = [str(executable_path), "hc-profile"]
         file_count = 0
         inputs = []
-        for key, option in (("profile-checkmate", "checkmate"), ("profile-perftest", "perftest")):
-            files = manifest.get(key, [])
-            if not isinstance(files, list) or any(not isinstance(p, str) or not p for p in files):
-                raise ValueError(f"{key} must be an array of file paths")
+        records = []
+        for key, option in (("profile-checkmate", "checkmate"), ("profile-perftest", "perftest"),
+                            ("profile-count", "count")):
+            entries = manifest.get(key, [])
+            if not isinstance(entries, list):
+                raise ValueError(f"{key} must be an array")
+            files = []
+            expectations = []
+            for entry in entries:
+                expected = None
+                if option == "count":
+                    if not isinstance(entry, dict):
+                        raise ValueError("profile-count entries require file and expected fields")
+                    filename = entry.get("file")
+                    expected = entry.get("expected")
+                    if not isinstance(expected, str) or not re.fullmatch(r"[<=>][0-9]+", expected):
+                        raise ValueError("expected must be a comparison such as =8, <1000, or >100")
+                    value = int(expected[1:])
+                    limit = value + (expected[0] != "<")
+                    if limit < 1 or limit > 2147483647:
+                        raise ValueError("expected comparison requires an action limit in 1..2147483647")
+                else:
+                    filename = entry
+                if not isinstance(filename, str) or not filename:
+                    raise ValueError(f"{key} requires nonempty file paths")
+                files.append(filename)
+                expectations.append(expected)
             if args.workload not in ("all", option) or not files:
                 continue
             paths = [(ROOT / path).resolve() for path in files]
@@ -77,10 +101,17 @@ def main() -> int:
             for path in paths:
                 if not path.is_file():
                     raise ValueError(f"profile input not found: {path}")
-            inputs.extend({"workload": key, "file": str(path),
-                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-                          for path in paths)
-            command.extend([f"--{option}", *map(str, paths)])
+            for path, expected in zip(paths, expectations):
+                content = path.read_bytes()
+                pgn = " ".join(content.decode("utf-8").split())
+                prefix = f"EXPECTED{expected} " if expected is not None else ""
+                records.append(f"{prefix}{option.upper()} {pgn}\n")
+                entry = {"workload": key, "file": str(path),
+                         "record": len(records),
+                         "sha256": hashlib.sha256(content).hexdigest()}
+                if expected is not None:
+                    entry["expected"] = expected
+                inputs.append(entry)
             file_count += len(paths)
         if file_count == 0:
             raise ValueError("the selected workload has no files")
@@ -104,12 +135,13 @@ def main() -> int:
         # Keep warmups and measured rounds in one native process. stderr carries
         # native progress; stdout is machine-readable profiling data only.
         with subprocess.Popen(
-            command, cwd=ROOT, stdout=subprocess.PIPE, text=True, encoding="utf-8",
+            command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            text=True, encoding="utf-8",
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
         ) as process:
             was_interrupted = False
             try:
-                stdout, _ = process.communicate(timeout=args.timeout)
+                stdout, _ = process.communicate(input="".join(records), timeout=args.timeout)
             except KeyboardInterrupt:
                 was_interrupted = True
                 # Ctrl+C may already have reached the child through the terminal.
@@ -150,6 +182,10 @@ def main() -> int:
         report = {"error": str(error)}
         metadata["status"] = "process_error"
         exit_code = 1
+    # Native stdin cases use line numbers; retain source filenames in launcher reports.
+    filenames = {f"stdin:{entry['record']}": entry["file"] for entry in inputs}
+    for case in report.get("cases", []):
+        case["file"] = filenames.get(case["file"], case["file"])
     report["run"] = metadata
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -157,6 +193,10 @@ def main() -> int:
     except OSError as error:
         print(f"Cannot save profile: {error}", file=sys.stderr)
         return 1
+    for case in report.get("cases", []):
+        if case["workload"] == "profile-count":
+            print(f"profile-count {Path(case['file']).name}: action_count={case.get('action_count')} "
+                  f"exhausted={case.get('exhausted')} complete={case['complete']}")
     for workload, summary in report.get("summary", {}).items():
         timing = summary["timing"]
         if timing["samples"] or summary["incomplete_cases"]:

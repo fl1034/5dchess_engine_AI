@@ -245,19 +245,6 @@ int with_position(
     return 0;
 }
 
-std::size_t count_actions(state s, search_mode mode, int maximum)
-{
-    switch(mode)
-    {
-        case search_mode::balanced: return count_balanced(s, maximum);
-        case search_mode::naive: return count_naive(s, maximum);
-        case search_mode::stable: return count_stable(s, maximum);
-        case search_mode::iterative: return count_iterative(s, maximum);
-        case search_mode::fine: return count_fine(s, maximum);
-    }
-    throw std::logic_error("unknown search mode");
-}
-
 void print_count(std::size_t count, output_format format)
 {
     if(format == output_format::json)
@@ -458,6 +445,7 @@ int run_all(int argc, const char *argv[])
             case search_mode::balanced: count = count_balanced<true>(s, max); break;
             case search_mode::naive: count = count_naive<true>(s, max); break;
             case search_mode::stable: count = count_stable<true>(s, max); break;
+            case search_mode::deferred: count = count_deferred<true>(s, max); break;
             case search_mode::iterative: count = count_iterative<true>(s, max); break;
             case search_mode::fine: count = count_fine<true>(s, max); break;
         }

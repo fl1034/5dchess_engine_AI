@@ -509,7 +509,39 @@ std::optional<point> HC_info::take_point(HC &hc) const
     return take_point(hc, natural_HC_ordering{});
 }
 
+std::optional<point> HC_info::take_point(HC &hc, std::span<const slice> negative) const
+{
+    return take_point(hc, negative, natural_HC_ordering{});
+}
 
+bool HC_info::prune_retained_slices(HC &hc, std::span<const slice> negative)
+{
+    if(hc.empty()) return false;
+    bool changed;
+    do
+    {
+        changed = false;
+        for(const slice &problem : negative)
+        {
+            if(!hc.is_slice_good(problem)) continue;
+            const auto &fixed = problem.get_fixed_axes();
+            const auto cut = std::find_if(fixed.begin(), fixed.end(),
+                [&](const auto &axis) {
+                    return !hc[axis.first].is_subset_of(axis.second);
+                });
+            if(cut == fixed.end()) return false; // The slice covers this HC.
+            hc[cut->first].minus(cut->second);
+            changed = true;
+        }
+        // A cut can make an earlier constraint unary or cover the whole HC.
+    } while(changed);
+    return true;
+}
+
+generator<moveseq> HC_info::deferred_search(search_space ss) const &
+{
+    return deferred_search(std::move(ss), natural_HC_ordering{});
+}
 
 std::optional<slice> HC_info::find_problem(const point &p, const HC &hc) const
 {

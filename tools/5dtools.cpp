@@ -31,7 +31,7 @@ constexpr std::array commands{
     command{"checkmate", "[--at turn] [policy]", "detect checkmate or stalemate", run_checkmate},
     command{"diff", "[--at turn]", "compare balanced and naive searches", run_diff},
     command{"perftest", "[policy]", "check every position in a 5DPGN game", run_perftest},
-    command{"hc-profile", "[--checkmate files...] [--perftest files...] [options]", "profile search with internal C++ timing and warmup rounds", run_hc_profile},
+    command{"hc-profile", "[options]", "profile search from stdin records with internal C++ timing", run_hc_profile},
     command{"rollout", "[options]", "run random rollout simulations", run_rollout},
     command{"replay-log", "<log> [seed]", "replay and time a protocol failure log", replay_log},
 };
@@ -50,7 +50,7 @@ void print_help()
     }
     std::cout
         << "\nRun '5dtools <command> --help' for detailed command usage.\n"
-        << "\nSearch policies: balanced, naive, stable, iterative, fine\n"
+        << "\nSearch policies: balanced, naive, stable, deferred, iterative, fine\n"
         << "The print, stats, count, all, checkmate, diff, and perftest commands read 5DPGN from stdin.\n";
 }
 }

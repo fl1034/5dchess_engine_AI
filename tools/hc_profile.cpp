@@ -8,9 +8,9 @@
 #include <csignal>
 #include <cstdlib>
 #include <exception>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <mutex>
 #include <optional>
@@ -37,8 +37,6 @@ extern "C" void interrupt_profile(int)
 
 struct options
 {
-    std::vector<std::string> checkmate_files;
-    std::vector<std::string> perftest_files;
     search_mode policy = search_mode::balanced;
     std::string policy_name = "balanced";
     int warmup_rounds = 3;
@@ -52,6 +50,8 @@ struct sample
     std::size_t position_index;
     std::string outcome;
     double elapsed_ms;
+    std::optional<std::size_t> action_count;
+    bool exhausted = false;
 };
 
 struct round_result
@@ -70,6 +70,22 @@ struct failure
     std::string message;
 };
 
+struct count_expectation
+{
+    char comparison;
+    int value;
+
+    int limit() const { return value + (comparison == '<' ? 0 : 1); }
+    bool matches(std::size_t count) const
+    {
+        const auto expected = static_cast<std::size_t>(value);
+        if(comparison == '<') return count < expected;
+        if(comparison == '>') return count > expected;
+        return count == expected;
+    }
+    std::string text() const { return std::string(1, comparison) + std::to_string(value); }
+};
+
 struct profile_case
 {
     std::string workload;
@@ -78,7 +94,10 @@ struct profile_case
     std::optional<state> initial;
     std::size_t endpoint_index = 0;
     std::vector<std::string> expected_outcomes;
+    std::optional<std::size_t> action_count;
     std::vector<sample> samples;
+    std::optional<count_expectation> expected;
+    std::optional<bool> exhausted;
     std::vector<round_result> rounds;
     std::vector<failure> errors;
 
@@ -90,10 +109,11 @@ void print_help()
 {
     std::cout
         << "Usage: 5dtools hc-profile [options]\n"
-        << "  --checkmate <files...>   profile each game's final position\n"
-        << "  --perftest <files...>    profile initial and submitted main-line positions\n"
-        << "                          (last variation, matching perftest)\n"
-        << "  --policy <name>         balanced (default), stable, iterative, fine, naive\n"
+        << "Reads workload records from stdin until EOF:\n"
+        << "  PERFTEST|CHECKMATE <single-line 5dpgn>\n"
+        << "  EXPECTED<100 COUNT <single-line 5dpgn>\n"
+        << "  EXPECTED=100 or EXPECTED>100 stops at 101 actions\n"
+        << "  --policy <name>         balanced (default), stable, deferred, iterative, fine, naive\n"
         << "  --warmup-rounds <n>     complete unrecorded workload rounds (default: 3)\n"
         << "  --rounds <n>            measured workload rounds (default: 5)\n"
         << "  --format text|json      output format (default: text)\n"
@@ -120,17 +140,6 @@ options parse_options(int argc, const char *argv[])
     for(int i = 1; i < argc; ++i)
     {
         const std::string_view arg = argv[i];
-        if(arg == "--checkmate" || arg == "--perftest")
-        {
-            auto &files = arg == "--checkmate"
-                ? result.checkmate_files : result.perftest_files;
-            const auto before = files.size();
-            while(i + 1 < argc && !std::string_view(argv[i + 1]).starts_with('-'))
-                files.emplace_back(argv[++i]);
-            if(files.size() == before)
-                throw std::invalid_argument(std::string(arg) + " requires files");
-            continue;
-        }
         if(arg != "--policy" && arg != "--warmup-rounds"
            && arg != "--rounds" && arg != "--format")
             throw std::invalid_argument("unknown hc-profile option: " + std::string(arg));
@@ -150,14 +159,13 @@ options parse_options(int argc, const char *argv[])
             result.policy_name = value;
             if(value == "balanced") result.policy = search_mode::balanced;
             else if(value == "stable") result.policy = search_mode::stable;
+            else if(value == "deferred") result.policy = search_mode::deferred;
             else if(value == "iterative") result.policy = search_mode::iterative;
             else if(value == "fine") result.policy = search_mode::fine;
             else if(value == "naive") result.policy = search_mode::naive;
             else throw std::invalid_argument("unknown search policy: " + std::string(value));
         }
     }
-    if(result.checkmate_files.empty() && result.perftest_files.empty())
-        throw std::invalid_argument("provide --checkmate and/or --perftest files");
     return result;
 }
 
@@ -169,18 +177,14 @@ const pgnparser_ast::gametree::variation_t *next_action(
     return variations && !variations->empty() ? &variations->back() : nullptr;
 }
 
-void prepare(profile_case &entry, std::mutex &results_mutex)
+void prepare(profile_case &entry, std::mutex &results_mutex, std::string_view source)
 {
     try
     {
-        std::ifstream input(entry.file);
-        if(!input) throw std::runtime_error("cannot open PGN file");
-        std::ostringstream text;
-        text << input.rdbuf();
-        auto parsed = pgnparser(text.str()).parse_game();
+        auto parsed = pgnparser(std::string(source)).parse_game();
         if(!parsed) throw std::runtime_error("expected a PGN game");
         entry.game = std::move(*parsed);
-        if(entry.workload == "profile-checkmate")
+        if(entry.workload != "profile-perftest")
         {
             auto *node = &entry.game->gt;
             while(const auto *action = next_action(*node))
@@ -205,6 +209,56 @@ void prepare(profile_case &entry, std::mutex &results_mutex)
     }
 }
 
+void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex)
+{
+    std::string line;
+    std::size_t line_number = 0;
+    while(std::getline(std::cin, line))
+    {
+        ++line_number;
+        std::istringstream record(line);
+        std::string command;
+        if(!(record >> command)) continue;
+        const auto label = "stdin:" + std::to_string(line_number);
+        std::optional<count_expectation> expected;
+        if(command.starts_with("EXPECTED"))
+        {
+            const std::string_view specification(command);
+            if(specification.size() < 10 || (specification[8] != '<'
+                && specification[8] != '=' && specification[8] != '>'))
+                throw std::invalid_argument(label + ": use EXPECTED<n, EXPECTED=n, or EXPECTED>n");
+            const auto value = specification.substr(9);
+            int count = 0;
+            const auto [end, ec] = std::from_chars(
+                value.data(), value.data() + value.size(), count);
+            const char comparison = specification[8];
+            if(value.front() < '0' || value.front() > '9'
+                || ec != std::errc{} || end != value.data() + value.size() || count < 0
+                || (comparison == '<' ? count == 0 : count == std::numeric_limits<int>::max()))
+                throw std::invalid_argument(label + ": invalid expected count");
+            expected = count_expectation{comparison, count};
+            record >> command;
+        }
+        std::string workload;
+        if(command == "COUNT") workload = "profile-count";
+        else if(command == "PERFTEST") workload = "profile-perftest";
+        else if(command == "CHECKMATE") workload = "profile-checkmate";
+        else throw std::invalid_argument(label + ": unknown workload: " + command);
+        if(expected && command != "COUNT")
+            throw std::invalid_argument(label + ": EXPECTED requires COUNT");
+        if(command == "COUNT" && !expected)
+            throw std::invalid_argument(label + ": COUNT requires a bounded EXPECTED comparison");
+        std::string source;
+        std::getline(record >> std::ws, source);
+        if(source.empty()) throw std::invalid_argument(label + ": missing 5dpgn");
+        auto &entry = cases.emplace_back(workload, label);
+        entry.expected = expected;
+        prepare(entry, results_mutex, source);
+    }
+    if(std::cin.bad()) throw std::runtime_error("cannot read stdin");
+    if(cases.empty()) throw std::invalid_argument("provide at least one workload record");
+}
+
 void replay_action(state &current, const pgnparser_ast::actions &action,
     const std::shared_ptr<const std::string> &source)
 {
@@ -222,8 +276,8 @@ void run_round(profile_case &entry, const options &settings, int round, bool war
     std::mutex &results_mutex)
 {
     if(!entry.errors.empty()) return;
-    std::size_t position_index = entry.workload == "profile-checkmate"
-        ? entry.endpoint_index : 0;
+    std::size_t position_index = entry.workload == "profile-perftest"
+        ? 0 : entry.endpoint_index;
     std::string phase = "setup";
     try
     {
@@ -235,28 +289,46 @@ void run_round(profile_case &entry, const options &settings, int round, bool war
         {
             phase = "search";
             const auto start = std::chrono::steady_clock::now();
-            auto moves = find_first_action(current, settings.policy);
-            const bool checkmate = !moves && current.has_phantom_check();
+            std::optional<moveseq> moves;
+            std::optional<std::size_t> action_count;
+            if(entry.workload == "profile-count")
+                action_count = count_actions(current, settings.policy, entry.expected->limit());
+            else
+                moves = find_first_action(current, settings.policy);
+            const bool has_actions = action_count ? *action_count != 0 : moves.has_value();
+            const bool checkmate = !has_actions && current.has_phantom_check();
             const double elapsed_ms = std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
             // All checks below are outside the measured operation.
             phase = "validation";
-            const std::string outcome = moves ? "action"
+            const std::string outcome = has_actions ? "action"
                 : checkmate ? "checkmate" : "stalemate";
             if(moves && !current.can_apply(action::from_moveseq(*moves, current)))
                 throw std::runtime_error("search returned an illegal action");
             const auto *next = entry.workload == "profile-perftest"
                 ? next_action(*node) : nullptr;
-            if(!moves && next)
+            if(!has_actions && next)
                 throw std::runtime_error("search reports a terminal position before the recorded main-line end");
             {
                 std::lock_guard lock(results_mutex);
+                if(action_count)
+                {
+                    if(entry.action_count && entry.action_count != action_count)
+                        throw std::runtime_error("action count changed between rounds");
+                    entry.action_count = action_count;
+                    entry.exhausted = *action_count < static_cast<std::size_t>(entry.expected->limit());
+                    if(!entry.expected->matches(*action_count))
+                        throw std::runtime_error("expected " + entry.expected->text()
+                            + " actions, observed " + std::to_string(*action_count)
+                            + (*entry.exhausted ? " (exhausted)" : " (limit reached)"));
+                }
                 if(positions == entry.expected_outcomes.size())
                     entry.expected_outcomes.push_back(outcome);
                 else if(entry.expected_outcomes.at(positions) != outcome)
                     throw std::runtime_error("action availability or mate classification changed between rounds");
                 if(!warmup)
-                    entry.samples.push_back({round, position_index, outcome, elapsed_ms});
+                    entry.samples.push_back({round, position_index, outcome, elapsed_ms,
+                        action_count, entry.exhausted.value_or(false)});
             }
             ++positions;
             total_ms += elapsed_ms;
@@ -364,6 +436,18 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
             json_string(std::cout, entry.workload);
             std::cout << ",\"file\":";
             json_string(std::cout, entry.file);
+            if(entry.workload == "profile-count")
+            {
+                std::cout << ",\"action_count\":";
+                if(entry.action_count) std::cout << *entry.action_count;
+                else std::cout << "null";
+                std::cout << ",\"expected_count\":";
+                std::cout << entry.expected->value << ",\"expected_operator\":";
+                json_string(std::cout, std::string(1, entry.expected->comparison));
+                std::cout << ",\"action_limit\":" << entry.expected->limit() << ",\"exhausted\":";
+                if(entry.exhausted) std::cout << (*entry.exhausted ? "true" : "false");
+                else std::cout << "null";
+            }
             std::cout << ",\"complete\":" << (complete(entry, settings) ? "true" : "false")
                       << ",\"positions_per_round\":" << entry.expected_outcomes.size()
                       << ",\"summary\":";
@@ -376,6 +460,9 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                 std::cout << "{\"round\":" << s.round << ",\"position_index\":"
                           << s.position_index << ",\"outcome\":";
                 json_string(std::cout, s.outcome);
+                if(s.action_count)
+                    std::cout << ",\"action_count\":" << *s.action_count
+                              << ",\"exhausted\":" << (s.exhausted ? "true" : "false");
                 std::cout << ",\"elapsed_ms\":" << s.elapsed_ms << '}';
             }
             std::cout << "],\"game_rounds\":[";
@@ -408,7 +495,7 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                   << " warmup rounds, " << settings.rounds << " measured rounds\n";
 
     bool first_workload = true;
-    for(const std::string workload : {"profile-checkmate", "profile-perftest"})
+    for(const std::string workload : {"profile-checkmate", "profile-perftest", "profile-count"})
     {
         std::vector<double> values;
         std::size_t failed_cases = 0, incomplete_cases = 0;
@@ -426,6 +513,13 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                           << entry.expected_outcomes.size() << " samples=" << s.count
                           << " outcome=" << (entry.expected_outcomes.empty()
                               ? "unknown" : entry.expected_outcomes.back())
+                          << (entry.workload == "profile-count"
+                              ? " action_count=" + (entry.action_count
+                                  ? std::to_string(*entry.action_count) : "unknown") : "")
+                          << (entry.expected ? " expected" + entry.expected->text()
+                              + " action_limit=" + std::to_string(entry.expected->limit())
+                              + " exhausted=" + (entry.exhausted
+                                  ? (*entry.exhausted ? "true" : "false") : "unknown") : "")
                           << " mean_ms=" << s.mean << " median_ms=" << s.median
                           << " p95_ms=" << s.p95 << " max_ms=" << s.maximum
                           << (complete(entry, settings) ? "\n" : " INCOMPLETE\n");
@@ -474,8 +568,16 @@ int run_hc_profile(int argc, const char *argv[])
         return 2;
     }
     std::vector<profile_case> cases;
-    for(const auto &file : settings.checkmate_files) cases.emplace_back("profile-checkmate", file);
-    for(const auto &file : settings.perftest_files) cases.emplace_back("profile-perftest", file);
+    std::mutex results_mutex;
+    try
+    {
+        read_records(cases, results_mutex);
+    }
+    catch(const std::exception &error)
+    {
+        std::cerr << "Error: " << error.what() << '\n';
+        return 2;
+    }
     interrupted = false;
     const auto previous_handler = std::signal(SIGINT, interrupt_profile);
     if(previous_handler == SIG_ERR)
@@ -483,7 +585,6 @@ int run_hc_profile(int argc, const char *argv[])
 #ifdef SIGBREAK
     const auto previous_break_handler = std::signal(SIGBREAK, interrupt_profile);
 #endif
-    std::mutex results_mutex;
     std::atomic<bool> finished = false;
     std::exception_ptr worker_error;
     // Keep the search itself unchanged, including policies without cancellation.
@@ -491,7 +592,6 @@ int run_hc_profile(int argc, const char *argv[])
     std::thread worker([&] {
         try
         {
-            for(auto &entry : cases) prepare(entry, results_mutex);
             for(int round = 0; round < settings.warmup_rounds; ++round)
             {
                 std::cerr << "Warmup round " << round + 1 << '/' << settings.warmup_rounds << '\n';

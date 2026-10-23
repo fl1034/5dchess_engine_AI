@@ -276,18 +276,23 @@ search_space HC::remove_slice(const slice &s) const
 search_space HC::remove_point(const point &p) const
 {
     search_space result;
+    std::size_t end = p.size();
+    while(end > 0 && axes[end - 1].size() == 1) --end;
+    if(end == 0) return result;
+
     HC remaining = *this;
-    for(index_t i = 0; i < static_cast<index_t>(p.size()); i++)
+    for(std::size_t i = 0; i + 1 < end; ++i)
     {
+        // Singleton axes already fix the prefix to p and have no output piece.
+        if(axes[i].size() == 1) continue;
         HC x = remaining;
         x.axes[i].erase(p[i]);
-        integer_set singleton = {p[i]};
-        remaining.axes[i] = std::move(singleton);
-        if(!x.axes[i].empty()) // do not include empty hc
-        {
-            result.push_back(std::move(x));
-        }
+        remaining.axes[i] = integer_set{p[i]};
+        result.push_back(std::move(x));
     }
+    // No later piece needs the remaining prefix, so reuse its HC directly.
+    remaining.axes[end - 1].erase(p[end - 1]);
+    result.push_back(std::move(remaining));
     return result;
 }
 

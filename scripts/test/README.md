@@ -14,6 +14,11 @@ From `scripts/`, use `python -m unittest discover -s test -v`.
 blocks, signed timeline labels, a complete two-timeline history, even-timeline
 jumps and promotions, odd timelines, and invalid text between FEN blocks.
 
+`test_profile_hc.py` checks required count comparisons in the profiling manifest,
+their stdin encoding, filename mapping in saved reports, and rejection of invalid
+or overflowing limits. It mocks the native process; native enumeration counts
+are checked by the `hc_count_*` CTest checks.
+
 `test_public_api.py` checks these files through their public interfaces:
 
 | File | What passing verifies |

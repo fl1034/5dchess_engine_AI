@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iostream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -147,6 +148,30 @@ std::size_t count_stable(state s, int limit)
 }
 
 template<bool PRINT>
+std::size_t count_deferred(state s, int limit)
+{
+    auto [w, ss] = HC_info::build_HC(s);
+    auto actions = w.deferred_search(std::move(ss));
+    std::size_t count = 0;
+    for(const auto &moves : actions)
+    {
+        if constexpr(PRINT)
+        {
+            state t = s;
+            for(full_move m : moves)
+            {
+                std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
+                t.apply_move<true>(m);
+            }
+            std::cout << "\n";
+        }
+        ++count;
+        if(count == static_cast<std::size_t>(limit)) break;
+    }
+    return count;
+}
+
+template<bool PRINT>
 std::size_t count_iterative(state s, int limit)
 {
     auto [w, ss] = HC_info::build_HC(s);
@@ -249,6 +274,7 @@ std::pair<search_mode, int> parse_search_args(
         if(arg == "balanced") mode = search_mode::balanced;
         else if(arg == "naive") mode = search_mode::naive;
         else if(arg == "stable") mode = search_mode::stable;
+        else if(arg == "deferred") mode = search_mode::deferred;
         else if(arg == "iterative") mode = search_mode::iterative;
         else if(arg == "fine") mode = search_mode::fine;
         else max = std::stoi(arg);
@@ -270,6 +296,10 @@ std::optional<moveseq> find_first_action(state &s, search_mode mode)
             auto [w, ss] = HC_info::build_HC(s);
             return w.stable_search(ss).first();
         }
+        case search_mode::deferred: {
+            auto [w, ss] = HC_info::build_HC(s);
+            return w.deferred_search(std::move(ss)).first();
+        }
         case search_mode::iterative: {
             auto [w, ss] = HC_info::build_HC(s);
             return w.iterative_search(ss).first();
@@ -283,10 +313,27 @@ std::optional<moveseq> find_first_action(state &s, search_mode mode)
     return std::nullopt;
 }
 
+std::size_t count_actions(state s, search_mode mode, int limit)
+{
+    if(limit <= 0) throw std::invalid_argument("action limit must be positive");
+    switch(mode)
+    {
+        case search_mode::balanced: return count_balanced(std::move(s), limit);
+        case search_mode::naive: return count_naive(std::move(s), limit);
+        case search_mode::stable: return count_stable(std::move(s), limit);
+        case search_mode::deferred: return count_deferred(std::move(s), limit);
+        case search_mode::iterative: return count_iterative(std::move(s), limit);
+        case search_mode::fine: return count_fine(std::move(s), limit);
+    }
+    throw std::invalid_argument("unknown search policy");
+}
+
 template std::size_t count_balanced<false>(state, int);
 template std::size_t count_balanced<true>(state, int);
 template std::size_t count_stable<false>(state, int);
 template std::size_t count_stable<true>(state, int);
+template std::size_t count_deferred<false>(state, int);
+template std::size_t count_deferred<true>(state, int);
 template std::size_t count_iterative<false>(state, int);
 template std::size_t count_iterative<true>(state, int);
 template std::size_t count_naive<false>(state, int);

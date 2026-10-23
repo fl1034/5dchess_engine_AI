@@ -19,11 +19,6 @@ foreach(TEST_FILE ${TEST_SOURCES})
     # Link against the core engine library
     target_link_libraries(${TEST_NAME} PRIVATE 5dchess_client 5dchess_engine)
 
-    if(TEST_NAME STREQUAL "test_search_tools")
-        target_sources(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../tools/search_tools.cpp")
-        target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../tools")
-    endif()
-
     # Include necessary directories
     target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
@@ -36,3 +31,23 @@ set_tests_properties(test_hcutils PROPERTIES TIMEOUT 30)
 
 # Global propagation must resolve the formerly unbounded engine/fine searches.
 set_tests_properties(test_global_search PROPERTIES TIMEOUT 30)
+
+if(TOOLS)
+    # Reuse the shell script's literal stdin records without requiring a shell in CTest.
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/hc_count.sh" HC_COUNT_SCRIPT)
+    string(REGEX MATCH "HC_PROFILE_INPUT'\n(.*)\nHC_PROFILE_INPUT" HC_COUNT_MATCH "${HC_COUNT_SCRIPT}")
+    if(NOT HC_COUNT_MATCH)
+        message(FATAL_ERROR "Missing hc_count.sh input records")
+    endif()
+    set(HC_COUNT_INPUT "${CMAKE_CURRENT_BINARY_DIR}/hc_count.in")
+    file(WRITE "${HC_COUNT_INPUT}" "${CMAKE_MATCH_1}\n")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS hc_count.sh)
+    foreach(POLICY balanced stable deferred)
+        add_test(NAME hc_count_${POLICY}
+            COMMAND ${CMAKE_COMMAND}
+                "-DTOOLS=$<TARGET_FILE:5dtools>"
+                "-DINPUT=${HC_COUNT_INPUT}" "-DPOLICY=${POLICY}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/run_hc_count.cmake")
+        set_tests_properties(hc_count_${POLICY} PROPERTIES TIMEOUT 30)
+    endforeach()
+endif()

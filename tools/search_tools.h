@@ -12,6 +12,7 @@ enum class search_mode
     balanced,
     naive,
     stable,
+    deferred,
     iterative,
     fine,
 };
@@ -20,6 +21,7 @@ std::pair<search_mode, int> parse_search_args(
     int argc, const char *argv[], int start_index = 1);
 
 std::optional<moveseq> find_first_action(state &s, search_mode mode);
+std::size_t count_actions(state s, search_mode mode, int limit);
 
 generator<moveseq> naive_search(state s);
 
@@ -27,6 +29,8 @@ template<bool PRINT=false>
 std::size_t count_balanced(state s, int limit);
 template<bool PRINT=false>
 std::size_t count_stable(state s, int limit);
+template<bool PRINT=false>
+std::size_t count_deferred(state s, int limit);
 template<bool PRINT=false>
 std::size_t count_iterative(state s, int limit);
 template<bool PRINT=false>

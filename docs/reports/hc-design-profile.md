@@ -1,8 +1,11 @@
 # Hypercuboid search: findings and open questions
 
-The experiments use matches 59, 72, and 123 in `test/pgn/slow/`, plus
-`test/pgn/100timelines.5dpgn`. These positions may be strongly biased. Timings
-refer to the experimental policies before the latest 100-problem fallback changes.
+The experiments use matches 59, 72, and 123 and `100timelines` in
+`test/pgn/slow/`, main lines from 50 online games, and complete enumeration of
+the 30,134-action, 55,332-action, and final NP positions. The slow positions
+may be strongly biased. The propagation comparison predates the 100-problem
+fallback changes; the deferred-policy and point-removal comparisons below are
+separate, later measurements.
 
 ## Findings
 
@@ -49,7 +52,7 @@ refer to the experimental policies before the latest 100-problem fallback change
    the phantom-check test distinguishes checkmate from stalemate without
    repeating `get_mate_type()`'s legality searches.
 
-## Representative timings
+## Earlier propagation timings
 
 Median milliseconds, three trials. Old uses local slices; other columns use
 global slices. Secondary cuts use codimension ≤1 in both
@@ -81,13 +84,93 @@ Match 123's **1,438 secondary pairs come from four problems**, not 1,438
 independent problems. These small, trajectory-dependent samples differ mainly
 in the expensive tail.
 
+## Deferred constraints and matching order
+
+The comparisons below retain their historical policy names. The current
+`deferred` policy uses matching-first behavior; the original Deferred variant
+has been removed.
+
+Deferred search retains global problem slices as negative constraints instead
+of immediately splitting every HC. Global codimension at most one still
+propagates immediately. When retained slices outnumber stored HCs, it fully
+propagates one slice of smallest global codimension; equal counts retain the
+slices. Matching-first search tries matching in the stored HC before creating
+temporary regions to avoid retained slices.
+
+In a four-policy comparison, median final-position search times were:
+
+| Position | Balanced | Stable | Deferred | Deferred matching first |
+| --- | ---: | ---: | ---: | ---: |
+| 100timelines | 28.727 | 29.069 | 28.433 | 28.907 |
+| Match 59 | 6.077 | 22.018 | 21.327 | 3.948 |
+| Match 72 | 4.185 | 24.499 | 3.727 | 3.627 |
+| Match 123 | 54.180 | 38.800 | 34.547 | 15.632 |
+
+These are milliseconds from Release builds with AppleClang 17 and `-fno-rtti`,
+three warmup rounds, and five measured rounds. Times include context setup,
+search, cleanup, and terminal classification; parsing, replay, and action
+validation are excluded. Match 72 returned an action; the other three final
+positions were checkmate.
+
+Matching first substantially improved Matches 59 and 123, but did not improve
+typical positions in the same run. Across 11,385 main-line position samples per
+policy, mean times were 15.305 microseconds for Balanced, 17.350 for Stable,
+15.469 for Deferred, and 16.228 for Deferred matching first. These small
+single-run differences do not establish a universally faster policy. All
+policies agreed on action availability and terminal classification.
+
+A subsequent change persists retained slices' removals from a visited HC
+whenever relative codimension is at most one. Covering slices discard the HC;
+unary slices shrink one coordinate set without fragmentation. Cuts repeat to
+a fixed point, including after matching-first's unsupported-arrival pruning.
+The global slices remain available for other HCs.
+
+## Complete enumeration and point removal
+
+The large first-action gains do not carry over to complete enumeration.
+Every legal action still has to be generated, and point removal still divides
+the remaining space. With persistent local cuts, Deferred matching first was
+close to Balanced on the two large count cases; plain Deferred was slower.
+All policies returned exactly 30,134, 55,332, and eight actions in every round.
+The combined 57-case manifest also completed without errors.
+
+Optimizing `HC::remove_point` improved enumeration across all four policies.
+Skipping singleton axes and moving the working HC into the last nonempty piece
+reduces HC copies from D+1 to k, where D is dimension and k is the number of
+nonsingleton axes. Output regions and their order remain unchanged.
+
+In paired before/after runs, median elapsed time fell by **13.3–15.4%** on the
+30,134-action case and **30.3–31.4%** on the 55,332-action case. Each run used
+three warmups and five measured rounds, alternating before/after order between
+policies. Post-optimization median milliseconds were:
+
+| Position | Balanced | Stable | Deferred | Deferred matching first |
+| --- | ---: | ---: | ---: | ---: |
+| 30134 | 57.290 | 56.488 | 67.086 | 57.666 |
+| 55332 | 108.562 | 108.828 | 117.053 | 109.393 |
+
+These are separate measurements from the first-action table. The eight-action
+NP case remained below 0.2 ms under every policy; its small differences are not
+strong performance evidence. Count and full action-set regressions passed.
+Point-removal tests verified ordered, nonoverlapping coverage of every original
+point except the removed point, including singleton axes and multiple bitset
+blocks.
+
+For current commands and the fixed profiling manifest, see
+[HC search profiling](../usage/tools.md#hc-search-profiling). Count records now
+use bounded comparisons; the exact-count expectations in the manifest exhaust
+the same three spaces, with one additional action as the failure limit.
+
 ## Open question
 
 How should recent slice-quality observations and space size or memory control
 codimension relaxation? Higher limits expose constraints but multiply fragments;
 a codimension-2 propagation pass can potentially double HC count. Retained
 problems may become cheaper as HCs shrink. The history statistic, gauge, and
-relaxation schedule remain open mathematical questions.
+relaxation schedule remain open mathematical questions. For Deferred search,
+the negative-slice versus HC-count gauge is also a heuristic; these results do
+not establish that it is optimal or whether removal volume should supplement
+codimension when choosing a slice.
 
 Small action-set comparisons and native tests passed; they do not establish
 an optimal policy. Raw data: [comparative profiles](res/hc-design-profile/),

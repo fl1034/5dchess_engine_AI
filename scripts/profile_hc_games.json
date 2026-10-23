@@ -3,6 +3,20 @@
   "policy": "balanced",
   "warmup_rounds": 3,
   "rounds": 5,
+  "profile-count": [
+    {
+      "file": "test/pgn/count/30134.5dpgn",
+      "expected": "=30134"
+    },
+    {
+      "file": "test/pgn/count/55332.5dpgn",
+      "expected": "=55332"
+    },
+    {
+      "file": "test/pgn/NP.5dpgn",
+      "expected": "=8"
+    }
+  ],
   "profile-checkmate": [
     "test/pgn/slow/100timelines.5dpgn",
     "test/pgn/slow/factored-match-59.5dpgn",
