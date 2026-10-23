@@ -18,6 +18,7 @@
 #include <functional>
 #include <span>
 #include "geometry.h"
+#include "graph.h"
 #include "state.h"
 #include "vec4.h"
 #include "generator.h"
@@ -192,17 +193,31 @@ public:
      arrives get deleted immediately (that's why parameter hc is a
      non-const reference)
      */
-    std::optional<point> take_point(HC &hc) const;
+    // Scratch storage may be reused across calls, including different contexts.
+    // Each active search owns its workspace; returned points never borrow it.
+    struct workspace
+    {
+    private:
+        friend class HC_info;
+        graph matching_graph{0};
+        std::vector<index_t> must_include;
+        std::vector<index_t> edge_refs;
+        integer_set ghost_arrive_indices;
+    };
+
+    std::optional<point> take_point(HC &hc, workspace *ws = nullptr) const;
     template<HCOrdering Order>
-    std::optional<point> take_point(HC &hc, const Order &order) const;
+    std::optional<point> take_point(HC &hc, const Order &order, workspace *ws = nullptr) const;
 
     // With negative slices, use temporary regions before matching; their
     // matching-dependent pruning never replaces the input HC. An empty span
     // uses ordinary take_point(), including its unsupported-arrival pruning.
-    std::optional<point> take_point(HC &hc, std::span<const slice> negative) const;
+    std::optional<point> take_point(
+        HC &hc, std::span<const slice> negative, workspace *ws = nullptr) const;
     template<HCOrdering Order>
     std::optional<point> take_point(
-        HC &hc, std::span<const slice> negative, const Order &order) const;
+        HC &hc, std::span<const slice> negative, const Order &order,
+        workspace *ws = nullptr) const;
     
     /*
      find_problem(p, hc): find any problem about p and returns the problem 
@@ -219,12 +234,6 @@ public:
     std::optional<slice> find_checks(const point &p, const HC &hc) const;
     moveseq to_action(const point &p) const;
     static std::pair<HC_info, search_space> build_HC(const state &s);
-    generator<moveseq> search(search_space ss) const &;
-    generator<moveseq> search(search_space ss) const && = delete;
-    template<HCOrdering Order>
-    generator<moveseq> search(search_space ss, Order order) const &;
-    template<HCOrdering Order>
-    generator<moveseq> search(search_space ss, Order order) const && = delete;
     generator<moveseq> iterative_search(search_space ss) const &;
     generator<moveseq> iterative_search(search_space ss) const && = delete;
     template<HCOrdering Order>
@@ -243,6 +252,12 @@ public:
     generator<moveseq> deferred_search(search_space ss, Order order) const &;
     template<HCOrdering Order>
     generator<moveseq> deferred_search(search_space ss, Order order) const && = delete;
+    generator<moveseq> search(search_space ss) const &;
+    generator<moveseq> search(search_space ss) const && = delete;
+    template<HCOrdering Order>
+    generator<moveseq> search(search_space ss, Order order) const &;
+    template<HCOrdering Order>
+    generator<moveseq> search(search_space ss, Order order) const && = delete;
     // /* uncomment when debugging */
     //std::vector<moveseq> search1(search_space ss) const;
 };

@@ -409,12 +409,59 @@ void test_line_axis_lookup()
     }
 }
 
+void test_point_workspace()
+{
+    HC_info::workspace ws;
+    // Alternate dimensions and revisit contexts after failures. Reuse must
+    // preserve both the selected point and unsupported-arrival pruning.
+    for(const auto *pgn : {
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:1:w]\n",
+        "[Board \"custom\"]\n[Size \"4x4\"]\n[3k/4/4/KN2:0:1:w]\n",
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:1:w]\n"})
+    {
+        auto [info, space] = HC_info::build_HC(state::from_pgn(pgn));
+        for(const HC &original : space)
+        {
+            for(unsigned repeat = 0; repeat < 2; ++repeat)
+            {
+                HC fresh = original, reused = original;
+                const auto expected = info.take_point(fresh);
+                assert(info.take_point(reused, &ws) == expected);
+                assert(reused.to_string() == fresh.to_string());
+                if(info.dimension() != 0)
+                {
+                    HC empty = original;
+                    empty[0].clear();
+                    assert(!info.take_point(empty, &ws));
+                }
+            }
+        }
+    }
+
+    // Reset adjacency rows across bit-set blocks and graph size changes.
+    graph g(130);
+    g.add_edge(0, 129);
+    assert(g.find_matching({0, 129}));
+    for(index_t n : {index_t{130}, index_t{3}, index_t{130}})
+    {
+        g.reset(n);
+        assert(!g.find_matching({0}));
+        g.add_edge(0, 1);
+        assert(g.find_matching({0, 1}));
+    }
+    g.reset(0);
+    assert(g.find_matching({}));
+}
+
 void test_negative_point_selection()
 {
     const auto position = state::from_pgn(
         "[Board \"custom\"]\n[Size \"4x4\"]\n"
         "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:1:w]\n");
     auto [info, space] = HC_info::build_HC(position);
+    HC_info::workspace ws;
     for(const HC &original : space)
     {
         HC hc = original;
@@ -430,7 +477,10 @@ void test_negative_point_selection()
         negative.push_back(std::move(excluded));
         for(unsigned step = 0; step < 4; ++step)
         {
+            auto reused_hc = hc;
             auto actual = info.take_point(hc, negative);
+            assert(info.take_point(reused_hc, negative, &ws) == actual);
+            assert(reused_hc.to_string() == hc.to_string());
             assert(hc.to_string() == before);
             auto remaining = search_space{hc};
             for(const slice &problem : negative) remaining.remove_slice_globally(problem);
@@ -665,6 +715,7 @@ int run()
     test_global_slice_order();
     test_search_branch_order();
     test_line_axis_lookup();
+    test_point_workspace();
     test_negative_point_selection();
     test_persistent_retained_slice();
     test_reactivated_present();

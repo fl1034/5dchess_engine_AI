@@ -169,7 +169,7 @@ result path. `--timeout <seconds>` bounds the entire native invocation, not
 individual searches; an exceeded limit saves an explicit timeout result and
 returns 124.
 
-The [count regression script](../../test/hc_count.sh) embeds the 30,134 and 55,332
+The [count regression script](../../test/hc_count.sh) embeds the 30,134, 55,332, and 1,494
 cases and runs without separately linked test executables:
 
 ```sh
@@ -177,7 +177,7 @@ sh test/hc_count.sh build/5dtools --policy deferred
 ```
 
 With `TOOLS=ON` and `TEST=ON`, CTest checks these records with Balanced, Stable,
-and Deferred. CTest feeds the shell script's literal
+Deferred, and Fine. CTest feeds the shell script's literal
 records through CMake, so these count checks do not require a shell.
 
 ## Castling in custom positions

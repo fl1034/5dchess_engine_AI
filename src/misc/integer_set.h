@@ -200,6 +200,13 @@ public:
     const_iterator end() const && = delete;
     const_iterator cend() const && = delete;
 
+    // Remove all values while retaining storage for higher blocks.
+    void clear() noexcept
+    {
+        first_block = 0;
+        remaining_blocks.clear();
+    }
+
     inline constexpr void insert(value_type value);
     bool erase(value_type value) noexcept;
     template <typename Predicate>

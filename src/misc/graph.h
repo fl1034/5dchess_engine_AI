@@ -27,6 +27,14 @@ public:
           adj(n)
     {}
 
+    // Start an empty graph, retaining adjacency storage where possible.
+    void reset(index_t n)
+    {
+        for(auto &row : adj) row.clear();
+        adj.resize(n);
+        n_vertices = n;
+    }
+
     void add_edge(index_t u, index_t v);
 
     std::optional<std::vector<std::pair<index_t, index_t>>>

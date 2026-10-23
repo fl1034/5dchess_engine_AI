@@ -5,15 +5,23 @@
 #include "graph.h"
 
 template<HCOrdering Order>
-std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
+std::optional<point> HC_info::take_point(HC &hc, const Order &order, workspace *ws) const
 {
     assert(hc.dimension() == dimension());
-    graph g(dimension());
-    std::vector<index_t> must_include;
+    if(!ws)
+    {
+        workspace local;
+        return take_point(hc, order, &local);
+    }
+    auto &g = ws->matching_graph;
+    g.reset(dimension());
+    auto &must_include = ws->must_include;
+    must_include.clear();
     constexpr index_t invalid_index = std::numeric_limits<index_t>::max();
 
     const size_t num_edges = static_cast<std::size_t>(dimension()) * dimension();
-    std::vector<index_t> edge_refs(num_edges, invalid_index);
+    auto &edge_refs = ws->edge_refs;
+    edge_refs.assign(num_edges, invalid_index);
     const auto edge_ref = [&](index_t p, index_t q) -> index_t & {
         return edge_refs[static_cast<std::size_t>(p) * dimension() + q];
     };
@@ -22,7 +30,8 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
     for(index_t n = 0; n < dimension(); n++)
     {
         bool has_nonjump = false;
-        integer_set ghost_arrive_indices;
+        auto &ghost_arrive_indices = ws->ghost_arrive_indices;
+        ghost_arrive_indices.clear();
         order.for_each(n, hc[n], [&](index_t i) {
             const entry &loc = axis_coords[n][i];
             std::visit(overloads {
@@ -97,9 +106,14 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order) const
 
 template<HCOrdering Order>
 std::optional<point> HC_info::take_point(
-    HC &hc, std::span<const slice> negative, const Order &order) const
+    HC &hc, std::span<const slice> negative, const Order &order, workspace *ws) const
 {
-    if(negative.empty()) return take_point(hc, order);
+    if(!ws)
+    {
+        workspace local;
+        return take_point(hc, negative, order, &local);
+    }
+    if(negative.empty()) return take_point(hc, order, ws);
 
     // Explore the complement lazily: a temporary region at depth k already
     // avoids slices [0, k). Matching is only run after all slices are avoided.
@@ -113,7 +127,7 @@ std::optional<point> HC_info::take_point(
         while(next < negative.size() && !region.intersects(negative[next])) ++next;
         if(next == negative.size())
         {
-            if(auto pt = take_point(region, order)) return pt;
+            if(auto pt = take_point(region, order, ws)) return pt;
             continue;
         }
         auto pieces = region.remove_slice_carefully(negative[next]);
@@ -124,8 +138,62 @@ std::optional<point> HC_info::take_point(
 }
 
 template<HCOrdering Order>
+generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const &
+{
+    workspace ws;
+    while(!ss.empty())
+    {
+        HC hc = std::move(ss.back());
+        ss.pop_back();
+        auto pt_opt = take_point(hc, order, &ws);
+        if(!pt_opt)
+        {
+            continue;
+        }
+
+        const point &pt = *pt_opt;
+        auto problem = find_problem(pt, hc);
+        if(problem)
+        {
+            ss.concat(hc.remove_slice(*problem));
+        }
+        else
+        {
+            co_yield to_action(pt);
+            ss.concat(hc.remove_point(pt));
+        }
+    }
+}
+
+template<HCOrdering Order>
+generator<moveseq> HC_info::stable_search(search_space ss, Order order) const &
+{
+    workspace ws;
+    while(!ss.empty())
+    {
+        HC hc = std::move(ss.back());
+        ss.pop_back();
+        auto pt = take_point(hc, order, &ws);
+        if(!pt) continue;
+
+        auto problem = find_problem(*pt, universe);
+        if(problem)
+        {
+            ss.push_back(std::move(hc));
+            ss.remove_slice_globally(*problem);
+        }
+        else
+        {
+            co_yield to_action(*pt);
+            ss.concat(hc.remove_point(*pt));
+        }
+    }
+}
+
+template<HCOrdering Order>
 generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const &
 {
+    workspace ws;
     // Negative information belongs to this search invocation, alongside its
     // positive HC cover. Temporary point-selection fragments are discarded.
     std::vector<slice> negative;
@@ -142,12 +210,12 @@ generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const 
         if(!prune_retained_slices(hc, negative)) continue;
         // Prune unsupported arrivals before temporary slicing. A matching
         // point outside all retained slices needs no temporary regions.
-        auto pt = take_point(hc, order);
+        auto pt = take_point(hc, order, &ws);
         if(!pt || !prune_retained_slices(hc, negative)) continue;
         if(std::any_of(negative.begin(), negative.end(),
             [&](const slice &problem) { return problem.contains(*pt); }))
         {
-            pt = take_point(hc, negative, order);
+            pt = take_point(hc, negative, order, &ws);
         }
         if(!pt) continue;
 
@@ -180,42 +248,16 @@ generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const 
 }
 
 template<HCOrdering Order>
-generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const &
-{
-    while(!ss.empty())
-    {
-        HC hc = std::move(ss.back());
-        ss.pop_back();
-        auto pt_opt = take_point(hc, order);
-        if(!pt_opt)
-        {
-            continue;
-        }
-
-        const point &pt = *pt_opt;
-        auto problem = find_problem(pt, hc);
-        if(problem)
-        {
-            ss.concat(hc.remove_slice(*problem));
-        }
-        else
-        {
-            co_yield to_action(pt);
-            ss.concat(hc.remove_point(pt));
-        }
-    }
-}
-
-template<HCOrdering Order>
 generator<moveseq> HC_info::search(search_space ss, Order order) const &
 {
+    workspace ws;
     constexpr std::size_t adaptive_problem_limit = 100;
     std::size_t num_problems = 0;
     while(!ss.empty() && num_problems < adaptive_problem_limit)
     {
         HC hc = std::move(ss.back());
         ss.pop_back();
-        auto pt = take_point(hc, order);
+        auto pt = take_point(hc, order, &ws);
         if(!pt) continue;
 
         auto problem = find_problem(*pt, hc);
@@ -232,28 +274,4 @@ generator<moveseq> HC_info::search(search_space ss, Order order) const &
 
     for(auto &&moves : stable_search(std::move(ss), std::move(order)))
         co_yield std::move(moves);
-}
-
-template<HCOrdering Order>
-generator<moveseq> HC_info::stable_search(search_space ss, Order order) const &
-{
-    while(!ss.empty())
-    {
-        HC hc = std::move(ss.back());
-        ss.pop_back();
-        auto pt = take_point(hc, order);
-        if(!pt) continue;
-
-        auto problem = find_problem(*pt, universe);
-        if(problem)
-        {
-            ss.push_back(std::move(hc));
-            ss.remove_slice_globally(*problem);
-        }
-        else
-        {
-            co_yield to_action(*pt);
-            ss.concat(hc.remove_point(*pt));
-        }
-    }
 }

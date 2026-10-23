@@ -504,14 +504,15 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
 }
 
 
-std::optional<point> HC_info::take_point(HC &hc) const
+std::optional<point> HC_info::take_point(HC &hc, workspace *ws) const
 {
-    return take_point(hc, natural_HC_ordering{});
+    return take_point(hc, natural_HC_ordering{}, ws);
 }
 
-std::optional<point> HC_info::take_point(HC &hc, std::span<const slice> negative) const
+std::optional<point> HC_info::take_point(
+    HC &hc, std::span<const slice> negative, workspace *ws) const
 {
-    return take_point(hc, negative, natural_HC_ordering{});
+    return take_point(hc, negative, natural_HC_ordering{}, ws);
 }
 
 bool HC_info::prune_retained_slices(HC &hc, std::span<const slice> negative)
@@ -538,10 +539,6 @@ bool HC_info::prune_retained_slices(HC &hc, std::span<const slice> negative)
     return true;
 }
 
-generator<moveseq> HC_info::deferred_search(search_space ss) const &
-{
-    return deferred_search(std::move(ss), natural_HC_ordering{});
-}
 
 std::optional<slice> HC_info::find_problem(const point &p, const HC &hc) const
 {
@@ -1004,12 +1001,6 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
 // ------------------------------------------------------------
 
 
-
-generator<moveseq> HC_info::iterative_search(search_space ss) const &
-{
-    return iterative_search(std::move(ss), natural_HC_ordering{});
-}
-
 // /* for debugging only (this version is more friendly with stacktracing) */
 //std::vector<moveseq> HC_info::search1(search_space ss) const
 //{
@@ -1055,7 +1046,6 @@ generator<moveseq> HC_info::iterative_search(search_space ss) const &
 //}
 
 
-
 moveseq HC_info::to_action(const point &p) const
 {
     std::vector<full_move> mvs;
@@ -1087,9 +1077,19 @@ moveseq HC_info::to_action(const point &p) const
     return mvs;
 }
 
+generator<moveseq> HC_info::iterative_search(search_space ss) const &
+{
+    return iterative_search(std::move(ss), natural_HC_ordering{});
+}
+
 generator<moveseq> HC_info::stable_search(search_space ss) const &
 {
     return stable_search(std::move(ss), natural_HC_ordering{});
+}
+
+generator<moveseq> HC_info::deferred_search(search_space ss) const &
+{
+    return deferred_search(std::move(ss), natural_HC_ordering{});
 }
 
 generator<moveseq> HC_info::search(search_space ss) const &
