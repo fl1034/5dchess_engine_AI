@@ -16,6 +16,7 @@
 #include <tuple>
 #include <utility>
 #include <functional>
+#include <span>
 #include "geometry.h"
 #include "state.h"
 #include "vec4.h"
@@ -94,10 +95,17 @@
  Differences are in how problem slices are removed and propagated through the search space:
  - `iterative_search()` removes a discovered problem only from the currently
    examined hypercuboid.
- - `stable_search()` propagates each problem slice through every remaining
-   hypercuboid, limiting fragmentation with careful removal.
- - `search()` is the default adaptive policy. It propagates a problem through
-   nearby intersecting hypercuboids while those intersections remain dense.
+ - `stable_search()` constructs universe-wide problems and removes them from
+   every remaining hypercuboid with intersection-aware removal.
+ - `search()` uses HC-local problems and adaptive propagation for the first
+   100 problems, then falls back to stable search with the same ordering.
+ - `deferred_search()` retains global problem slices as negative constraints.
+   Unary problems are removed immediately; otherwise, when retained slices
+   outnumber HCs, the slice of smallest global codimension is removed globally.
+   Retained slices of relative codimension at most one are also removed from
+   each visited HC, persisting those cuts without fragmenting it.
+   It first tries matching and prunes unsupported arrivals in the stored HC. Negative
+   slices are applied temporarily only when they exclude the matching point.
 */
 
 class HC_info
@@ -132,6 +140,8 @@ class HC_info
     HC universe;
     index_t new_axis;
     std::vector<int> mandatory_lines;
+
+    static bool prune_retained_slices(HC &hc, std::span<const slice> negative);
 
     // The caller must establish that line is in range; missing axes return no_axis.
     index_t line_to_axis_unsafe(int line) const noexcept {
@@ -185,6 +195,14 @@ public:
     std::optional<point> take_point(HC &hc) const;
     template<HCOrdering Order>
     std::optional<point> take_point(HC &hc, const Order &order) const;
+
+    // With negative slices, use temporary regions before matching; their
+    // matching-dependent pruning never replaces the input HC. An empty span
+    // uses ordinary take_point(), including its unsupported-arrival pruning.
+    std::optional<point> take_point(HC &hc, std::span<const slice> negative) const;
+    template<HCOrdering Order>
+    std::optional<point> take_point(
+        HC &hc, std::span<const slice> negative, const Order &order) const;
     
     /*
      find_problem(p, hc): find any problem about p and returns the problem 
@@ -215,6 +233,16 @@ public:
     generator<moveseq> iterative_search(search_space ss, Order order) const && = delete;
     generator<moveseq> stable_search(search_space ss) const &;
     generator<moveseq> stable_search(search_space ss) const && = delete;
+    template<HCOrdering Order>
+    generator<moveseq> stable_search(search_space ss, Order order) const &;
+    template<HCOrdering Order>
+    generator<moveseq> stable_search(search_space ss, Order order) const && = delete;
+    generator<moveseq> deferred_search(search_space ss) const &;
+    generator<moveseq> deferred_search(search_space ss) const && = delete;
+    template<HCOrdering Order>
+    generator<moveseq> deferred_search(search_space ss, Order order) const &;
+    template<HCOrdering Order>
+    generator<moveseq> deferred_search(search_space ss, Order order) const && = delete;
     // /* uncomment when debugging */
     //std::vector<moveseq> search1(search_space ss) const;
 };

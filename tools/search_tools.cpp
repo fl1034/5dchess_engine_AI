@@ -4,10 +4,63 @@
 #include <chrono>
 #include <iostream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "hypercuboid.h"
+#include "finetree.h"
+
+namespace
+{
+generator<fine_node<> *> fine_ceilings(fine_node<> &node)
+{
+    if(node.is_ceiling())
+    {
+        co_yield &node;
+        co_return;
+    }
+
+    // Expansion creates a whole witness branch. Visit those existing children
+    // before searching for additional children at this level.
+    const std::size_t existing = node.get_children().size();
+    for(std::size_t j = 0; j < existing; ++j)
+    {
+        for(auto *ceiling : fine_ceilings(*node.get_children()[j]))
+            co_yield ceiling;
+    }
+    for([[maybe_unused]] index_t i : node.search(natural_HC_ordering{}))
+    {
+        // Separate cells can produce distinct children with the same index.
+        // Search appends the new branch; get_child(i) can find an older one.
+        for(auto *ceiling : fine_ceilings(*node.get_children().back()))
+            co_yield ceiling;
+    }
+}
+}
+
+template<bool PRINT>
+std::size_t count_fine(state s, int limit)
+{
+    auto root = fine_node<>::make_root(s);
+    std::size_t count = 0;
+    for(auto *ceiling : fine_ceilings(*root))
+    {
+        if constexpr(PRINT)
+        {
+            state t = s;
+            for(full_move m : ceiling->to_action())
+            {
+                std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
+                t.apply_move<true>(m);
+            }
+            std::cout << "\n";
+        }
+        ++count;
+        if(count == static_cast<std::size_t>(limit)) break;
+    }
+    return count;
+}
 
 template <typename T>
 std::set<T> set_minus(const std::set<T> &a, const std::set<T> &b)
@@ -82,6 +135,30 @@ std::size_t count_stable(state s, int limit)
         {
             state t = s;
             for(full_move m : x)
+            {
+                std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
+                t.apply_move<true>(m);
+            }
+            std::cout << "\n";
+        }
+        ++count;
+        if(count == static_cast<std::size_t>(limit)) break;
+    }
+    return count;
+}
+
+template<bool PRINT>
+std::size_t count_deferred(state s, int limit)
+{
+    auto [w, ss] = HC_info::build_HC(s);
+    auto actions = w.deferred_search(std::move(ss));
+    std::size_t count = 0;
+    for(const auto &moves : actions)
+    {
+        if constexpr(PRINT)
+        {
+            state t = s;
+            for(full_move m : moves)
             {
                 std::cout << m.pgn(t, QUEEN_W, pgn_options::SHOW_CAPTURE) << " ";
                 t.apply_move<true>(m);
@@ -197,7 +274,9 @@ std::pair<search_mode, int> parse_search_args(
         if(arg == "balanced") mode = search_mode::balanced;
         else if(arg == "naive") mode = search_mode::naive;
         else if(arg == "stable") mode = search_mode::stable;
+        else if(arg == "deferred") mode = search_mode::deferred;
         else if(arg == "iterative") mode = search_mode::iterative;
+        else if(arg == "fine") mode = search_mode::fine;
         else max = std::stoi(arg);
     }
     return {mode, max};
@@ -217,19 +296,47 @@ std::optional<moveseq> find_first_action(state &s, search_mode mode)
             auto [w, ss] = HC_info::build_HC(s);
             return w.stable_search(ss).first();
         }
+        case search_mode::deferred: {
+            auto [w, ss] = HC_info::build_HC(s);
+            return w.deferred_search(std::move(ss)).first();
+        }
         case search_mode::iterative: {
             auto [w, ss] = HC_info::build_HC(s);
             return w.iterative_search(ss).first();
         }
+        case search_mode::fine: {
+            auto root = fine_node<>::make_root(s);
+            if(root->is_terminal()) return std::nullopt;
+            return finetree_nearby_ceiling(root.get())->to_action();
+        }
     }
     return std::nullopt;
+}
+
+std::size_t count_actions(state s, search_mode mode, int limit)
+{
+    if(limit <= 0) throw std::invalid_argument("action limit must be positive");
+    switch(mode)
+    {
+        case search_mode::balanced: return count_balanced(std::move(s), limit);
+        case search_mode::naive: return count_naive(std::move(s), limit);
+        case search_mode::stable: return count_stable(std::move(s), limit);
+        case search_mode::deferred: return count_deferred(std::move(s), limit);
+        case search_mode::iterative: return count_iterative(std::move(s), limit);
+        case search_mode::fine: return count_fine(std::move(s), limit);
+    }
+    throw std::invalid_argument("unknown search policy");
 }
 
 template std::size_t count_balanced<false>(state, int);
 template std::size_t count_balanced<true>(state, int);
 template std::size_t count_stable<false>(state, int);
 template std::size_t count_stable<true>(state, int);
+template std::size_t count_deferred<false>(state, int);
+template std::size_t count_deferred<true>(state, int);
 template std::size_t count_iterative<false>(state, int);
 template std::size_t count_iterative<true>(state, int);
 template std::size_t count_naive<false>(state, int);
 template std::size_t count_naive<true>(state, int);
+template std::size_t count_fine<false>(state, int);
+template std::size_t count_fine<true>(state, int);

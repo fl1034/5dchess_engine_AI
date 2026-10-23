@@ -509,7 +509,39 @@ std::optional<point> HC_info::take_point(HC &hc) const
     return take_point(hc, natural_HC_ordering{});
 }
 
+std::optional<point> HC_info::take_point(HC &hc, std::span<const slice> negative) const
+{
+    return take_point(hc, negative, natural_HC_ordering{});
+}
 
+bool HC_info::prune_retained_slices(HC &hc, std::span<const slice> negative)
+{
+    if(hc.empty()) return false;
+    bool changed;
+    do
+    {
+        changed = false;
+        for(const slice &problem : negative)
+        {
+            if(!hc.is_slice_good(problem)) continue;
+            const auto &fixed = problem.get_fixed_axes();
+            const auto cut = std::find_if(fixed.begin(), fixed.end(),
+                [&](const auto &axis) {
+                    return !hc[axis.first].is_subset_of(axis.second);
+                });
+            if(cut == fixed.end()) return false; // The slice covers this HC.
+            hc[cut->first].minus(cut->second);
+            changed = true;
+        }
+        // A cut can make an earlier constraint unary or cover the whole HC.
+    } while(changed);
+    return true;
+}
+
+generator<moveseq> HC_info::deferred_search(search_space ss) const &
+{
+    return deferred_search(std::move(ss), natural_HC_ordering{});
+}
 
 std::optional<slice> HC_info::find_problem(const point &p, const HC &hc) const
 {
@@ -1057,53 +1089,7 @@ moveseq HC_info::to_action(const point &p) const
 
 generator<moveseq> HC_info::stable_search(search_space ss) const &
 {
-    dprint("begining psearch: ", ss.to_string());
-    while(!ss.empty())
-    {
-        HC hc = std::move(ss.back());
-        dprint("searching ", hc.to_string());
-        ss.pop_back();
-        auto pt_opt = take_point(hc);
-        if(pt_opt)
-        {
-            const point &pt = *pt_opt;
-            dprint("got point: ", range_to_string(pt));
-            auto problem = find_problem(pt, hc);
-            if(problem)
-            {
-                const slice &problem_slice = problem.value();
-                dprint("found problem:", problem.value().to_string());
-                // Remove this slice from every remaining hypercuboid and re-join all pieces.
-                search_space adjoined;
-                for(const HC &other_hc : ss)
-                {
-                    search_space sstemp = other_hc.remove_slice_carefully(problem_slice);
-                    adjoined.concat(std::move(sstemp));
-                }
-                // Keep the selected HC's pieces at the back, where search
-                // will consume them before the earlier HCs.
-                adjoined.concat(hc.remove_slice(problem_slice));
-                // make sure when a leave is removed, so is the corresponding arrive
-                dprint("removed problem from all hcs, continue search:", adjoined.to_string());
-                ss = std::move(adjoined);
-            }
-            else
-            {
-                dprint("point is okay, removing it from this hc");
-                co_yield to_action(pt);
-                search_space new_ss = hc.remove_point(pt);
-                dprint("removed point, continue search:", new_ss.to_string());
-                ss.concat(std::move(new_ss));
-            }
-        }
-        else
-        {
-            dprint("didn't secure any point in the first hypercuboid;");
-            dprint("continue searching the remaining part");
-        }
-    }
-    dprint("search space is empty; finish.");
-    co_return;
+    return stable_search(std::move(ss), natural_HC_ordering{});
 }
 
 generator<moveseq> HC_info::search(search_space ss) const &

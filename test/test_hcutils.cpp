@@ -12,6 +12,11 @@
 #include <limits>
 #include <vector>
 #include <set>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <chrono>
 
 namespace hcutils_tests
 {
@@ -43,6 +48,75 @@ void test_remove()
     slice sl {fixed_axes};
     search_space ss2 = hc.remove_slice(sl);
     std::cout << ss2.to_string() << "\n";
+}
+
+void test_remove_point_partition()
+{
+    // Exhaust every point in mixed singleton/non-singleton products, including
+    // coordinates spanning several integer_set blocks and the zero-axis case.
+    for(std::size_t dimension = 0; dimension <= 4; ++dimension)
+    {
+        for(unsigned mask = 0; mask < (1u << dimension); ++mask)
+        {
+            std::vector<integer_set> axes;
+            std::size_t expected_pieces = 0;
+            for(index_t axis = 0; axis < dimension; ++axis)
+            {
+                const bool multiple = (mask & (1u << axis)) != 0;
+                const auto low = static_cast<index_t>(axis + 1);
+                const auto middle = static_cast<index_t>(axis + 65);
+                const auto high = static_cast<index_t>(axis + 129);
+                axes.push_back(multiple ? integer_set{low, middle, high} : integer_set{middle});
+                expected_pieces += multiple;
+            }
+            const HC hc(std::move(axes));
+            const auto before = hc.to_string();
+            std::vector<point> points;
+            point current(dimension);
+            const auto enumerate = [&](auto &&self, std::size_t axis) -> void {
+                if(axis == dimension)
+                {
+                    points.push_back(current);
+                    return;
+                }
+                for(index_t coordinate : hc[axis])
+                {
+                    current[axis] = coordinate;
+                    self(self, axis + 1);
+                }
+            };
+            enumerate(enumerate, 0);
+            for(const point &removed : points)
+            {
+                const auto pieces = hc.remove_point(removed);
+                assert(pieces.size() == expected_pieces);
+                assert(hc.to_string() == before);
+                auto piece = pieces.begin();
+                // Output order is increasing split axis. Earlier axes are
+                // fixed to the point; later axes retain their original sets.
+                for(std::size_t split = 0; split < dimension; ++split)
+                {
+                    if(hc[split].size() == 1) continue;
+                    assert(piece != pieces.end() && !piece->empty());
+                    for(std::size_t axis = 0; axis < dimension; ++axis)
+                    {
+                        integer_set expected = axis < split ? integer_set{removed[axis]} : hc[axis];
+                        if(axis == split) expected.erase(removed[axis]);
+                        assert((*piece)[axis].is_subset_of(expected));
+                        assert(expected.is_subset_of((*piece)[axis]));
+                    }
+                    ++piece;
+                }
+                assert(piece == pieces.end());
+                for(const point &candidate : points)
+                {
+                    std::size_t containing = 0;
+                    for(const HC &region : pieces) containing += region.contains(candidate);
+                    assert(containing == (candidate == removed ? 0 : 1));
+                }
+            }
+        }
+    }
 }
 
 void test_backward_slice_removal()
@@ -179,6 +253,78 @@ void test_backward_slice_order()
     assert(space.to_string() == expected.to_string());
 }
 
+void test_global_slice_order()
+{
+    const slice problem{{{0, {0, 99}}, {1, {0, 99}}}};
+    const HC a{{9}, {9}};
+    const HC b{{0, 2}, {0, 2}};
+    const HC c{{3}, {3}};
+    const HC removed{{0}, {0}};
+    const HC e{{0, 4}, {0, 4}};
+    const HC f{{5}, {5}};
+    search_space space{a, b, c, removed, e, f};
+    search_space expected{a};
+    expected.concat(b.remove_slice_carefully(problem));
+    expected.push_back(c);
+    expected.concat(e.remove_slice_carefully(problem));
+    expected.push_back(f);
+    space.remove_slice_globally(problem);
+    assert(space.to_string() == expected.to_string());
+    assert(space.volume() == 9);
+    assert(!space.contains(point{99, 2}));
+    // A completed cut is idempotent, and cancellation before removal changes nothing.
+    space.remove_slice_globally(problem);
+    assert(space.to_string() == expected.to_string());
+    std::stop_source stopped;
+    stopped.request_stop();
+    space.remove_slice_globally(slice{}, stopped.get_token());
+    assert(space.to_string() == expected.to_string());
+    space.remove_slice_globally(slice{});
+    assert(space.empty());
+    space.remove_slice_globally(problem);
+}
+
+struct counted_pass_order
+{
+    std::size_t *pass_hcs;
+    template<class F>
+    void for_each(index_t axis, const integer_set &coords, F &&visit) const
+    {
+        if(axis == 0 && coords.contains(0)) ++*pass_hcs;
+        for(index_t i : coords) visit(i);
+    }
+};
+
+void test_balanced_stable_transition(const HC_info &info, search_space initial)
+{
+    // Each bad HC contains the same matching point that fails Present. A
+    // disjoint, empty sentinel stops adaptive propagation between bad HCs.
+    // Global propagation removes all bad HCs after discovering one problem.
+    HC candidate = initial.back();
+    auto pt = info.take_point(candidate);
+    assert(pt && (*pt)[0] == 0 && info.test_present(*pt, info.get_universe()));
+    std::vector<integer_set> axes;
+    for(index_t coordinate : *pt) axes.push_back(integer_set{coordinate});
+    const HC bad(std::move(axes));
+    HC sentinel = bad;
+    sentinel[0] = integer_set{1};
+    sentinel[1] = integer_set{};
+    search_space space;
+    for(int i = 0; i < 113; ++i)
+    {
+        space.push_back(sentinel);
+        space.push_back(bad);
+    }
+    std::size_t stable_pass_hcs = 0;
+    assert(!info.stable_search(space, counted_pass_order{&stable_pass_hcs}).first());
+    assert(stable_pass_hcs == 1);
+    std::size_t balanced_pass_hcs = 0;
+    assert(!info.search(space, counted_pass_order{&balanced_pass_hcs}).first());
+    // Exactly 100 local/adaptive problems, then one stable problem. The custom
+    // ordering is still called after the transition, rather than reset.
+    assert(balanced_pass_hcs == 101);
+}
+
 void test_search_branch_order()
 {
     auto parsed = pgnparser(R"(
@@ -263,6 +409,99 @@ void test_line_axis_lookup()
     }
 }
 
+void test_negative_point_selection()
+{
+    const auto position = state::from_pgn(
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:1:w]\n");
+    auto [info, space] = HC_info::build_HC(position);
+    for(const HC &original : space)
+    {
+        HC hc = original;
+        auto first = info.take_point(hc);
+        if(!first) continue;
+        const auto before = hc.to_string();
+        std::vector<slice> negative;
+        // Excluding one matching witness must still find alternatives, even
+        // when temporary regions contain unsupported arrivals or no matching.
+        slice excluded;
+        for(index_t axis = 0; axis < hc.dimension(); ++axis)
+            excluded.fix_axis(axis, {(*first)[axis]});
+        negative.push_back(std::move(excluded));
+        for(unsigned step = 0; step < 4; ++step)
+        {
+            auto actual = info.take_point(hc, negative);
+            assert(hc.to_string() == before);
+            auto remaining = search_space{hc};
+            for(const slice &problem : negative) remaining.remove_slice_globally(problem);
+            bool exists = false;
+            for(HC &region : remaining)
+                if(info.take_point(region)) { exists = true; break; }
+            assert(actual.has_value() == exists);
+            if(!actual) break;
+            assert(hc.contains(*actual));
+            for(const slice &problem : negative) assert(!problem.contains(*actual));
+            slice next;
+            next.fix_axis(0, {(*actual)[0]});
+            negative.push_back(std::move(next));
+        }
+        // Several negative slices can jointly cover an HC without any one
+        // slice covering it. Exhaustion must account for their union.
+        negative.clear();
+        for(index_t coordinate : hc[0])
+            negative.emplace_back(std::map<index_t, integer_set>{{0, {coordinate}}});
+        assert(!info.take_point(hc, negative));
+        assert(hc.to_string() == before);
+        negative = {slice{}};
+        assert(!info.take_point(hc, negative));
+    }
+}
+
+struct retained_slice_order
+{
+    index_t watched_axis;
+    integer_set excluded;
+    std::size_t *visits;
+
+    void for_each(index_t axis, const integer_set &coordinates, auto &&visit) const
+    {
+        if(axis == watched_axis && coordinates.intersects(excluded)) ++*visits;
+        for(index_t coordinate : coordinates) visit(coordinate);
+    }
+};
+
+void test_persistent_retained_slice()
+{
+    const auto position = state::from_pgn(
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:-2:3:b]\n"
+        "[3k/4/4/KN2:-1:5:w]\n[3k/4/4/KN2:-1:5:b]\n"
+        "[3k/4/4/KN2:-1:6:w]\n[3k/4/4/KN2:0:5:w]\n");
+    auto [info, space] = HC_info::build_HC(position);
+    const HC origin = space.back();
+    const auto problem = info.test_present(point(info.dimension(), 0), info.get_universe());
+    assert(problem && !info.get_universe().is_slice_good(*problem));
+    assert(origin.is_slice_good(*problem));
+    const auto &fixed = problem->get_fixed_axes();
+    const auto cut = std::find_if(fixed.begin(), fixed.end(), [&](const auto &axis) {
+        return !origin[axis.first].is_subset_of(axis.second);
+    });
+    assert(cut != fixed.end());
+    const search_space restricted{origin};
+    std::set<moveseq> expected;
+    for(const auto &moves : info.iterative_search(restricted)) expected.insert(moves);
+    assert(!expected.empty());
+    std::size_t visits = 0;
+    retained_slice_order order{cut->first, cut->second, &visits};
+    std::set<moveseq> actual;
+    for(const auto &moves : info.deferred_search(restricted, order))
+        assert(actual.insert(moves).second);
+    assert(actual == expected);
+    // The first candidate discovers this globally non-unary problem. Its
+    // locally unary cut then persists across every subsequent yielded action.
+    assert(visits == 1);
+}
+
 void test_reactivated_present()
 {
     // Earlier reactivated endpoints excuse the pass on L0; endpoints on the
@@ -298,12 +537,42 @@ void test_reactivated_present()
             assert(expected.size() == expected_count);
             assert(collect(info.search(space)) == expected);
             assert(collect(info.stable_search(space)) == expected);
+            assert(collect(info.deferred_search(space)) == expected);
+            if(reactivated_t == 5 && playable)
+            {
+                // Global problems must also preserve the complete action set
+                // across a highly fragmented, disjoint refinement.
+                std::deque<HC> regions;
+                for(const HC &region : space)
+                    if(!region.empty()) regions.push_back(region);
+                while(regions.size() < 1025)
+                {
+                    HC hc = std::move(regions.front());
+                    regions.pop_front();
+                    index_t axis = 0;
+                    while(axis < hc.dimension() && hc[axis].size() <= 1) ++axis;
+                    if(axis == hc.dimension())
+                    {
+                        regions.push_back(std::move(hc));
+                        continue;
+                    }
+                    const index_t coordinate = *hc[axis].begin();
+                    auto [with_coordinate, without_coordinate] = hc.split(axis, coordinate);
+                    regions.push_back(std::move(with_coordinate));
+                    regions.push_back(std::move(without_coordinate));
+                }
+                search_space fragmented;
+                for(HC &region : regions) fragmented.push_back(std::move(region));
+                assert(collect(info.deferred_search(fragmented)) == expected);
+                assert(collect(info.search(std::move(fragmented))) == expected);
+            }
             for(unsigned seed : {0, 1, 2})
             {
                 std::mt19937 rng(seed);
                 random_HC_ordering order(info.get_universe(), rng);
                 assert(collect(info.search(space, order)) == expected);
                 assert(collect(info.iterative_search(space, order)) == expected);
+                assert(collect(info.deferred_search(space, order)) == expected);
             }
             moveseq witness;
             if(playable) witness.emplace_back("(-2T" + std::to_string(reactivated_t) + ")a1a2");
@@ -317,6 +586,8 @@ void test_reactivated_present()
             assert(space.back().contains(no_moves));
             const auto problem = info.test_present(no_moves, space.back());
             assert(problem);
+            const auto global_problem = info.test_present(no_moves, info.get_universe());
+            assert(global_problem && global_problem->contains(no_moves));
             for(const auto &[n, coordinates] : problem->get_fixed_axes())
                 assert(coordinates.is_subset_of(space.back()[n]));
             assert(space.back().is_slice_good(*problem, 1));
@@ -345,19 +616,59 @@ void test_reactivated_present()
             // Unrestricted axes can cover points outside hc. Such points may
             // be included when invalid, but a legal witness must be excluded.
             assert(!problem->contains(branched) || !expected.contains(witness));
+            assert(!global_problem->contains(branched) || !expected.contains(witness));
         }
     }
+}
+
+void test_slow_global_conflicts()
+{
+    const auto path = std::filesystem::path(__FILE__).parent_path()
+        / "pgn/slow/flat-ucb-match-123.5dpgn";
+    std::ifstream input(path);
+    assert(input);
+    std::ostringstream text;
+    text << input.rdbuf();
+    const state position = state::from_pgn(text.str());
+    assert(position.get_boards().size() == 365);
+    {
+        auto [info, space] = HC_info::build_HC(position);
+        assert(!info.deferred_search(std::move(space)).first());
+    }
+    for(bool stable : {false, true})
+    {
+        auto [info, space] = HC_info::build_HC(position);
+        const auto start = std::chrono::steady_clock::now();
+        auto actions = stable ? info.stable_search(std::move(space))
+                              : info.search(std::move(space));
+        assert(!actions.first());
+        std::cerr << (stable ? "stable" : "balanced") << " slow fixture: "
+                  << std::chrono::duration<double, std::milli>(
+                         std::chrono::steady_clock::now() - start).count()
+                  << " ms\n";
+    }
+    {
+        auto [info, space] = HC_info::build_HC(position);
+        test_balanced_stable_transition(info, std::move(space));
+    }
+    assert(position.has_phantom_check());
+    assert(position.get_mate_type() == mate_type::CHECKMATE);
 }
 
 int run()
 {
     test_hc();
+    test_remove_point_partition();
     test_slice_good();
     test_backward_slice_removal();
     test_backward_slice_order();
+    test_global_slice_order();
     test_search_branch_order();
     test_line_axis_lookup();
+    test_negative_point_selection();
+    test_persistent_retained_slice();
     test_reactivated_present();
+    test_slow_global_conflicts();
     //test_remove();
 //    HC h2 = {{{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}}};
 //    point b = {20};

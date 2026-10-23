@@ -8,6 +8,7 @@
 #include <list>
 #include <string>
 #include <map>
+#include <stop_token>
 #include "integer_set.h"
 
 // a point in the multi-dimensional space
@@ -104,6 +105,11 @@ public:
         size_t disjoint_weight = 2,
         index_t max_codim = 1
     );
+
+    // Remove from every HC without a quality/density limit. Replace intersecting
+    // HCs in place, preserving the order of all original regions and pieces.
+    // Cancellation may leave a partially pruned space; callers must check stop.
+    void remove_slice_globally(const slice &s, std::stop_token stop = {});
 
     std::list<HC>::iterator begin() & noexcept;
     std::list<HC>::iterator end() & noexcept;
