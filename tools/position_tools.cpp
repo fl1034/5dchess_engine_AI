@@ -17,6 +17,7 @@
 
 #include "pgnparser.h"
 #include "search_tools.h"
+#include "hypercuboid.h"
 #include "statistics.h"
 #include "utils.h"
 
@@ -324,7 +325,7 @@ int run_count(int argc, const char *argv[])
             << "  A result equal to max means at least max actions may exist.\n"
             << "  --at turn          select the state after a submitted turn (0, 1w, 1b, ...)\n"
             << "  --format text|json select output format (default: text)\n"
-            << "  policy             balanced, naive, stable, iterative, or fine\n"
+            << "  policy             deferred (default), balanced, naive, stable, iterative, or fine\n"
             << "  max                positive enumeration limit\n";
     };
     std::optional<turn_selection> selection;
@@ -399,11 +400,11 @@ int run_all(int argc, const char *argv[])
         std::size_t count = 0;
         switch(mode)
         {
-            case search_mode::balanced: count = count_balanced<true>(s, max); break;
+            case search_mode::balanced: count = count_hc<hc_policy::balanced, true>(s, max); break;
             case search_mode::naive: count = count_naive<true>(s, max); break;
-            case search_mode::stable: count = count_stable<true>(s, max); break;
-            case search_mode::deferred: count = count_deferred<true>(s, max); break;
-            case search_mode::iterative: count = count_iterative<true>(s, max); break;
+            case search_mode::stable: count = count_hc<hc_policy::stable, true>(s, max); break;
+            case search_mode::deferred: count = count_hc<hc_policy::deferred, true>(s, max); break;
+            case search_mode::iterative: count = count_hc<hc_policy::iterative, true>(s, max); break;
             case search_mode::fine: count = count_fine<true>(s, max); break;
         }
         print_count(count, output_format::text);

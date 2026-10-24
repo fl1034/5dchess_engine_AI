@@ -39,8 +39,8 @@ extern "C" void interrupt_profile(int)
 
 struct options
 {
-    search_mode policy = search_mode::balanced;
-    std::string policy_name = "balanced";
+    search_mode policy = search_mode::deferred;
+    std::string policy_name = "deferred";
     int warmup_rounds = 3;
     int rounds = 5;
     bool json = false;
@@ -134,7 +134,7 @@ void print_help()
         << "  EXPECTED=100 AT=11b COUNT <single-line 5dpgn>\n"
         << "  AT selects a submitted main-line turn (0 selects the initial position)\n"
         << "  EXPECTED=100 or EXPECTED>100 stops at 101 actions\n"
-        << "  --policy <name>         balanced (default), stable, deferred, iterative, fine, naive\n"
+        << "  --policy <name>         deferred (default), balanced, stable, iterative, fine, naive\n"
         << "  --warmup-rounds <n>     complete unrecorded workload rounds (default: 3)\n"
         << "  --rounds <n>            measured workload rounds (default: 5)\n"
         << "  --prefixes 10,100,1000  add separate bounded COUNT cases (or none)\n"

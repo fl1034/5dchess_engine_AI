@@ -268,7 +268,7 @@ int run() try
     state initial = state::from_pgn<true>("[Variant \"Standard\"]");
     auto [info, space] = HC_info::build_HC(initial);
     std::vector<action> actions;
-    for(const auto &moves : info.search(std::move(space)))
+    for(const auto &moves : info.search<natural_HC_ordering, hc_policy::balanced>(std::move(space)))
     {
         actions.push_back(action::from_moveseq(moves, initial));
         if(actions.size() == 2) break;

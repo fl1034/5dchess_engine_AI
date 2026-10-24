@@ -83,7 +83,7 @@ def main() -> int:
         executable_path = (ROOT / executable).resolve()
         if not executable_path.is_file():
             raise ValueError(f"executable not found: {executable_path}; build 5dtools or use --executable")
-        policy = args.policy or manifest.get("policy", "balanced")
+        policy = args.policy or manifest.get("policy", "deferred")
         if policy not in POLICIES:
             raise ValueError(f"unknown policy: {policy}")
         warmups = args.warmup_rounds if args.warmup_rounds is not None else manifest.get("warmup_rounds", 3)

@@ -18,7 +18,7 @@ The engine is built as `build/5dchess`, and the general command-line utility is 
 -  `rollout [options]`: run and report random rollout simulations
 -  `replay-log <log> [seed]`: replay and time a protocol failure log
 
-Search policies are `balanced` (default), `naive`, `stable`, `deferred`,
+Search policies are `deferred` (default), `balanced`, `naive`, `stable`,
 `iterative`, and `fine`. The `fine` policy creates a
 fine tree rooted at the selected position.
 For `checkmate` and `perftest`, it searches for one witness action; `count` and
@@ -38,7 +38,10 @@ from every HC. Equal counts retain the slices. Retained slices are also removed
 permanently from each visited HC when their relative codimension there is at
 most one. These cuts do not increase the HC count and repeat until no further
 such cuts apply, including after unsupported-arrival pruning. Successful actions
-are removed as usual. The C++ API, `deferred_search`, supports coordinate ordering.
+are removed as usual. The C++ API uses `info.search<Ordering, hc_policy::deferred>(space, order)`;
+omitting template arguments also selects Deferred, with ordering deduced from
+the supplied object or natural ordering when omitted. Other HC policies use
+`hc_policy::iterative`, `hc_policy::stable`, or `hc_policy::balanced`.
 
 For `balanced`, `stable`, `deferred`, and `iterative`, continued enumeration
 groups similar actions before returning to other jump choices. Physical moves

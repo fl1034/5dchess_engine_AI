@@ -25,14 +25,9 @@ std::size_t count_actions(state s, search_mode mode, int limit);
 
 generator<moveseq> naive_search(state s);
 
-template<bool PRINT=false>
-std::size_t count_balanced(state s, int limit);
-template<bool PRINT=false>
-std::size_t count_stable(state s, int limit);
-template<bool PRINT=false>
-std::size_t count_deferred(state s, int limit);
-template<bool PRINT=false>
-std::size_t count_iterative(state s, int limit);
+enum class hc_policy;
+template<hc_policy Policy, bool Print = false>
+std::size_t count_hc(state s, int limit);
 template<bool PRINT=false>
 std::size_t count_naive(state s, int limit);
 template<bool PRINT=false>

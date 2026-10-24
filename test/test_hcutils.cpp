@@ -424,13 +424,18 @@ void test_balanced_stable_transition(const HC_info &info, search_space initial)
         space.push_back(bad);
     }
     std::size_t stable_pass_hcs = 0;
-    assert(!info.stable_search(space, counted_pass_order{&stable_pass_hcs}).first());
+    assert((!info.search<counted_pass_order, hc_policy::stable>(space, counted_pass_order{&stable_pass_hcs}).first()));
     assert(stable_pass_hcs == 1);
     std::size_t balanced_pass_hcs = 0;
-    assert(!info.search(space, counted_pass_order{&balanced_pass_hcs}).first());
+    assert((!info.search<counted_pass_order, hc_policy::balanced>(space, counted_pass_order{&balanced_pass_hcs}).first()));
     // Exactly 100 local/adaptive problems, then one stable problem. The custom
     // ordering is still called after the transition, rather than reset.
     assert(balanced_pass_hcs == 101);
+    std::size_t explicit_deferred = 0, default_deferred = 0;
+    assert((!info.search<counted_pass_order, hc_policy::deferred>(
+        space, counted_pass_order{&explicit_deferred}).first()));
+    assert(!info.search(space, counted_pass_order{&default_deferred}).first());
+    assert(explicit_deferred == default_deferred);
 }
 
 void test_search_branch_order()
@@ -461,8 +466,8 @@ void test_search_branch_order()
 
         // Moving a completed context before creating its generator preserves search.
         HC_info moved(std::move(info));
-        auto actions = stable ? moved.stable_search(std::move(space))
-                              : moved.search(std::move(space));
+        auto actions = stable ? moved.search<natural_HC_ordering, hc_policy::stable>(std::move(space))
+                              : moved.search<natural_HC_ordering, hc_policy::balanced>(std::move(space));
         int count = 0;
         for(const auto &moves : actions)
         {
@@ -536,13 +541,13 @@ void test_point_workspace()
             {
                 HC fresh = original, reused = original;
                 const auto expected = info.take_point(fresh);
-                assert(info.take_point(reused, &ws) == expected);
+                assert(info.take_point(reused, natural_HC_ordering{}, &ws) == expected);
                 assert(reused.to_string() == fresh.to_string());
                 if(info.dimension() != 0)
                 {
                     HC empty = original;
                     empty[0].clear();
-                    assert(!info.take_point(empty, &ws));
+                    assert(!info.take_point(empty, natural_HC_ordering{}, &ws));
                 }
             }
         }
@@ -586,8 +591,8 @@ void test_negative_point_selection()
         for(unsigned step = 0; step < 4; ++step)
         {
             auto reused_hc = hc;
-            auto actual = info.take_point(hc, negative);
-            assert(info.take_point(reused_hc, negative, &ws) == actual);
+            auto actual = info.take_point(hc, natural_HC_ordering{}, nullptr, negative);
+            assert(info.take_point(reused_hc, natural_HC_ordering{}, &ws, negative) == actual);
             assert(reused_hc.to_string() == hc.to_string());
             assert(hc.to_string() == before);
             auto remaining = search_space{hc};
@@ -608,10 +613,10 @@ void test_negative_point_selection()
         negative.clear();
         for(index_t coordinate : hc[0])
             negative.emplace_back(std::map<index_t, integer_set>{{0, {coordinate}}});
-        assert(!info.take_point(hc, negative));
+        assert(!info.take_point(hc, natural_HC_ordering{}, nullptr, negative));
         assert(hc.to_string() == before);
         negative = {slice{}};
-        assert(!info.take_point(hc, negative));
+        assert(!info.take_point(hc, natural_HC_ordering{}, nullptr, negative));
     }
 }
 
@@ -714,10 +719,10 @@ void test_paired_similar_rectangle()
                 assert(actual == expected);
             };
             const search_space restricted{rectangle};
-            collect(info.iterative_search(restricted));
-            collect(info.stable_search(restricted));
-            collect(info.search(restricted));
-            collect(info.deferred_search(restricted));
+            collect(info.search<natural_HC_ordering, hc_policy::iterative>(restricted));
+            collect(info.search<natural_HC_ordering, hc_policy::stable>(restricted));
+            collect(info.search<natural_HC_ordering, hc_policy::balanced>(restricted));
+            collect(info.search<natural_HC_ordering, hc_policy::deferred>(restricted));
             if(std::string(destination) == "3k/4/4/rN1K")
             {
                 // Yield a king capture first, then force a knight departure
@@ -725,19 +730,19 @@ void test_paired_similar_rectangle()
                 // The learned source and arrival restrictions must be intersected.
                 assert(preferred && rejected);
                 paired_projection_order order{info.get_universe(), target, *preferred, *rejected};
-                collect(info.iterative_search(restricted, order));
-                collect(info.stable_search(restricted, order));
-                collect(info.search(restricted, order));
-                collect(info.deferred_search(restricted, order));
+                collect(info.search<decltype(order), hc_policy::iterative>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::stable>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::balanced>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::deferred>(restricted, order));
             }
             for(unsigned seed : {7, 42})
             {
                 std::mt19937 rng(seed);
                 random_HC_ordering order(info.get_universe(), rng);
-                collect(info.iterative_search(restricted, order));
-                collect(info.stable_search(restricted, order));
-                collect(info.search(restricted, order));
-                collect(info.deferred_search(restricted, order));
+                collect(info.search<decltype(order), hc_policy::iterative>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::stable>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::balanced>(restricted, order));
+                collect(info.search<decltype(order), hc_policy::deferred>(restricted, order));
             }
         }
     }
@@ -775,12 +780,12 @@ void test_persistent_retained_slice()
     assert(cut != fixed.end());
     const search_space restricted{origin};
     std::set<moveseq> expected;
-    for(const auto &moves : info.iterative_search(restricted)) expected.insert(moves);
+    for(const auto &moves : info.search<natural_HC_ordering, hc_policy::iterative>(restricted)) expected.insert(moves);
     assert(!expected.empty());
     std::size_t visits = 0;
     retained_slice_order order{cut->first, cut->second, &visits};
     std::set<moveseq> actual;
-    for(const auto &moves : info.deferred_search(restricted, order))
+    for(const auto &moves : info.search<decltype(order), hc_policy::deferred>(restricted, order))
         assert(actual.insert(moves).second);
     assert(actual == expected);
     // The first candidate discovers this globally non-unary problem. Its
@@ -817,13 +822,13 @@ void test_reactivated_present()
                 }
                 return result;
             };
-            const auto expected = collect(info.iterative_search(space));
+            const auto expected = collect(info.search<natural_HC_ordering, hc_policy::iterative>(space));
             const size_t expected_count = reactivated_t == 3
                 ? (playable ? 784 : 150) : (playable ? 3644 : 146);
             assert(expected.size() == expected_count);
-            assert(collect(info.search(space)) == expected);
-            assert(collect(info.stable_search(space)) == expected);
-            assert(collect(info.deferred_search(space)) == expected);
+            assert((collect(info.search<natural_HC_ordering, hc_policy::balanced>(space)) == expected));
+            assert((collect(info.search<natural_HC_ordering, hc_policy::stable>(space)) == expected));
+            assert((collect(info.search<natural_HC_ordering, hc_policy::deferred>(space)) == expected));
             if(reactivated_t == 5 && playable)
             {
                 // Global problems must also preserve the complete action set
@@ -849,16 +854,16 @@ void test_reactivated_present()
                 }
                 search_space fragmented;
                 for(HC &region : regions) fragmented.push_back(std::move(region));
-                assert(collect(info.deferred_search(fragmented)) == expected);
-                assert(collect(info.search(std::move(fragmented))) == expected);
+                assert((collect(info.search<natural_HC_ordering, hc_policy::deferred>(fragmented)) == expected));
+                assert((collect(info.search<natural_HC_ordering, hc_policy::balanced>(std::move(fragmented))) == expected));
             }
             for(unsigned seed : {0, 1, 2})
             {
                 std::mt19937 rng(seed);
                 random_HC_ordering order(info.get_universe(), rng);
-                assert(collect(info.search(space, order)) == expected);
-                assert(collect(info.iterative_search(space, order)) == expected);
-                assert(collect(info.deferred_search(space, order)) == expected);
+                assert((collect(info.search<decltype(order), hc_policy::balanced>(space, order)) == expected));
+                assert((collect(info.search<decltype(order), hc_policy::iterative>(space, order)) == expected));
+                assert((collect(info.search<decltype(order), hc_policy::deferred>(space, order)) == expected));
             }
             moveseq witness;
             if(playable) witness.emplace_back("(-2T" + std::to_string(reactivated_t) + ")a1a2");
@@ -919,14 +924,14 @@ void test_slow_global_conflicts()
     assert(position.get_boards().size() == 365);
     {
         auto [info, space] = HC_info::build_HC(position);
-        assert(!info.deferred_search(std::move(space)).first());
+        assert((!info.search<natural_HC_ordering, hc_policy::deferred>(std::move(space)).first()));
     }
     for(bool stable : {false, true})
     {
         auto [info, space] = HC_info::build_HC(position);
         const auto start = std::chrono::steady_clock::now();
-        auto actions = stable ? info.stable_search(std::move(space))
-                              : info.search(std::move(space));
+        auto actions = stable ? info.search<natural_HC_ordering, hc_policy::stable>(std::move(space))
+                              : info.search<natural_HC_ordering, hc_policy::balanced>(std::move(space));
         assert(!actions.first());
         std::cerr << (stable ? "stable" : "balanced") << " slow fixture: "
                   << std::chrono::duration<double, std::milli>(

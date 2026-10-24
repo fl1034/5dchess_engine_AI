@@ -518,17 +518,6 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
 }
 
 
-std::optional<point> HC_info::take_point(HC &hc, workspace *ws) const
-{
-    return take_point(hc, natural_HC_ordering{}, ws);
-}
-
-std::optional<point> HC_info::take_point(
-    HC &hc, std::span<const slice> negative, workspace *ws) const
-{
-    return take_point(hc, negative, natural_HC_ordering{}, ws);
-}
-
 std::unique_ptr<HC_info::local_space>
 HC_info::build_local_space(const HC &hc, const point &seed) const
 {
@@ -1147,24 +1136,4 @@ moveseq HC_info::to_action(const point &p) const
     }
 #endif
     return mvs;
-}
-
-generator<moveseq> HC_info::iterative_search(search_space ss) const &
-{
-    return iterative_search(std::move(ss), natural_HC_ordering{});
-}
-
-generator<moveseq> HC_info::stable_search(search_space ss) const &
-{
-    return stable_search(std::move(ss), natural_HC_ordering{});
-}
-
-generator<moveseq> HC_info::deferred_search(search_space ss) const &
-{
-    return deferred_search(std::move(ss), natural_HC_ordering{});
-}
-
-generator<moveseq> HC_info::search(search_space ss) const &
-{
-    return search(std::move(ss), natural_HC_ordering{});
 }

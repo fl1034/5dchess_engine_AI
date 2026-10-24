@@ -45,7 +45,7 @@
  Generators borrow the context; moving, assigning, or destroying it invalidates them.
 
  To randomize the search order, construct a `random_HC_ordering` with the
- `get_universe()` from `HC_info`, then pass it to `search()` or `iterative_search()`.
+ `get_universe()` from `HC_info`, then pass it to `search()`. Ordering objects are owned by the coroutine.
 
  Terminology and representation:
 
@@ -87,7 +87,7 @@
 
  Search policies:
 
- All *search() methods work roughly by performing this loop:
+ All `search<Ordering, Policy>()` specializations work roughly by performing this loop:
  1. take a point from the search space
  2. find a problem slice for that point
  3. if no problem, yield the point's action sequence
@@ -102,13 +102,13 @@
  before the first yield; a singleton class uses ordinary point removal.
 
  Differences are in how problem slices are removed and propagated through the search space:
- - `iterative_search()` removes a discovered problem only from the currently
+ - `hc_policy::iterative` removes a discovered problem only from the currently
    examined hypercuboid.
- - `stable_search()` constructs universe-wide problems and removes them from
+ - `hc_policy::stable` constructs universe-wide problems and removes them from
    every remaining hypercuboid with intersection-aware removal.
- - `search()` uses HC-local problems and adaptive propagation for the first
+ - `hc_policy::balanced` uses HC-local problems and adaptive propagation for the first
    100 problems, then falls back to stable search with the same ordering.
- - `deferred_search()` retains global problem slices as negative constraints.
+ - `hc_policy::deferred` (the default) retains global problem slices as negative constraints.
    Unary problems are removed immediately; otherwise, when retained slices
    outnumber HCs, the slice of smallest global codimension is removed globally.
    Retained slices of relative codimension at most one are also removed from
@@ -116,6 +116,8 @@
    It first tries matching and prunes unsupported arrivals in the stored HC. Negative
    slices are applied temporarily only when they exclude the matching point.
 */
+
+enum class hc_policy { iterative, stable, balanced, deferred };
 
 class HC_info
 {
@@ -158,7 +160,6 @@ class HC_info
 
     static bool prune_retained_slices(HC &hc, std::span<const slice> negative);
 
-    enum class local_policy { iterative, stable, balanced, deferred };
     struct local_space
     {
         std::vector<index_t> axes;
@@ -168,10 +169,10 @@ class HC_info
         std::vector<slice> problems;
     };
     std::unique_ptr<local_space> build_local_space(const HC &hc, const point &seed) const;
-    template<HCOrdering Order>
+    template<HCOrdering Ordering, hc_policy Policy>
     generator<moveseq> local_search(
-        const HC &outer_hc, local_space &local, const point &seed, const Order &order,
-        local_policy policy, std::span<const slice> negative = {}
+        const HC &outer_hc, local_space &local, const point &seed, const Ordering &order,
+        std::span<const slice> negative = {}
     ) const;
 
     // The caller must establish that line is in range; missing axes return no_axis.
@@ -236,20 +237,18 @@ public:
         integer_set ghost_arrive_indices;
     };
 
-    std::optional<point> take_point(HC &hc, workspace *ws = nullptr) const;
-    template<HCOrdering Order>
-    std::optional<point> take_point(HC &hc, const Order &order, workspace *ws = nullptr) const;
+    // Negative slices are explored in temporary regions. Only the empty-span
+    // path persists unsupported-arrival pruning in the supplied HC.
+    template<HCOrdering Ordering = natural_HC_ordering>
+    std::optional<point> take_point(
+        HC &hc, const Ordering &order = {}, workspace *ws = nullptr,
+        std::span<const slice> negative = {}) const;
 
-    // With negative slices, use temporary regions before matching; their
-    // matching-dependent pruning never replaces the input HC. An empty span
-    // uses ordinary take_point(), including its unsupported-arrival pruning.
-    std::optional<point> take_point(
-        HC &hc, std::span<const slice> negative, workspace *ws = nullptr) const;
-    template<HCOrdering Order>
-    std::optional<point> take_point(
-        HC &hc, std::span<const slice> negative, const Order &order,
-        workspace *ws = nullptr) const;
-    
+private:
+    template<HCOrdering Ordering>
+    std::optional<point> match_point(HC &hc, const Ordering &order, workspace &ws) const;
+
+public:
     /*
      find_problem(p, hc): find any problem about p and returns the problem 
      slice containing p or std::nullopt if the point is okay. Each fixed
@@ -265,30 +264,10 @@ public:
     std::optional<slice> find_checks(const point &p, const HC &hc) const;
     moveseq to_action(const point &p) const;
     static std::pair<HC_info, search_space> build_HC(const state &s);
-    generator<moveseq> iterative_search(search_space ss) const &;
-    generator<moveseq> iterative_search(search_space ss) const && = delete;
-    template<HCOrdering Order>
-    generator<moveseq> iterative_search(search_space ss, Order order) const &;
-    template<HCOrdering Order>
-    generator<moveseq> iterative_search(search_space ss, Order order) const && = delete;
-    generator<moveseq> stable_search(search_space ss) const &;
-    generator<moveseq> stable_search(search_space ss) const && = delete;
-    template<HCOrdering Order>
-    generator<moveseq> stable_search(search_space ss, Order order) const &;
-    template<HCOrdering Order>
-    generator<moveseq> stable_search(search_space ss, Order order) const && = delete;
-    generator<moveseq> deferred_search(search_space ss) const &;
-    generator<moveseq> deferred_search(search_space ss) const && = delete;
-    template<HCOrdering Order>
-    generator<moveseq> deferred_search(search_space ss, Order order) const &;
-    template<HCOrdering Order>
-    generator<moveseq> deferred_search(search_space ss, Order order) const && = delete;
-    generator<moveseq> search(search_space ss) const &;
-    generator<moveseq> search(search_space ss) const && = delete;
-    template<HCOrdering Order>
-    generator<moveseq> search(search_space ss, Order order) const &;
-    template<HCOrdering Order>
-    generator<moveseq> search(search_space ss, Order order) const && = delete;
+    template<HCOrdering Ordering = natural_HC_ordering, hc_policy Policy = hc_policy::deferred>
+    generator<moveseq> search(search_space ss, Ordering order = {}) const &;
+    template<HCOrdering Ordering = natural_HC_ordering, hc_policy Policy = hc_policy::deferred>
+    generator<moveseq> search(search_space ss, Ordering order = {}) const && = delete;
     // /* uncomment when debugging */
     //std::vector<moveseq> search1(search_space ss) const;
 };

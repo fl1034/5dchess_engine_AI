@@ -4,23 +4,18 @@
 #include <limits>
 #include "graph.h"
 
-template<HCOrdering Order>
-std::optional<point> HC_info::take_point(HC &hc, const Order &order, workspace *ws) const
+template<HCOrdering Ordering>
+std::optional<point> HC_info::match_point(HC &hc, const Ordering &order, workspace &ws) const
 {
     assert(hc.dimension() == dimension());
-    if(!ws)
-    {
-        workspace local;
-        return take_point(hc, order, &local);
-    }
-    auto &g = ws->matching_graph;
+    auto &g = ws.matching_graph;
     g.reset(dimension());
-    auto &must_include = ws->must_include;
+    auto &must_include = ws.must_include;
     must_include.clear();
     constexpr index_t invalid_index = std::numeric_limits<index_t>::max();
 
     const size_t num_edges = static_cast<std::size_t>(dimension()) * dimension();
-    auto &edge_refs = ws->edge_refs;
+    auto &edge_refs = ws.edge_refs;
     edge_refs.assign(num_edges, invalid_index);
     const auto edge_ref = [&](index_t p, index_t q) -> index_t & {
         return edge_refs[static_cast<std::size_t>(p) * dimension() + q];
@@ -30,7 +25,7 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order, workspace *
     for(index_t n = 0; n < dimension(); n++)
     {
         bool has_nonjump = false;
-        auto &ghost_arrive_indices = ws->ghost_arrive_indices;
+        auto &ghost_arrive_indices = ws.ghost_arrive_indices;
         ghost_arrive_indices.clear();
         for(index_t i : order(n, hc[n]))
         {
@@ -97,16 +92,16 @@ std::optional<point> HC_info::take_point(HC &hc, const Order &order, workspace *
     return result;
 }
 
-template<HCOrdering Order>
+template<HCOrdering Ordering>
 std::optional<point> HC_info::take_point(
-    HC &hc, std::span<const slice> negative, const Order &order, workspace *ws) const
+    HC &hc, const Ordering &order, workspace *ws, std::span<const slice> negative) const
 {
     if(!ws)
     {
         workspace local;
-        return take_point(hc, negative, order, &local);
+        return take_point(hc, order, &local, negative);
     }
-    if(negative.empty()) return take_point(hc, order, ws);
+    if(negative.empty()) return match_point(hc, order, *ws);
 
     // Explore the complement lazily: a temporary region at depth k already
     // avoids slices [0, k). Matching is only run after all slices are avoided.
@@ -120,7 +115,7 @@ std::optional<point> HC_info::take_point(
         while(next < negative.size() && !region.intersects(negative[next])) ++next;
         if(next == negative.size())
         {
-            if(auto pt = take_point(region, order, ws)) return pt;
+            if(auto pt = match_point(region, order, *ws)) return pt;
             continue;
         }
         auto pieces = std::move(region).remove_slice_carefully(negative[next]);
@@ -130,10 +125,10 @@ std::optional<point> HC_info::take_point(
     return std::nullopt;
 }
 
-template<HCOrdering Order>
+template<HCOrdering Ordering, hc_policy Policy>
 generator<moveseq> HC_info::local_search(
-    const HC &outer_hc, local_space &local, const point &seed, const Order &order,
-    local_policy policy, std::span<const slice> negative) const
+    const HC &outer_hc, local_space &local, const point &seed, const Ordering &order,
+    std::span<const slice> negative) const
 {
     struct local_departure
     {
@@ -217,7 +212,8 @@ generator<moveseq> HC_info::local_search(
     {
         HC hc = std::move(remaining.back());
         remaining.pop_back();
-        if(policy == local_policy::deferred && !prune_retained_slices(hc, retained)) continue;
+        if constexpr(Policy == hc_policy::deferred)
+            if(!prune_retained_slices(hc, retained)) continue;
         auto selected = select(hc);
         if(!selected) continue;
         if(std::any_of(retained.begin(), retained.end(),
@@ -263,7 +259,7 @@ generator<moveseq> HC_info::local_search(
         auto projected = project_problem(local.problems.back());
         assert(projected && projected->contains(*selected));
         ++num_problems;
-        if(policy == local_policy::iterative)
+        if constexpr(Policy == hc_policy::iterative)
         {
             for(const auto &[axis, values] : projected->get_fixed_axes())
                 projected->fix_axis(axis, hc[axis] & values);
@@ -271,7 +267,7 @@ generator<moveseq> HC_info::local_search(
             continue;
         }
         remaining.push_back(std::move(hc));
-        if(policy == local_policy::deferred)
+        if constexpr(Policy == hc_policy::deferred)
         {
             if(projected->get_fixed_axes().size() <= 1)
             {
@@ -289,9 +285,10 @@ generator<moveseq> HC_info::local_search(
                 retained.erase(cheapest);
             }
         }
-        else if(policy == local_policy::balanced && num_problems <= 100)
+        else if constexpr(Policy == hc_policy::balanced)
         {
-            remaining.remove_slice_backwards(*projected, true, 10);
+            if(num_problems <= 100) remaining.remove_slice_backwards(*projected, true, 10);
+            else remaining.remove_slice_globally(*projected);
         }
         else
         {
@@ -300,80 +297,13 @@ generator<moveseq> HC_info::local_search(
     }
 }
 
-template<HCOrdering Order>
-generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const &
+template<HCOrdering Ordering, hc_policy Policy>
+generator<moveseq> HC_info::search(search_space ss, Ordering order) const &
 {
     workspace ws;
-    while(!ss.empty())
-    {
-        HC hc = std::move(ss.back());
-        ss.pop_back();
-        auto pt_opt = take_point(hc, order, &ws);
-        if(!pt_opt)
-        {
-            continue;
-        }
-
-        const point &pt = *pt_opt;
-        auto problem = find_problem(pt, hc);
-        if(problem)
-        {
-            ss.concat(std::move(hc).remove_slice(*problem));
-        }
-        else
-        {
-            co_yield to_action(pt);
-            if(auto local = build_local_space(hc, pt))
-            {
-                auto actions = local_search(hc, *local, pt, order, local_policy::iterative);
-                while(auto moves = actions.first()) co_yield std::move(*moves);
-                ss.concat(std::move(hc).remove_slice(local->outer_region));
-                for(const slice &problem : local->problems) ss.remove_slice_globally(problem);
-            }
-            else ss.concat(std::move(hc).remove_point(pt));
-        }
-    }
-}
-
-template<HCOrdering Order>
-generator<moveseq> HC_info::stable_search(search_space ss, Order order) const &
-{
-    workspace ws;
-    while(!ss.empty())
-    {
-        HC hc = std::move(ss.back());
-        ss.pop_back();
-        auto pt = take_point(hc, order, &ws);
-        if(!pt) continue;
-
-        auto problem = find_problem(*pt, universe);
-        if(problem)
-        {
-            ss.push_back(std::move(hc));
-            ss.remove_slice_globally(*problem);
-        }
-        else
-        {
-            co_yield to_action(*pt);
-            if(auto local = build_local_space(hc, *pt))
-            {
-                auto actions = local_search(hc, *local, *pt, order, local_policy::stable);
-                while(auto moves = actions.first()) co_yield std::move(*moves);
-                ss.concat(std::move(hc).remove_slice(local->outer_region));
-                for(const slice &problem : local->problems) ss.remove_slice_globally(problem);
-            }
-            else ss.concat(std::move(hc).remove_point(*pt));
-        }
-    }
-}
-
-template<HCOrdering Order>
-generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const &
-{
-    workspace ws;
-    // Negative information belongs to this search invocation, alongside its
-    // positive HC cover. Temporary point-selection fragments are discarded.
     std::vector<slice> negative;
+    std::size_t num_problems = 0;
+    constexpr std::size_t adaptive_problem_limit = 100;
     const auto codimension = [&](const slice &problem) {
         index_t result = 0;
         for(const auto &[axis, values] : problem.get_fixed_axes())
@@ -382,27 +312,32 @@ generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const 
     };
     while(!ss.empty())
     {
+        if constexpr(Policy == hc_policy::balanced)
+            if(num_problems == adaptive_problem_limit) break;
         HC hc = std::move(ss.back());
         ss.pop_back();
-        if(!prune_retained_slices(hc, negative)) continue;
-        // Prune unsupported arrivals before temporary slicing. A matching
-        // point outside all retained slices needs no temporary regions.
+        if constexpr(Policy == hc_policy::deferred)
+            if(!prune_retained_slices(hc, negative)) continue;
         auto pt = take_point(hc, order, &ws);
-        if(!pt || !prune_retained_slices(hc, negative)) continue;
-        if(std::any_of(negative.begin(), negative.end(),
-            [&](const slice &problem) { return problem.contains(*pt); }))
+        if constexpr(Policy == hc_policy::deferred)
         {
-            pt = take_point(hc, negative, order, &ws);
+            if(!pt || !prune_retained_slices(hc, negative)) continue;
+            if(std::any_of(negative.begin(), negative.end(),
+                [&](const slice &problem) { return problem.contains(*pt); }))
+                pt = take_point(hc, order, &ws, negative);
         }
         if(!pt) continue;
-
-        auto problem = find_problem(*pt, universe);
+        auto problem = [&] {
+            if constexpr(Policy == hc_policy::stable || Policy == hc_policy::deferred)
+                return find_problem(*pt, universe);
+            else return find_problem(*pt, hc);
+        }();
         if(!problem)
         {
             co_yield to_action(*pt);
             if(auto local = build_local_space(hc, *pt))
             {
-                auto actions = local_search(hc, *local, *pt, order, local_policy::deferred, negative);
+                auto actions = local_search<Ordering, Policy>(hc, *local, *pt, order, negative);
                 while(auto moves = actions.first()) co_yield std::move(*moves);
                 ss.concat(std::move(hc).remove_slice(local->outer_region));
                 for(const slice &problem : local->problems) ss.remove_slice_globally(problem);
@@ -410,59 +345,39 @@ generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const 
             else ss.concat(std::move(hc).remove_point(*pt));
             continue;
         }
-
-        ss.push_back(std::move(hc));
-        if(codimension(*problem) <= 1)
+        if constexpr(Policy == hc_policy::iterative)
         {
-            ss.remove_slice_globally(*problem);
-            continue;
+            ss.concat(std::move(hc).remove_slice(*problem));
         }
-        negative.push_back(std::move(*problem));
-        if(negative.size() > ss.size())
+        else
         {
-            auto cheapest = std::min_element(negative.begin(), negative.end(),
-                [&](const slice &a, const slice &b) {
-                    return codimension(a) < codimension(b);
-                });
-            // A popped constraint must be removed from every positive region.
-            ss.remove_slice_globally(*cheapest);
-            negative.erase(cheapest);
-        }
-    }
-}
-
-template<HCOrdering Order>
-generator<moveseq> HC_info::search(search_space ss, Order order) const &
-{
-    workspace ws;
-    constexpr std::size_t adaptive_problem_limit = 100;
-    std::size_t num_problems = 0;
-    while(!ss.empty() && num_problems < adaptive_problem_limit)
-    {
-        HC hc = std::move(ss.back());
-        ss.pop_back();
-        auto pt = take_point(hc, order, &ws);
-        if(!pt) continue;
-
-        auto problem = find_problem(*pt, hc);
-        if(!problem)
-        {
-            co_yield to_action(*pt);
-            if(auto local = build_local_space(hc, *pt))
+            ss.push_back(std::move(hc));
+            if constexpr(Policy == hc_policy::balanced)
             {
-                auto actions = local_search(hc, *local, *pt, order, local_policy::balanced);
-                while(auto moves = actions.first()) co_yield std::move(*moves);
-                ss.concat(std::move(hc).remove_slice(local->outer_region));
-                for(const slice &problem : local->problems) ss.remove_slice_globally(problem);
+                ++num_problems;
+                ss.remove_slice_backwards(*problem, true, 10);
             }
-            else ss.concat(std::move(hc).remove_point(*pt));
-            continue;
+            else if constexpr(Policy == hc_policy::stable)
+                ss.remove_slice_globally(*problem);
+            else
+            {
+                if(codimension(*problem) <= 1)
+                {
+                    ss.remove_slice_globally(*problem);
+                    continue;
+                }
+                negative.push_back(std::move(*problem));
+                if(negative.size() > ss.size())
+                {
+                    const auto cheapest = std::min_element(negative.begin(), negative.end(),
+                        [&](const slice &a, const slice &b) { return codimension(a) < codimension(b); });
+                    ss.remove_slice_globally(*cheapest);
+                    negative.erase(cheapest);
+                }
+            }
         }
-        ++num_problems;
-        ss.push_back(std::move(hc));
-        ss.remove_slice_backwards(*problem, true, 10);
     }
-
-    for(auto &&moves : stable_search(std::move(ss), std::move(order)))
-        co_yield std::move(moves);
+    if constexpr(Policy == hc_policy::balanced)
+        for(auto &&moves : search<Ordering, hc_policy::stable>(std::move(ss), std::move(order)))
+            co_yield std::move(moves);
 }

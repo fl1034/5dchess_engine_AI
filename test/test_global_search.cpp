@@ -61,7 +61,7 @@ void compare_action_sets()
             "[3k/4/4/KN2:0:5:w]\n");
         auto [info, space] = HC_info::build_HC(position);
         std::set<moveseq> expected;
-        for(const auto &moves : info.iterative_search(space)) expected.insert(moves);
+        for(const auto &moves : info.search<natural_HC_ordering, hc_policy::iterative>(space)) expected.insert(moves);
         assert(expected.size() == (reactivated_turn == 3 ? 150 : 146));
         assert(fine_actions(position, natural_HC_ordering{}) == expected);
         for(unsigned seed : {7, 42})
@@ -107,18 +107,18 @@ void compare_similar_action_sets()
             assert(actual == expected);
         };
         auto [info, space] = HC_info::build_HC(position);
-        collect(info.iterative_search(space));
-        collect(info.stable_search(space));
-        collect(info.search(space));
-        collect(info.deferred_search(space));
+        collect(info.search<natural_HC_ordering, hc_policy::iterative>(space));
+        collect(info.search<natural_HC_ordering, hc_policy::stable>(space));
+        collect(info.search<natural_HC_ordering, hc_policy::balanced>(space));
+        collect(info.search<natural_HC_ordering, hc_policy::deferred>(space));
         for(unsigned seed : {7, 42})
         {
             std::mt19937 rng(seed);
             random_HC_ordering order(info.get_universe(), rng);
-            collect(info.iterative_search(space, order));
-            collect(info.stable_search(space, order));
-            collect(info.search(space, order));
-            collect(info.deferred_search(space, order));
+            collect(info.search<decltype(order), hc_policy::iterative>(space, order));
+            collect(info.search<decltype(order), hc_policy::stable>(space, order));
+            collect(info.search<decltype(order), hc_policy::balanced>(space, order));
+            collect(info.search<decltype(order), hc_policy::deferred>(space, order));
         }
     }
 }

@@ -19,7 +19,7 @@ int run_perftest(int argc, const char *argv[])
         out << "Usage: 5dtools perftest [policy]\n"
             << "  On each intermediate position, print 1 if actions are available and 0 otherwise.\n"
             << "  Reads a 5DPGN game from stdin.\n"
-            << "  policy      balanced, naive, stable, iterative, or fine\n"
+            << "  policy      deferred (default), balanced, naive, stable, iterative, or fine\n"
             << "  -h, --help  display this help text and exit\n";
     };
     if(argc == 2 && (std::string_view(argv[1]) == "-h"

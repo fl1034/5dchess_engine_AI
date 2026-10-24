@@ -1,6 +1,6 @@
 {
   "executable": "build/5dtools",
-  "policy": "balanced",
+  "policy": "deferred",
   "warmup_rounds": 3,
   "rounds": 5,
   "count_prefixes": [
