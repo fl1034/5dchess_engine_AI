@@ -42,15 +42,21 @@ public:
     size_t volume() const noexcept;
     /* remove_slice and remove_point only work when it actually contains
     the stuff to be removed; otherwise, expect duplicate hcs */
-    search_space remove_slice(const slice &s) const;
-    search_space remove_point(const point &p) const;
+    search_space remove_slice(const slice &s) const &;
+    // Consume an owned HC, reusing it for the final nonempty piece.
+    search_space remove_slice(const slice &s) &&;
+    search_space remove_point(const point &p) const &;
+    // Reuse an owned HC for the final piece; output order is unchanged.
+    search_space remove_point(const point &p) &&;
     /* general purpose methods that includes a safety check */
-    search_space remove_slice_carefully(const slice &s) const;
+    search_space remove_slice_carefully(const slice &s) const &;
+    search_space remove_slice_carefully(const slice &s) &&;
     search_space remove_point_carefully(const point &p) const;
     /* check if the slice has codimension less than or equal to max_codim */
     bool is_slice_good(const slice &s, index_t max_codim = 1) const noexcept;
     /* remove slice if the codimension of the slice in this hc is small */
-    search_space remove_slice_if_good(const slice &s, index_t max_codim = 1) const;
+    search_space remove_slice_if_good(const slice &s, index_t max_codim = 1) const &;
+    search_space remove_slice_if_good(const slice &s, index_t max_codim = 1) &&;
     /* split the hypercuboid along the nth axis at the ith value 
     returns {part with ith value, part without ith value}
     */

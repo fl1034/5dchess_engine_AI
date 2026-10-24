@@ -33,10 +33,10 @@ graph::find_matching(const std::vector<index_t> &include) const
     }
 
     std::vector<index_t> mate(n_vertices, nil_vertex);
-    std::vector<std::uint8_t> must_include(n_vertices, false);
+    integer_set must_include;
     for(index_t n : include)
     {
-        must_include[n] = true;
+        must_include.insert(n);
     }
 
     // Storage used by every augmenting-path search in this matching. Keeping it
@@ -46,11 +46,11 @@ graph::find_matching(const std::vector<index_t> &include) const
     // base[v] is the base of the blossom containing v, or v itself if v is not in a blossom
     std::vector<index_t> base(n_vertices);
     // whether a vertex is reachable from the root by an even-length alternating path
-    std::vector<std::uint8_t> is_even_reachable(n_vertices);
+    integer_set is_even_reachable;
     // bases included in the blossom currently being contracted
-    std::vector<std::uint8_t> in_blossom(n_vertices);
+    integer_set in_blossom;
     // used to find the lowest common ancestor of two vertices in the alternating tree
-    std::vector<std::uint8_t> in_ancestor_path(n_vertices);
+    integer_set in_ancestor_path;
     // the BFS queue
     std::vector<index_t> queue;
     // the returned path and temporary storage used to reconstruct it
@@ -63,17 +63,17 @@ graph::find_matching(const std::vector<index_t> &include) const
     const auto find_augmenting_path = [&](index_t root) {
         std::fill(parent.begin(), parent.end(), nil_vertex);
         std::iota(base.begin(), base.end(), index_t{0});
-        std::fill(is_even_reachable.begin(), is_even_reachable.end(), false);
+        is_even_reachable.clear();
         queue.clear();
         path.clear();
         reverse_path.clear();
 
         const auto lowest_common_ancestor = [&](index_t a, index_t b) {
-            std::fill(in_ancestor_path.begin(), in_ancestor_path.end(), false);
+            in_ancestor_path.clear();
             while(true)
             {
                 a = base[a];
-                in_ancestor_path[a] = true;
+                in_ancestor_path.insert(a);
                 if(mate[a] == nil_vertex)
                 {
                     break;
@@ -83,7 +83,7 @@ graph::find_matching(const std::vector<index_t> &include) const
             while(true)
             {
                 b = base[b];
-                if(in_ancestor_path[b])
+                if(in_ancestor_path.contains(b))
                 {
                     return b;
                 }
@@ -94,8 +94,8 @@ graph::find_matching(const std::vector<index_t> &include) const
         const auto mark_blossom_path = [&](index_t vertex, index_t blossom_base, index_t child) {
             while(base[vertex] != blossom_base)
             {
-                in_blossom[base[vertex]] = true;
-                in_blossom[base[mate[vertex]]] = true;
+                in_blossom.insert(base[vertex]);
+                in_blossom.insert(base[mate[vertex]]);
                 parent[vertex] = child;
                 child = mate[vertex];
                 vertex = parent[mate[vertex]];
@@ -125,7 +125,7 @@ graph::find_matching(const std::vector<index_t> &include) const
 
         // BFS starts
         queue.push_back(root);
-        is_even_reachable[root] = true;
+        is_even_reachable.insert(root);
         std::size_t queue_position = 0;
         while(queue_position < queue.size())
         {
@@ -153,28 +153,28 @@ graph::find_matching(const std::vector<index_t> &include) const
                 {
                     // mark the blossom
                     const index_t blossom_base = lowest_common_ancestor(vertex, neighbor);
-                    std::fill(in_blossom.begin(), in_blossom.end(), false);
+                    in_blossom.clear();
                     mark_blossom_path(vertex, blossom_base, neighbor);
                     mark_blossom_path(neighbor, blossom_base, vertex);
                     // for the contracted blossom
                     for(index_t v = 0; v < n_vertices; ++v)
                     {
-                        if(in_blossom[base[v]])
+                        if(in_blossom.contains(base[v]))
                         {
                             base[v] = blossom_base;
                             // since a blossom is an odd cycle, all vertices in it are even-reachable
                             // even those initially thought as odd (take another path through the blossom)
                             // they will need to be added to the searching queue
-                            if(!is_even_reachable[v])
+                            if(!is_even_reachable.contains(v))
                             {
                                 // A newly even-reachable vertex outside S is a valid endpoint.
-                                if(!must_include[v])
+                                if(!must_include.contains(v))
                                 {
                                     reconstruct_path(mate[v]);
                                     path.push_back(v);
                                     return true;
                                 }
-                                is_even_reachable[v] = true;
+                                is_even_reachable.insert(v);
                                 queue.push_back(v);
                             }
                         }
@@ -193,13 +193,13 @@ graph::find_matching(const std::vector<index_t> &include) const
                     // otherwise, add the neighbor's mate to the tree
                     // and add it to the searching queue
                     const index_t next = mate[neighbor];
-                    if(!must_include[next])
+                    if(!must_include.contains(next))
                     {
                         reconstruct_path(neighbor);
                         path.push_back(next);
                         return true;
                     }
-                    is_even_reachable[next] = true;
+                    is_even_reachable.insert(next);
                     queue.push_back(next);
                 }
             }

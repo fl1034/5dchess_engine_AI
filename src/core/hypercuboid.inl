@@ -130,7 +130,7 @@ std::optional<point> HC_info::take_point(
             if(auto pt = take_point(region, order, ws)) return pt;
             continue;
         }
-        auto pieces = region.remove_slice_carefully(negative[next]);
+        auto pieces = std::move(region).remove_slice_carefully(negative[next]);
         for(HC &piece : pieces)
             pending.emplace_back(std::move(piece), next + 1);
     }
@@ -155,12 +155,12 @@ generator<moveseq> HC_info::iterative_search(search_space ss, Order order) const
         auto problem = find_problem(pt, hc);
         if(problem)
         {
-            ss.concat(hc.remove_slice(*problem));
+            ss.concat(std::move(hc).remove_slice(*problem));
         }
         else
         {
             co_yield to_action(pt);
-            ss.concat(hc.remove_point(pt));
+            ss.concat(std::move(hc).remove_point(pt));
         }
     }
 }
@@ -185,7 +185,7 @@ generator<moveseq> HC_info::stable_search(search_space ss, Order order) const &
         else
         {
             co_yield to_action(*pt);
-            ss.concat(hc.remove_point(*pt));
+            ss.concat(std::move(hc).remove_point(*pt));
         }
     }
 }
@@ -223,7 +223,7 @@ generator<moveseq> HC_info::deferred_search(search_space ss, Order order) const 
         if(!problem)
         {
             co_yield to_action(*pt);
-            ss.concat(hc.remove_point(*pt));
+            ss.concat(std::move(hc).remove_point(*pt));
             continue;
         }
 
@@ -264,7 +264,7 @@ generator<moveseq> HC_info::search(search_space ss, Order order) const &
         if(!problem)
         {
             co_yield to_action(*pt);
-            ss.concat(hc.remove_point(*pt));
+            ss.concat(std::move(hc).remove_point(*pt));
             continue;
         }
         ++num_problems;

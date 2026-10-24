@@ -89,6 +89,17 @@ void test_remove_point_partition()
             for(const point &removed : points)
             {
                 const auto pieces = hc.remove_point(removed);
+                HC owned = hc;
+                const auto consumed = std::move(owned).remove_point(removed);
+                assert(consumed.size() == pieces.size());
+                auto expected_piece = pieces.begin();
+                for(const HC &actual_piece : consumed)
+                {
+                    assert(expected_piece != pieces.end());
+                    assert(actual_piece.to_string() == expected_piece->to_string());
+                    ++expected_piece;
+                }
+                assert(expected_piece == pieces.end());
                 assert(pieces.size() == expected_pieces);
                 assert(hc.to_string() == before);
                 auto piece = pieces.begin();
@@ -116,6 +127,104 @@ void test_remove_point_partition()
                 }
             }
         }
+    }
+}
+
+void test_consuming_slice_partition()
+{
+    const auto compare = [](const search_space &actual, const search_space &expected) {
+        assert(actual.size() == expected.size());
+        auto reference = expected.begin();
+        for(const HC &piece : actual)
+        {
+            assert(reference != expected.end());
+            assert(piece.dimension() == reference->dimension());
+            for(index_t axis = 0; axis < piece.dimension(); ++axis)
+            {
+                assert(piece[axis].is_subset_of((*reference)[axis]));
+                assert((*reference)[axis].is_subset_of(piece[axis]));
+            }
+            ++reference;
+        }
+        assert(reference == expected.end());
+    };
+    for(std::size_t dimension = 0; dimension <= 3; ++dimension)
+    {
+        for(unsigned shape = 0; shape < (1u << dimension); ++shape)
+        {
+            std::vector<integer_set> axes;
+            for(index_t axis = 0; axis < dimension; ++axis)
+            {
+                const auto middle = static_cast<index_t>(axis + 65);
+                axes.push_back(shape & (1u << axis)
+                    ? integer_set{static_cast<index_t>(axis + 1), middle,
+                                  static_cast<index_t>(axis + 129)}
+                    : integer_set{middle});
+            }
+            const HC hc(std::move(axes));
+            const auto before = hc.to_string();
+            unsigned combinations = 1;
+            for(std::size_t axis = 0; axis < dimension; ++axis) combinations *= 8;
+            for(unsigned pattern = 0; pattern < combinations; ++pattern)
+            {
+                slice cut;
+                unsigned options = pattern;
+                bool plain_valid = true;
+                for(index_t axis = 0; axis < dimension; ++axis, options /= 8)
+                {
+                    const auto choice = options % 8;
+                    if(choice == 0) continue; // free axis
+                    const auto middle = static_cast<index_t>(axis + 65);
+                    integer_set values;
+                    if(choice == 2) values.insert(250); // disjoint
+                    if(choice == 3 || choice == 4 || choice == 7) values.insert(middle);
+                    if(choice == 4) values.insert(static_cast<index_t>(axis + 1));
+                    if(choice == 5 || choice == 6) values = hc[axis];
+                    if(choice == 6 || choice == 7) values.insert(250);
+                    plain_valid &= !values.empty() && values.is_subset_of(hc[axis]);
+                    cut.fix_axis(axis, std::move(values));
+                }
+                const auto expected = hc.remove_slice_carefully(cut);
+                HC owned = hc;
+                const auto actual = std::move(owned).remove_slice_carefully(cut);
+                compare(actual, expected);
+                if(plain_valid)
+                {
+                    owned = hc;
+                    compare(std::move(owned).remove_slice(cut), hc.remove_slice(cut));
+                }
+                for(index_t limit = 0; limit <= dimension; ++limit)
+                {
+                    owned = hc;
+                    compare(std::move(owned).remove_slice_if_good(cut, limit),
+                            hc.remove_slice_if_good(cut, limit));
+                }
+                point candidate(dimension);
+                const auto coverage = [&](auto &&self, std::size_t axis) -> void {
+                    if(axis == dimension)
+                    {
+                        std::size_t count = 0;
+                        for(const HC &piece : actual) count += piece.contains(candidate);
+                        assert(count == (cut.contains(candidate) ? 0u : 1u));
+                        return;
+                    }
+                    for(index_t coordinate : hc[axis])
+                    {
+                        candidate[axis] = coordinate;
+                        self(self, axis + 1);
+                    }
+                };
+                coverage(coverage, 0);
+                assert(hc.to_string() == before);
+            }
+        }
+    }
+    // Empty HCs retain the borrowing implementation's exact piece behavior.
+    const HC empty{{}, {1, 65}};
+    for(const slice &cut : {slice{}, slice{{{0, {1}}}}, slice{{{1, {1}}}}})
+    {
+        HC owned = empty;
+        compare(std::move(owned).remove_slice_carefully(cut), empty.remove_slice_carefully(cut));
     }
 }
 
@@ -709,6 +818,7 @@ int run()
 {
     test_hc();
     test_remove_point_partition();
+    test_consuming_slice_partition();
     test_slice_good();
     test_backward_slice_removal();
     test_backward_slice_order();

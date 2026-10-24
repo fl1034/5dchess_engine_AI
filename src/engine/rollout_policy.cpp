@@ -34,14 +34,14 @@ generator<moveseq> mixed_search(
         if(!problem)
         {
             co_yield hc_info.to_action(*point);
-            space.concat(hc.remove_point(*point));
+            space.concat(std::move(hc).remove_point(*point));
             continue;
         }
 
         ++num_problems;
         if(iterative)
         {
-            space.concat(hc.remove_slice(*problem));
+            space.concat(std::move(hc).remove_slice(*problem));
         }
         else
         {
