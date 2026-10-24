@@ -34,6 +34,18 @@ def positive(value: str) -> int:
     return number
 
 
+def prefix_counts(value: str) -> list[int]:
+    if value == "none":
+        return []
+    parts = value.split(",")
+    if any(not re.fullmatch(r"[0-9]+", part) for part in parts):
+        raise argparse.ArgumentTypeError("prefixes must be comma-separated positive integers or none")
+    counts = [int(part) for part in parts]
+    if any(count < 1 or count > 2147483647 for count in counts) or len(set(counts)) != len(counts):
+        raise argparse.ArgumentTypeError("prefixes must be distinct integers in 1..2147483647")
+    return counts
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -41,6 +53,9 @@ def main() -> int:
     parser.add_argument("--policy", choices=POLICIES)
     parser.add_argument("--warmup-rounds", type=nonnegative)
     parser.add_argument("--rounds", type=positive)
+    parser.add_argument("--prefixes", type=prefix_counts, help="COUNT prefixes, e.g. 10,100,1000; none disables")
+    parser.add_argument("--metrics", action=argparse.BooleanOptionalAction, default=None,
+                        help="collect allocations and peak live HCs in an untimed pass (requires metrics build)")
     parser.add_argument("--workload", choices=("all", "checkmate", "perftest", "count"), default="all")
     parser.add_argument("--output", type=Path, help="save JSON here (default: logs/hc-profiles/<UTC run id>.json)")
     parser.add_argument("--timeout", type=positive, help="whole-invocation wall-time limit in seconds")
@@ -63,6 +78,13 @@ def main() -> int:
         rounds = args.rounds if args.rounds is not None else manifest.get("rounds", 5)
         if type(warmups) is not int or warmups < 0 or type(rounds) is not int or rounds < 1:
             raise ValueError("warmup_rounds must be nonnegative and rounds must be positive integers")
+        prefixes = args.prefixes if args.prefixes is not None else manifest.get("count_prefixes", [])
+        if (not isinstance(prefixes, list) or any(type(n) is not int or n < 1 or n > 2147483647 for n in prefixes)
+                or len(set(prefixes)) != len(prefixes)):
+            raise ValueError("count_prefixes must be distinct integers in 1..2147483647")
+        metrics = args.metrics if args.metrics is not None else manifest.get("metrics", False)
+        if type(metrics) is not bool:
+            raise ValueError("metrics must be a boolean")
         command = [str(executable_path), "hc-profile"]
         file_count = 0
         inputs = []
@@ -117,6 +139,10 @@ def main() -> int:
             raise ValueError("the selected workload has no files")
         command.extend(["--policy", policy, "--warmup-rounds", str(warmups),
                         "--rounds", str(rounds), "--format", "json"])
+        if prefixes:
+            command.extend(["--prefixes", ",".join(map(str, prefixes))])
+        if metrics:
+            command.append("--metrics")
         executable_hash = hashlib.sha256(executable_path.read_bytes()).hexdigest()
     except (OSError, ValueError) as error:
         parser.error(str(error))
@@ -129,6 +155,8 @@ def main() -> int:
         "command": command,
         "executable_sha256": executable_hash,
         "inputs": inputs,
+        "count_prefixes": prefixes,
+        "metrics": metrics,
     }
     print(f"Profiling {file_count} files with {policy}; output: {output}", file=sys.stderr)
     try:
@@ -194,9 +222,13 @@ def main() -> int:
         print(f"Cannot save profile: {error}", file=sys.stderr)
         return 1
     for case in report.get("cases", []):
-        if case["workload"] == "profile-count":
-            print(f"profile-count {Path(case['file']).name}: action_count={case.get('action_count')} "
+        if case["workload"] in ("profile-count", "profile-prefix"):
+            print(f"{case['workload']} {Path(case['file']).name}: "
+                  f"requested={case.get('requested_actions', 'comparison')} action_count={case.get('action_count')} "
                   f"exhausted={case.get('exhausted')} complete={case['complete']}")
+            if "metrics" in case:
+                print(f"  allocations_median={case['metrics']['allocations']['median']} "
+                      f"peak_live_hcs_max={case['metrics']['peak_live_hcs']['max']}")
     for workload, summary in report.get("summary", {}).items():
         timing = summary["timing"]
         if timing["samples"] or summary["incomplete_cases"]:

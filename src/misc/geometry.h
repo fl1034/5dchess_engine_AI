@@ -10,6 +10,9 @@
 #include <map>
 #include <stop_token>
 #include "integer_set.h"
+#ifdef HC_PROFILE_METRICS
+#include "hc_profile_metrics.h"
+#endif
 
 // a point in the multi-dimensional space
 using point = std::vector<index_t>;
@@ -24,6 +27,9 @@ class HC
     // where each axis_i is a sorted set of integers representing the allowed values on that axis
     // in actual computation, we only store the indices
     std::vector<integer_set> axes;
+#ifdef HC_PROFILE_METRICS
+    hc_profile::hc_lifetime lifetime;
+#endif
 public:
     HC(std::initializer_list<integer_set> init_axes);
     explicit HC(std::vector<integer_set> &&init_axes) noexcept;

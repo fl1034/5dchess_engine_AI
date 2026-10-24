@@ -24,6 +24,7 @@
 
 #include "pgnparser.h"
 #include "search_tools.h"
+#include "hc_profile_metrics.h"
 
 namespace
 {
@@ -42,6 +43,8 @@ struct options
     int warmup_rounds = 3;
     int rounds = 5;
     bool json = false;
+    bool metrics = false;
+    std::vector<int> prefixes;
 };
 
 struct sample
@@ -52,6 +55,7 @@ struct sample
     double elapsed_ms;
     std::optional<std::size_t> action_count;
     bool exhausted = false;
+    std::optional<hc_profile::counters> metrics;
 };
 
 struct round_result
@@ -98,11 +102,24 @@ struct profile_case
     std::vector<sample> samples;
     std::optional<count_expectation> expected;
     std::optional<bool> exhausted;
+    std::optional<int> prefix;
     std::vector<round_result> rounds;
     std::vector<failure> errors;
 
     profile_case(std::string workload, std::string file)
         : workload{std::move(workload)}, file{std::move(file)} {}
+
+    int limit() const { return prefix.value_or(expected->limit()); }
+    bool matches(std::size_t count) const
+    {
+        if(!prefix) return expected->matches(count);
+        const bool exhausted = count < static_cast<std::size_t>(*prefix);
+        if(exhausted) return expected->matches(count);
+        if(expected->comparison == '=')
+            return count <= static_cast<std::size_t>(expected->value);
+        if(expected->comparison == '<') return expected->matches(count);
+        return true;
+    }
 };
 
 void print_help()
@@ -116,6 +133,9 @@ void print_help()
         << "  --policy <name>         balanced (default), stable, deferred, iterative, fine, naive\n"
         << "  --warmup-rounds <n>     complete unrecorded workload rounds (default: 3)\n"
         << "  --rounds <n>            measured workload rounds (default: 5)\n"
+        << "  --prefixes 10,100,1000  add separate bounded COUNT cases (or none)\n"
+        << "  --metrics              measure allocations and peak live HCs in a separate pass\n"
+        << "                         requires a build with HC_PROFILE_METRICS=ON\n"
         << "  --format text|json      output format (default: text)\n"
         << "  -h, --help              show this help\n"
         << "Ctrl+C prints completed samples and exits with code 130.\n"
@@ -123,14 +143,14 @@ void print_help()
         << "classification, excluding parsing, replay, validation, and output.\n";
 }
 
-int parse_count(std::string_view value, bool allow_zero)
+int parse_count(std::string_view value, bool allow_zero, std::string_view label = "round count")
 {
     int result = 0;
     const auto [end, ec] = std::from_chars(
         value.data(), value.data() + value.size(), result);
     if(ec != std::errc{} || end != value.data() + value.size()
        || result < (allow_zero ? 0 : 1))
-        throw std::invalid_argument("invalid round count: " + std::string(value));
+        throw std::invalid_argument("invalid " + std::string(label) + ": " + std::string(value));
     return result;
 }
 
@@ -140,14 +160,37 @@ options parse_options(int argc, const char *argv[])
     for(int i = 1; i < argc; ++i)
     {
         const std::string_view arg = argv[i];
+        if(arg == "--metrics")
+        {
+            if(!hc_profile::available)
+                throw std::invalid_argument("--metrics requires a build with HC_PROFILE_METRICS=ON");
+            result.metrics = true;
+            continue;
+        }
         if(arg != "--policy" && arg != "--warmup-rounds"
-           && arg != "--rounds" && arg != "--format")
+           && arg != "--rounds" && arg != "--format" && arg != "--prefixes")
             throw std::invalid_argument("unknown hc-profile option: " + std::string(arg));
         if(++i == argc)
             throw std::invalid_argument(std::string(arg) + " requires a value");
         const std::string_view value = argv[i];
         if(arg == "--warmup-rounds") result.warmup_rounds = parse_count(value, true);
         else if(arg == "--rounds") result.rounds = parse_count(value, false);
+        else if(arg == "--prefixes")
+        {
+            result.prefixes.clear();
+            if(value == "none") continue;
+            std::size_t start = 0;
+            while(true)
+            {
+                const auto comma = value.find(',', start);
+                const auto prefix = parse_count(value.substr(start, comma - start), false, "action prefix");
+                if(std::find(result.prefixes.begin(), result.prefixes.end(), prefix) != result.prefixes.end())
+                    throw std::invalid_argument("duplicate action prefix");
+                result.prefixes.push_back(prefix);
+                if(comma == std::string_view::npos) break;
+                start = comma + 1;
+            }
+        }
         else if(arg == "--format")
         {
             if(value != "text" && value != "json")
@@ -209,7 +252,8 @@ void prepare(profile_case &entry, std::mutex &results_mutex, std::string_view so
     }
 }
 
-void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex)
+void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex,
+    const options &settings)
 {
     std::string line;
     std::size_t line_number = 0;
@@ -251,6 +295,16 @@ void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex)
         std::string source;
         std::getline(record >> std::ws, source);
         if(source.empty()) throw std::invalid_argument(label + ": missing 5dpgn");
+        if(expected)
+        {
+            for(int prefix : settings.prefixes)
+            {
+                auto &bounded = cases.emplace_back("profile-prefix", label);
+                bounded.expected = expected;
+                bounded.prefix = prefix;
+                prepare(bounded, results_mutex, source);
+            }
+        }
         auto &entry = cases.emplace_back(workload, label);
         entry.expected = expected;
         prepare(entry, results_mutex, source);
@@ -291,14 +345,31 @@ void run_round(profile_case &entry, const options &settings, int round, bool war
             const auto start = std::chrono::steady_clock::now();
             std::optional<moveseq> moves;
             std::optional<std::size_t> action_count;
-            if(entry.workload == "profile-count")
-                action_count = count_actions(current, settings.policy, entry.expected->limit());
+            if(entry.expected)
+                action_count = count_actions(current, settings.policy, entry.limit());
             else
                 moves = find_first_action(current, settings.policy);
             const bool has_actions = action_count ? *action_count != 0 : moves.has_value();
             const bool checkmate = !has_actions && current.has_phantom_check();
             const double elapsed_ms = std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
+            std::optional<hc_profile::counters> metrics;
+            if(settings.metrics && !warmup)
+            {
+                phase = "metrics";
+                hc_profile::measurement measurement;
+                if(action_count)
+                {
+                    if(count_actions(current, settings.policy, entry.limit()) != *action_count)
+                        throw std::runtime_error("diagnostic enumeration count differs from timed search");
+                }
+                else if(find_first_action(current, settings.policy).has_value() != moves.has_value())
+                    throw std::runtime_error("diagnostic action availability differs from timed search");
+                if(!has_actions) (void)current.has_phantom_check();
+                metrics = measurement.finish();
+                if(metrics->live_hcs != 0)
+                    throw std::runtime_error("HC objects outlived diagnostic search");
+            }
             // All checks below are outside the measured operation.
             phase = "validation";
             const std::string outcome = has_actions ? "action"
@@ -316,8 +387,8 @@ void run_round(profile_case &entry, const options &settings, int round, bool war
                     if(entry.action_count && entry.action_count != action_count)
                         throw std::runtime_error("action count changed between rounds");
                     entry.action_count = action_count;
-                    entry.exhausted = *action_count < static_cast<std::size_t>(entry.expected->limit());
-                    if(!entry.expected->matches(*action_count))
+                    entry.exhausted = *action_count < static_cast<std::size_t>(entry.limit());
+                    if(!entry.matches(*action_count))
                         throw std::runtime_error("expected " + entry.expected->text()
                             + " actions, observed " + std::to_string(*action_count)
                             + (*entry.exhausted ? " (exhausted)" : " (limit reached)"));
@@ -328,7 +399,7 @@ void run_round(profile_case &entry, const options &settings, int round, bool war
                     throw std::runtime_error("action availability or mate classification changed between rounds");
                 if(!warmup)
                     entry.samples.push_back({round, position_index, outcome, elapsed_ms,
-                        action_count, entry.exhausted.value_or(false)});
+                        action_count, entry.exhausted.value_or(false), metrics});
             }
             ++positions;
             total_ms += elapsed_ms;
@@ -375,6 +446,15 @@ std::vector<double> times(const profile_case &entry)
     return result;
 }
 
+std::vector<double> metric_values(const profile_case &entry, bool allocations)
+{
+    std::vector<double> result;
+    for(const auto &sample : entry.samples)
+        if(sample.metrics) result.push_back(allocations
+            ? sample.metrics->allocations : sample.metrics->peak_live_hcs);
+    return result;
+}
+
 void json_string(std::ostream &out, std::string_view value)
 {
     constexpr char hex[] = "0123456789abcdef";
@@ -408,6 +488,29 @@ bool complete(const profile_case &entry, const options &settings)
     return entry.errors.empty() && entry.rounds.size() == static_cast<std::size_t>(settings.rounds);
 }
 
+void json_metrics(const profile_case &entry)
+{
+    std::cout << ",\"metrics\":{";
+    for(bool allocations : {true, false})
+    {
+        if(!allocations) std::cout << ',';
+        const auto s = summarize(metric_values(entry, allocations));
+        std::cout << (allocations ? "\"allocations\":" : "\"peak_live_hcs\":")
+                  << "{\"samples\":" << s.count;
+        const auto field = [&](const char *name, double value) {
+            std::cout << ",\"" << name << "\":";
+            if(s.count) std::cout << value;
+            else std::cout << "null";
+        };
+        field("mean", s.mean);
+        field("median", s.median);
+        field("p95", s.p95);
+        field("max", s.maximum);
+        std::cout << '}';
+    }
+    std::cout << '}';
+}
+
 void print_results(const options &settings, const std::vector<profile_case> &cases, bool was_interrupted)
 {
     std::cout << std::setprecision(12);
@@ -417,6 +520,8 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
         json_string(std::cout, settings.policy_name);
         std::cout << ",\"warmup_rounds\":" << settings.warmup_rounds
                   << ",\"rounds\":" << settings.rounds
+                  << ",\"metrics_enabled\":" << (settings.metrics ? "true" : "false")
+                  << ",\"metrics_available\":" << (hc_profile::available ? "true" : "false")
                   << ",\"interrupted\":" << (was_interrupted ? "true" : "false");
 #ifdef PROJECT_VERSION_STRING
         std::cout << ",\"version\":";
@@ -436,15 +541,16 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
             json_string(std::cout, entry.workload);
             std::cout << ",\"file\":";
             json_string(std::cout, entry.file);
-            if(entry.workload == "profile-count")
+            if(entry.expected)
             {
+                if(entry.prefix) std::cout << ",\"requested_actions\":" << *entry.prefix;
                 std::cout << ",\"action_count\":";
                 if(entry.action_count) std::cout << *entry.action_count;
                 else std::cout << "null";
                 std::cout << ",\"expected_count\":";
                 std::cout << entry.expected->value << ",\"expected_operator\":";
                 json_string(std::cout, std::string(1, entry.expected->comparison));
-                std::cout << ",\"action_limit\":" << entry.expected->limit() << ",\"exhausted\":";
+                std::cout << ",\"action_limit\":" << entry.limit() << ",\"exhausted\":";
                 if(entry.exhausted) std::cout << (*entry.exhausted ? "true" : "false");
                 else std::cout << "null";
             }
@@ -452,6 +558,7 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                       << ",\"positions_per_round\":" << entry.expected_outcomes.size()
                       << ",\"summary\":";
             json_statistics(std::cout, summarize(times(entry)));
+            if(settings.metrics) json_metrics(entry);
             std::cout << ",\"samples\":[";
             bool first_sample = true;
             for(const auto &s : entry.samples)
@@ -463,6 +570,9 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                 if(s.action_count)
                     std::cout << ",\"action_count\":" << *s.action_count
                               << ",\"exhausted\":" << (s.exhausted ? "true" : "false");
+                if(s.metrics)
+                    std::cout << ",\"allocations\":" << s.metrics->allocations
+                              << ",\"peak_live_hcs\":" << s.metrics->peak_live_hcs;
                 std::cout << ",\"elapsed_ms\":" << s.elapsed_ms << '}';
             }
             std::cout << "],\"game_rounds\":[";
@@ -495,7 +605,7 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                   << " warmup rounds, " << settings.rounds << " measured rounds\n";
 
     bool first_workload = true;
-    for(const std::string workload : {"profile-checkmate", "profile-perftest", "profile-count"})
+    for(const std::string workload : {"profile-checkmate", "profile-perftest", "profile-prefix", "profile-count"})
     {
         std::vector<double> values;
         std::size_t failed_cases = 0, incomplete_cases = 0;
@@ -513,16 +623,19 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                           << entry.expected_outcomes.size() << " samples=" << s.count
                           << " outcome=" << (entry.expected_outcomes.empty()
                               ? "unknown" : entry.expected_outcomes.back())
-                          << (entry.workload == "profile-count"
+                          << (entry.expected
                               ? " action_count=" + (entry.action_count
                                   ? std::to_string(*entry.action_count) : "unknown") : "")
                           << (entry.expected ? " expected" + entry.expected->text()
-                              + " action_limit=" + std::to_string(entry.expected->limit())
+                              + " action_limit=" + std::to_string(entry.limit())
                               + " exhausted=" + (entry.exhausted
                                   ? (*entry.exhausted ? "true" : "false") : "unknown") : "")
                           << " mean_ms=" << s.mean << " median_ms=" << s.median
-                          << " p95_ms=" << s.p95 << " max_ms=" << s.maximum
-                          << (complete(entry, settings) ? "\n" : " INCOMPLETE\n");
+                          << " p95_ms=" << s.p95 << " max_ms=" << s.maximum;
+                if(settings.metrics)
+                    std::cout << " allocations_median=" << summarize(metric_values(entry, true)).median
+                              << " peak_live_hcs_max=" << summarize(metric_values(entry, false)).maximum;
+                std::cout << (complete(entry, settings) ? "\n" : " INCOMPLETE\n");
                 for(const auto &error : entry.errors)
                     std::cout << "  " << error.phase << ": " << error.message << '\n';
             }
@@ -571,7 +684,7 @@ int run_hc_profile(int argc, const char *argv[])
     std::mutex results_mutex;
     try
     {
-        read_records(cases, results_mutex);
+        read_records(cases, results_mutex, settings);
     }
     catch(const std::exception &error)
     {

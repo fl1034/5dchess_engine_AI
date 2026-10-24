@@ -101,8 +101,10 @@ initial position and every submitted position on the last-variation main line,
 matching the existing perftest convention. `COUNT` applies the requested bounded
 comparison at the final position. The former `--stdin`, `--checkmate`,
 `--perftest`, and `--count` options are not accepted.
-The two fixtures under `test/pgn/count/` have expected action counts of
-30,134 and 55,332. The final `NP.5dpgn` position has eight actions.
+The original fixtures under `test/pgn/count/` have expected action counts of
+30,134 and 55,332. The final `NP.5dpgn` position has eight actions. The custom
+`four-timeline-knights.5dpgn` fixture adds a position with several variable axes
+and 35,204 actions, so enumeration comparisons cover more than the original two cases.
 Policies are `balanced`, `stable`, `deferred`, `iterative`, `fine`, and `naive`.
 
 Games are parsed once. Warmups and measured rounds run in the same process;
@@ -129,6 +131,56 @@ and `action_limit`. The `action_count` and `exhausted` case fields are `null` if
 no enumeration completed. Count-workload timing statistics appear under
 `summary["profile-count"]`. Bounded cases may complete successfully without
 exhausting the search space.
+
+Use `--prefixes 10,100,1000` to add a separate enumeration at each requested
+action limit before each original `COUNT` case. The original comparison still
+runs, so `EXPECTED=30134` verifies complete enumeration independently of the
+prefixes. Prefix cases use `workload: "profile-prefix"` and include
+`requested_actions`, `action_limit`, `action_count`, and `exhausted`. Their timing
+summary is separate from `profile-count`; compare matching requested limits
+between policies. If a position has only eight actions, a request for ten reports
+eight with `exhausted: true`. Reaching the requested limit does not prove exhaustion.
+
+The launcher's default manifest requests prefixes 10, 100, and 1,000 through
+`"count_prefixes": [10, 100, 1000]`. Override them with `--prefixes 100,1000`, or
+use `--prefixes none` for the original comparison alone. Counts must be distinct
+integers in 1..2,147,483,647. These options do not change checkmate or perftest cases.
+
+For allocation and live-HC measurements, enable the optional instrumentation:
+
+```sh
+cmake -S . -B build-hc-profile -DTOOLS=ON -DTEST=ON -DPYMODULE=OFF \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-fno-rtti -DHC_PROFILE_METRICS=ON
+cmake --build build-hc-profile --config Release --parallel
+python scripts/profile_hc.py --executable build-hc-profile/5dtools \
+  --policy deferred --workload count --metrics
+```
+
+The native command also accepts `--metrics`. Each measured search is followed
+by a separate diagnostic search at the same action limit. Only the first search
+contributes `elapsed_ms`; the second supplies `allocations` and `peak_live_hcs`.
+Its action count or availability must agree with the timed search. Parsing,
+replay, validation, and report generation are outside the diagnostic scope.
+
+`allocations` counts successful C++ `new`/`new[]` calls on the search thread,
+including aligned allocations and search-context setup/cleanup. It does not count
+direct `malloc` calls or allocations on other threads. `peak_live_hcs` counts
+actual HC objects created during that search, including context universes,
+temporary regions, copies, empty HCs, and moved-from objects until destruction.
+Implicit future pieces are excluded until an HC is constructed. This is an object
+count, not heap bytes or process memory.
+
+JSON samples carry the two integer counters. Each case's `metrics` object contains
+their mean, median, p95, and maximum, with `null` values when no measurements
+completed. Text output includes median allocations and maximum live HCs. JSON
+also reports `metrics_enabled` and `metrics_available`. The manifest can set
+`"metrics": true`; `--no-metrics` disables it in the Python runner.
+
+Instrumentation is off in normal builds. When enabled it adds HC lifetime tickets
+and allocation hooks, even though diagnostic counting is active only during the
+separate pass. Compare policies built with the same instrumentation settings;
+do not interpret differences between instrumented and normal builds as policy
+speedups. Requesting metrics from a build without instrumentation returns an error.
 
 Press Ctrl+C to print a partial report immediately and exit with code 130.
 Only completed, validated measured searches are included; the unfinished search
@@ -158,7 +210,7 @@ Use `"<1000"` for an upper bound or `">100"` for a lower bound. Checkmate and
 perftest entries remain filename strings.
 
 The manifest records `build/5dtools`, all four current slow fixtures, 50 fixed
-online games, the three count positions, and the default rounds. Paths in the manifest are relative to
+online games, the four count positions, and the default rounds. Paths in the manifest are relative to
 the repository root; the launcher works from any directory. It reads and flattens
 each game into a stdin record, so filenames do not enlarge the native command
 line. It restores source filenames in the report using stdin record numbers.

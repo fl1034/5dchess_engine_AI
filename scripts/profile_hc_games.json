@@ -3,6 +3,8 @@
   "policy": "balanced",
   "warmup_rounds": 3,
   "rounds": 5,
+  "count_prefixes": [10, 100, 1000],
+  "metrics": false,
   "profile-count": [
     {
       "file": "test/pgn/count/30134.5dpgn",
@@ -15,6 +17,10 @@
     {
       "file": "test/pgn/NP.5dpgn",
       "expected": "=8"
+    },
+    {
+      "file": "test/pgn/count/four-timeline-knights.5dpgn",
+      "expected": "=35204"
     }
   ],
   "profile-checkmate": [
