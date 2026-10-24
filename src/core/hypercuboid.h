@@ -93,6 +93,14 @@
  3. if no problem, yield the point's action sequence
  4. otherwise, remove the problem slice from the search space and repeat
 
+ After a successful yield is resumed, these four policies exhaust a local
+ class with fixed null entries and jump axis pairing. Physical moves may vary;
+ arrivals retain source/destination TLs and determine their paired departures.
+ Matching, jump order, and Present stay valid, so only checks are tested.
+ Local axes omit constants. The exhausted class is removed once, then recorded
+ unprojected check problems are propagated globally. No local phase is built
+ before the first yield; a singleton class uses ordinary point removal.
+
  Differences are in how problem slices are removed and propagated through the search space:
  - `iterative_search()` removes a discovered problem only from the currently
    examined hypercuboid.
@@ -139,22 +147,45 @@ class HC_info
     std::vector<index_t> line_axes;
     std::vector<std::vector<entry>> axis_coords;
     HC universe;
+    // Per-axis classification masks. nonjump includes physical and null entries;
+    // an empty axis in a classification mask does not make other axes unusable.
+    HC nonjump_entries;
+    HC departing_entries;
+    HC arriving_entries;
+    constexpr static index_t null_coordinate = 0;
     index_t new_axis;
     std::vector<int> mandatory_lines;
 
     static bool prune_retained_slices(HC &hc, std::span<const slice> negative);
 
+    enum class local_policy { iterative, stable, balanced, deferred };
+    struct local_space
+    {
+        std::vector<index_t> axes;
+        HC universe{};
+        point seed;
+        slice outer_region;
+        std::vector<slice> problems;
+    };
+    std::unique_ptr<local_space> build_local_space(const HC &hc, const point &seed) const;
+    template<HCOrdering Order>
+    generator<moveseq> local_search(
+        const HC &outer_hc, local_space &local, const point &seed, const Order &order,
+        local_policy policy, std::span<const slice> negative = {}
+    ) const;
+
     // The caller must establish that line is in range; missing axes return no_axis.
     index_t line_to_axis_unsafe(int line) const noexcept {
-        assert(line >= l0_offset
-            && static_cast<unsigned int>(line) - static_cast<unsigned int>(l0_offset)
-                < line_axes.size());
+        assert(line >= l0_offset);
+        assert(static_cast<unsigned int>(line) - static_cast<unsigned int>(l0_offset)
+            < line_axes.size());
         return line_axes[line - l0_offset];
     }
 
     explicit HC_info(const state &position)
         : s(position), l0_offset(position.get_lines_range().first),
-          universe({}), new_axis(0) {}
+          universe({}), nonjump_entries({}), departing_entries({}),
+          arriving_entries({}), new_axis(0) {}
 
 public:
     const state &get_state() const & noexcept { return s; }

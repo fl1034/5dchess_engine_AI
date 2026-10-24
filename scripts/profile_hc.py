@@ -46,6 +46,18 @@ def prefix_counts(value: str) -> list[int]:
     return counts
 
 
+def turn_selector(value: object) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"0|[0-9]+[wWbB]", value):
+        raise ValueError("at must be a turn selector such as 0, 1w, or 11b")
+    if value in ("0", "0b", "0B"):
+        return "0b"
+    number = int(value[:-1])
+    color = value[-1].lower()
+    if number == 0:
+        raise ValueError("at must be 0 or a positive turn with w/b suffix")
+    return f"{number}{color}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -96,13 +108,17 @@ def main() -> int:
                 raise ValueError(f"{key} must be an array")
             files = []
             expectations = []
+            selections = []
             for entry in entries:
                 expected = None
+                at = None
                 if option == "count":
                     if not isinstance(entry, dict):
                         raise ValueError("profile-count entries require file and expected fields")
                     filename = entry.get("file")
                     expected = entry.get("expected")
+                    if "at" in entry:
+                        at = turn_selector(entry["at"])
                     if not isinstance(expected, str) or not re.fullmatch(r"[<=>][0-9]+", expected):
                         raise ValueError("expected must be a comparison such as =8, <1000, or >100")
                     value = int(expected[1:])
@@ -115,24 +131,29 @@ def main() -> int:
                     raise ValueError(f"{key} requires nonempty file paths")
                 files.append(filename)
                 expectations.append(expected)
+                selections.append(at)
             if args.workload not in ("all", option) or not files:
                 continue
             paths = [(ROOT / path).resolve() for path in files]
-            if len(set(paths)) != len(paths):
-                raise ValueError(f"duplicate files in {key}")
+            if len(set(zip(paths, selections))) != len(paths):
+                raise ValueError(f"duplicate file/turn pairs in {key}")
             for path in paths:
                 if not path.is_file():
                     raise ValueError(f"profile input not found: {path}")
-            for path, expected in zip(paths, expectations):
+            for path, expected, at in zip(paths, expectations, selections):
                 content = path.read_bytes()
                 pgn = " ".join(content.decode("utf-8").split())
                 prefix = f"EXPECTED{expected} " if expected is not None else ""
+                if at is not None:
+                    prefix += f"AT={at} "
                 records.append(f"{prefix}{option.upper()} {pgn}\n")
                 entry = {"workload": key, "file": str(path),
                          "record": len(records),
                          "sha256": hashlib.sha256(content).hexdigest()}
                 if expected is not None:
                     entry["expected"] = expected
+                if at is not None:
+                    entry["at"] = at
                 inputs.append(entry)
             file_count += len(paths)
         if file_count == 0:
@@ -158,7 +179,7 @@ def main() -> int:
         "count_prefixes": prefixes,
         "metrics": metrics,
     }
-    print(f"Profiling {file_count} files with {policy}; output: {output}", file=sys.stderr)
+    print(f"Profiling {file_count} records with {policy}; output: {output}", file=sys.stderr)
     try:
         # Keep warmups and measured rounds in one native process. stderr carries
         # native progress; stdout is machine-readable profiling data only.
@@ -224,6 +245,7 @@ def main() -> int:
     for case in report.get("cases", []):
         if case["workload"] in ("profile-count", "profile-prefix"):
             print(f"{case['workload']} {Path(case['file']).name}: "
+                  f"at={case.get('at', 'final')} "
                   f"requested={case.get('requested_actions', 'comparison')} action_count={case.get('action_count')} "
                   f"exhausted={case.get('exhausted')} complete={case['complete']}")
             if "metrics" in case:

@@ -3,7 +3,11 @@
   "policy": "balanced",
   "warmup_rounds": 3,
   "rounds": 5,
-  "count_prefixes": [10, 100, 1000],
+  "count_prefixes": [
+    10,
+    100,
+    1000
+  ],
   "metrics": false,
   "profile-count": [
     {
@@ -21,13 +25,91 @@
     {
       "file": "test/pgn/count/four-timeline-knights.5dpgn",
       "expected": "=35204"
+    },
+    {
+      "file": "test/pgn/small.5dpgn",
+      "at": "0",
+      "expected": "=20"
+    },
+    {
+      "file": "test/pgn/NP0.5dpgn",
+      "expected": "=0"
+    },
+    {
+      "file": "test/pgn/small.5dpgn",
+      "at": "1b",
+      "expected": "=602"
+    },
+    {
+      "file": "test/pgn/online/601.5dpgn",
+      "at": "7b",
+      "expected": "=1219"
+    },
+    {
+      "file": "test/pgn/online/116.5dpgn",
+      "at": "5b",
+      "expected": "=7098"
+    },
+    {
+      "file": "test/pgn/futures.5dpgn",
+      "at": "9b",
+      "expected": "=5306"
+    },
+    {
+      "file": "test/pgn/online/026.5dpgn",
+      "at": "11b",
+      "expected": "=3420"
+    },
+    {
+      "file": "test/pgn/online/113.5dpgn",
+      "at": "17w",
+      "expected": "=3758"
+    },
+    {
+      "file": "test/pgn/online/204.5dpgn",
+      "at": "10w",
+      "expected": "=1456"
+    },
+    {
+      "file": "test/pgn/online/070.5dpgn",
+      "at": "20w",
+      "expected": "=49196"
+    },
+    {
+      "file": "test/pgn/niceAndrey.5dpgn",
+      "at": "30b",
+      "expected": "=118398"
+    },
+    {
+      "file": "test/pgn/online/235.5dpgn",
+      "at": "20w",
+      "expected": "=145310"
+    },
+    {
+      "file": "test/pgn/ctp1.5dpgn",
+      "at": "8w",
+      "expected": "=98318"
+    },
+    {
+      "file": "test/pgn/manyChecks.5dpgn",
+      "at": "20w",
+      "expected": ">50000"
+    },
+    {
+      "file": "test/pgn/wide.5dpgn",
+      "at": "18w",
+      "expected": ">50000"
+    },
+    {
+      "file": "test/pgn/niceAndrey.5dpgn",
+      "expected": ">50000"
     }
   ],
   "profile-checkmate": [
-    "test/pgn/slow/100timelines.5dpgn",
-    "test/pgn/slow/factored-match-59.5dpgn",
-    "test/pgn/slow/factored-match-72.5dpgn",
-    "test/pgn/slow/flat-ucb-match-123.5dpgn"
+    "test/pgn/gigantic/100timelines.5dpgn",
+    "test/pgn/gigantic/factored-match-59.5dpgn",
+    "test/pgn/gigantic/factored-match-72.5dpgn",
+    "test/pgn/gigantic/flat-ucb-match-123.5dpgn"
   ],
   "profile-perftest": [
     "test/pgn/online/026.5dpgn",

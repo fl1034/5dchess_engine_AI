@@ -40,6 +40,13 @@ most one. These cuts do not increase the HC count and repeat until no further
 such cuts apply, including after unsupported-arrival pruning. Successful actions
 are removed as usual. The C++ API, `deferred_search`, supports coordinate ordering.
 
+For `balanced`, `stable`, `deferred`, and `iterative`, continued enumeration
+groups similar actions before returning to other jump choices. Physical moves
+can vary within a group; jumps can vary their piece and arrival square while
+keeping the same source and destination timeline-turns and the same timeline
+pairing. Departures change together with their arrivals. The first action is searched normally.
+The complete legal-action set is unchanged, but enumeration order can differ.
+
 For `print`, `stats`, `count`, `all`, `checkmate`, and `diff`, `--at 0` and
 `--at 0b` select the initial
 position. A value such as `--at 16b` selects the state immediately after
@@ -99,7 +106,8 @@ whole invocation without an external timeout command.
 `CHECKMATE` measures each game's final position. `PERFTEST` measures the
 initial position and every submitted position on the last-variation main line,
 matching the existing perftest convention. `COUNT` applies the requested bounded
-comparison at the final position. The former `--stdin`, `--checkmate`,
+comparison at the final position unless `AT` selects an earlier turn.
+The former `--stdin`, `--checkmate`,
 `--perftest`, and `--count` options are not accepted.
 The original fixtures under `test/pgn/count/` have expected action counts of
 30,134 and 55,332. The final `NP.5dpgn` position has eight actions. The custom
@@ -124,6 +132,15 @@ each position sample equally. Preparation, replay, invalid-action, and
 round-consistency failures are recorded explicitly; incomplete results return
 exit code 1. Invalid command options return 2.
 Count cases and their measured samples include an integer `action_count`.
+An optional `AT=<turn>` before `COUNT` selects the position after that submitted
+main-line turn, using the same selectors as `count --at`: `0` for the initial
+position, or a turn such as `11b`. For example, `EXPECTED=602 AT=1b COUNT` followed
+by the contents of `test/pgn/small.5dpgn` profiles its position after Black's first
+action. Omission selects the final position. Unavailable turns are preparation
+errors; selected cases and their prefixes include the normalized `at` in JSON.
+Replay and selection occur before timing. Later actions are not replayed or
+validated, although the complete PGN must still parse. `AT` requires `COUNT`.
+
 The count is the number of actions observed; `exhausted: true` establishes an
 exact total. At the action limit, `exhausted` is false even if the actual total
 happens to equal that limit. Cases include `expected_count`, `expected_operator`,
@@ -196,21 +213,32 @@ python scripts/profile_hc.py
 python scripts/profile_hc.py --policy stable --workload checkmate --rounds 3
 python scripts/profile_hc.py --policy deferred
 python scripts/profile_hc.py --policy deferred --workload count
+python scripts/profile_hc.py --config scripts/profile_hc_expanded.json
 ```
 
 Count entries in `profile_hc_games.json` require a file and comparison:
 
 ```json
 "profile-count": [
-  {"file": "test/pgn/NP.5dpgn", "expected": "=8"}
+  {"file": "test/pgn/NP.5dpgn", "expected": "=8"},
+  {"file": "test/pgn/small.5dpgn", "at": "1b", "expected": "=602"}
 ]
 ```
 
 Use `"<1000"` for an upper bound or `">100"` for a lower bound. Checkmate and
 perftest entries remain filename strings.
+The optional string `at` selects a submitted turn; omission selects the endpoint.
+Several count entries may reference the same file at different turns. Duplicate
+file/turn pairs are rejected. Reports retain the file and selected turn.
 
-The manifest records `build/5dtools`, all four current slow fixtures, 50 fixed
-online games, the four count positions, and the default rounds. Paths in the manifest are relative to
+The default manifest records `build/5dtools`, four gigantic checkmate fixtures,
+50 fixed online games, 20 representative count positions, and the default rounds.
+The [expanded count manifest](../../scripts/profile_hc_expanded.json) contains
+the other 255 count positions. Both reference existing games with optional turn
+selectors, fully enumerate known spaces up to 200,000 actions, and cap larger
+spaces at 50,001 using `>50000`. The
+[corpus guide](../../test/pgn/count/README.md) describes selection and provenance.
+Paths in the manifest are relative to
 the repository root; the launcher works from any directory. It reads and flattens
 each game into a stdin record, so filenames do not enlarge the native command
 line. It restores source filenames in the report using stdin record numbers.

@@ -15,7 +15,7 @@ namespace
 state slow_position()
 {
     const auto path = std::filesystem::path(__FILE__).parent_path()
-        / "pgn/slow/flat-ucb-match-123.5dpgn";
+        / "pgn/gigantic/flat-ucb-match-123.5dpgn";
     std::ifstream input(path);
     assert(input);
     std::ostringstream text;
@@ -78,6 +78,51 @@ void compare_action_sets()
     }
 }
 
+void compare_similar_action_sets()
+{
+    for(const char *first_board : {"3k/4/4/KN2", "3k/4/1r2/KN2"})
+    {
+        // The rook can check a king on another timeline after physical moves.
+        // Arrival alternatives also change captures and resulting board contents.
+        const auto position = state::from_pgn(
+            std::string("[Board \"custom\"]\n[Size \"4x4\"]\n[")
+            + first_board + ":0:1:w]\n[3k/4/4/KN2:1:1:w]\n");
+        const auto expected = fine_actions(position, natural_HC_ordering{});
+        assert(!expected.empty());
+        const auto collect = [&](auto actions) {
+            std::set<moveseq> actual;
+            // Resume explicitly across the seed yield and entry into the local
+            // phase, then finish through the normal range interface.
+            for(int i = 0; i < 2; ++i)
+            {
+                auto moves = actions.first();
+                assert(moves && position.can_apply(action::from_moveseq(*moves, position)));
+                assert(actual.insert(std::move(*moves)).second);
+            }
+            for(const auto &moves : actions)
+            {
+                assert(position.can_apply(action::from_moveseq(moves, position)));
+                assert(actual.insert(moves).second);
+            }
+            assert(actual == expected);
+        };
+        auto [info, space] = HC_info::build_HC(position);
+        collect(info.iterative_search(space));
+        collect(info.stable_search(space));
+        collect(info.search(space));
+        collect(info.deferred_search(space));
+        for(unsigned seed : {7, 42})
+        {
+            std::mt19937 rng(seed);
+            random_HC_ordering order(info.get_universe(), rng);
+            collect(info.iterative_search(space, order));
+            collect(info.stable_search(space, order));
+            collect(info.search(space, order));
+            collect(info.deferred_search(space, order));
+        }
+    }
+}
+
 void slow_searches()
 {
     const auto position = slow_position();
@@ -136,5 +181,6 @@ void slow_searches()
 int main()
 {
     compare_action_sets();
+    compare_similar_action_sets();
     slow_searches();
 }

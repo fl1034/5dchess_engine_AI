@@ -25,6 +25,7 @@
 #include "pgnparser.h"
 #include "search_tools.h"
 #include "hc_profile_metrics.h"
+#include "turn_selection.h"
 
 namespace
 {
@@ -101,6 +102,7 @@ struct profile_case
     std::optional<std::size_t> action_count;
     std::vector<sample> samples;
     std::optional<count_expectation> expected;
+    std::optional<turn_selection> at;
     std::optional<bool> exhausted;
     std::optional<int> prefix;
     std::vector<round_result> rounds;
@@ -129,6 +131,8 @@ void print_help()
         << "Reads workload records from stdin until EOF:\n"
         << "  PERFTEST|CHECKMATE <single-line 5dpgn>\n"
         << "  EXPECTED<100 COUNT <single-line 5dpgn>\n"
+        << "  EXPECTED=100 AT=11b COUNT <single-line 5dpgn>\n"
+        << "  AT selects a submitted main-line turn (0 selects the initial position)\n"
         << "  EXPECTED=100 or EXPECTED>100 stops at 101 actions\n"
         << "  --policy <name>         balanced (default), stable, deferred, iterative, fine, naive\n"
         << "  --warmup-rounds <n>     complete unrecorded workload rounds (default: 3)\n"
@@ -232,8 +236,17 @@ void prepare(profile_case &entry, std::mutex &results_mutex, std::string_view so
             auto *node = &entry.game->gt;
             while(const auto *action = next_action(*node))
             {
+                if(entry.at && entry.endpoint_index == entry.at->actions) break;
                 ++entry.endpoint_index;
                 node = action->second.get();
+            }
+            if(entry.at)
+            {
+                if(entry.endpoint_index != entry.at->actions)
+                    throw std::invalid_argument("turn " + entry.at->label
+                        + " is not available; the last submitted main-line turn is "
+                        + submitted_turn(entry.endpoint_index));
+                *node = pgnparser_ast::gametree{};
             }
             entry.initial = state::from_ast(*entry.game);
         }
@@ -283,6 +296,14 @@ void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex,
             expected = count_expectation{comparison, count};
             record >> command;
         }
+        std::optional<turn_selection> at;
+        if(command.starts_with("AT="))
+        {
+            std::string error;
+            at = parse_turn_selection(std::string_view(command).substr(3), error);
+            if(!at) throw std::invalid_argument(label + ": " + error);
+            record >> command;
+        }
         std::string workload;
         if(command == "COUNT") workload = "profile-count";
         else if(command == "PERFTEST") workload = "profile-perftest";
@@ -290,6 +311,8 @@ void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex,
         else throw std::invalid_argument(label + ": unknown workload: " + command);
         if(expected && command != "COUNT")
             throw std::invalid_argument(label + ": EXPECTED requires COUNT");
+        if(at && command != "COUNT")
+            throw std::invalid_argument(label + ": AT requires COUNT");
         if(command == "COUNT" && !expected)
             throw std::invalid_argument(label + ": COUNT requires a bounded EXPECTED comparison");
         std::string source;
@@ -302,11 +325,13 @@ void read_records(std::vector<profile_case> &cases, std::mutex &results_mutex,
                 auto &bounded = cases.emplace_back("profile-prefix", label);
                 bounded.expected = expected;
                 bounded.prefix = prefix;
+                bounded.at = at;
                 prepare(bounded, results_mutex, source);
             }
         }
         auto &entry = cases.emplace_back(workload, label);
         entry.expected = expected;
+        entry.at = at;
         prepare(entry, results_mutex, source);
     }
     if(std::cin.bad()) throw std::runtime_error("cannot read stdin");
@@ -541,6 +566,11 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
             json_string(std::cout, entry.workload);
             std::cout << ",\"file\":";
             json_string(std::cout, entry.file);
+            if(entry.at)
+            {
+                std::cout << ",\"at\":";
+                json_string(std::cout, entry.at->label);
+            }
             if(entry.expected)
             {
                 if(entry.prefix) std::cout << ",\"requested_actions\":" << *entry.prefix;
@@ -632,6 +662,7 @@ void print_results(const options &settings, const std::vector<profile_case> &cas
                                   ? (*entry.exhausted ? "true" : "false") : "unknown") : "")
                           << " mean_ms=" << s.mean << " median_ms=" << s.median
                           << " p95_ms=" << s.p95 << " max_ms=" << s.maximum;
+                if(entry.at) std::cout << " at=" << entry.at->label;
                 if(settings.metrics)
                     std::cout << " allocations_median=" << summarize(metric_values(entry, true)).median
                               << " peak_live_hcs_max=" << summarize(metric_values(entry, false)).maximum;

@@ -396,11 +396,10 @@ void test_global_slice_order()
 struct counted_pass_order
 {
     std::size_t *pass_hcs;
-    template<class F>
-    void for_each(index_t axis, const integer_set &coords, F &&visit) const
+    const integer_set &operator()(index_t axis, const integer_set &coords) const
     {
         if(axis == 0 && coords.contains(0)) ++*pass_hcs;
-        for(index_t i : coords) visit(i);
+        return coords;
     }
 };
 
@@ -616,16 +615,144 @@ void test_negative_point_selection()
     }
 }
 
+struct paired_projection_order : detail::precomputed_HC_ordering<paired_projection_order>
+{
+    paired_projection_order(const HC &universe, index_t target, index_t preferred, index_t rejected)
+    {
+        for(index_t axis = 0; axis < universe.dimension(); ++axis)
+        {
+            auto &values = orderings.emplace_back();
+            if(axis == target)
+            {
+                values.push_back(preferred);
+                values.push_back(rejected);
+            }
+            for(index_t i : universe[axis])
+                if(axis != target || (i != preferred && i != rejected)) values.push_back(i);
+        }
+    }
+};
+
+void test_paired_similar_rectangle()
+{
+    for(const char *destination : {"3k/4/4/KN2", "3k/4/1r2/KN2", "3k/4/4/rN1K"})
+    {
+        for(bool reverse : {false, true})
+        {
+            const int source_line = reverse ? 1 : 0;
+            const int destination_line = reverse ? 0 : 1;
+            const auto position = state::from_pgn(
+                "[Board \"custom\"]\n[Size \"4x4\"]\n"
+                "[3k/4/4/KN2:" + std::to_string(source_line) + ":1:w]\n["
+                + destination + ":" + std::to_string(destination_line) + ":1:w]\n");
+            auto [info, initial] = HC_info::build_HC(position);
+            const index_t source = *info.line_to_axis(source_line);
+            const index_t target = *info.line_to_axis(destination_line);
+            integer_set departures, arrivals;
+            for(index_t i : info.get_universe()[source])
+                if(info.get_semimove(source, i).is<departing_move>()) departures.insert(i);
+            for(index_t i : info.get_universe()[target])
+            {
+                const auto sm = info.get_semimove(target, i);
+                if(const auto *arrival = sm.get_if<arriving_move>();
+                    arrival && arrival->m.from.l() == source_line) arrivals.insert(i);
+            }
+            assert(departures.size() >= 2 && arrivals.size() >= 2);
+            std::vector<integer_set> axes(info.dimension(), integer_set{0});
+            axes[source] = departures;
+            axes[target] = arrivals;
+            const HC rectangle(std::move(axes));
+            std::set<moveseq> expected;
+            integer_set used_departures;
+            std::size_t rejected_checks = 0;
+            std::optional<index_t> preferred, rejected;
+            for(index_t a : arrivals)
+            {
+                const auto arrival = info.get_semimove(target, a);
+                const auto move = arrival.get<arriving_move>().m;
+                bool paired = false;
+                for(index_t d : departures)
+                {
+                    const auto departure = info.get_semimove(source, d);
+                    if(departure.get<departing_move>().from != move.from) continue;
+                    assert(!paired);
+                    paired = true;
+                    used_departures.insert(d);
+                    point p(info.dimension(), 0);
+                    p[source] = d;
+                    p[target] = a;
+                    assert(!info.jump_order_consistent(p, info.get_universe()));
+                    assert(!info.test_present(p, info.get_universe()));
+                    if(auto problem = info.find_checks(p, info.get_universe()))
+                    {
+                        ++rejected_checks;
+                        if(std::string(destination) == "3k/4/4/rN1K")
+                        {
+                            assert(problem->get_fixed_axes().contains(source));
+                            assert(problem->get_fixed_axes().contains(target));
+                            rejected = a;
+                        }
+                        continue;
+                    }
+                    if(move.from.x() == 0 && move.from.y() == 0
+                        && move.to.x() == 0 && move.to.y() == 0) preferred = a;
+                    auto moves = info.to_action(p);
+                    assert(position.can_apply(action::from_moveseq(moves, position)));
+                    assert(expected.insert(std::move(moves)).second);
+                }
+                assert(paired);
+            }
+            assert(used_departures.size() >= 2 && !expected.empty());
+            if(std::string(destination) == "3k/4/4/rN1K") assert(rejected_checks > 0);
+            const auto collect = [&](auto actions) {
+                std::set<moveseq> actual;
+                while(auto moves = actions.first())
+                {
+                    assert(position.can_apply(action::from_moveseq(*moves, position)));
+                    assert(actual.insert(std::move(*moves)).second);
+                }
+                assert(actual == expected);
+            };
+            const search_space restricted{rectangle};
+            collect(info.iterative_search(restricted));
+            collect(info.stable_search(restricted));
+            collect(info.search(restricted));
+            collect(info.deferred_search(restricted));
+            if(std::string(destination) == "3k/4/4/rN1K")
+            {
+                // Yield a king capture first, then force a knight departure
+                // exposing the source king before the remaining legal king move.
+                // The learned source and arrival restrictions must be intersected.
+                assert(preferred && rejected);
+                paired_projection_order order{info.get_universe(), target, *preferred, *rejected};
+                collect(info.iterative_search(restricted, order));
+                collect(info.stable_search(restricted, order));
+                collect(info.search(restricted, order));
+                collect(info.deferred_search(restricted, order));
+            }
+            for(unsigned seed : {7, 42})
+            {
+                std::mt19937 rng(seed);
+                random_HC_ordering order(info.get_universe(), rng);
+                collect(info.iterative_search(restricted, order));
+                collect(info.stable_search(restricted, order));
+                collect(info.search(restricted, order));
+                collect(info.deferred_search(restricted, order));
+            }
+        }
+    }
+}
+
 struct retained_slice_order
 {
     index_t watched_axis;
     integer_set excluded;
     std::size_t *visits;
 
-    void for_each(index_t axis, const integer_set &coordinates, auto &&visit) const
+    const integer_set &operator()(index_t axis, const integer_set &allowed) const
     {
-        if(axis == watched_axis && coordinates.intersects(excluded)) ++*visits;
-        for(index_t coordinate : coordinates) visit(coordinate);
+        if(axis == watched_axis && allowed.intersects(excluded)) ++*visits;
+        return allowed;
     }
 };
 
@@ -783,7 +910,7 @@ void test_reactivated_present()
 void test_slow_global_conflicts()
 {
     const auto path = std::filesystem::path(__FILE__).parent_path()
-        / "pgn/slow/flat-ucb-match-123.5dpgn";
+        / "pgn/gigantic/flat-ucb-match-123.5dpgn";
     std::ifstream input(path);
     assert(input);
     std::ostringstream text;
@@ -827,6 +954,7 @@ int run()
     test_line_axis_lookup();
     test_point_workspace();
     test_negative_point_selection();
+    test_paired_similar_rectangle();
     test_persistent_retained_slice();
     test_reactivated_present();
     test_slow_global_conflicts();

@@ -12,6 +12,7 @@
 #include <map>
 #include <memory_resource>
 #include <random>
+#include <utility>
 
 //#define DEBUGMSG
 #include "debug.h"
@@ -432,6 +433,9 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     
     // build the whole space
     info.universe = HC(std::vector<integer_set>(dimension));
+    info.nonjump_entries = HC(std::vector<integer_set>(dimension));
+    info.departing_entries = HC(std::vector<integer_set>(dimension));
+    info.arriving_entries = HC(std::vector<integer_set>(dimension));
     for(index_t n = 0; n < dimension; n++)
     {
         auto &coords = info.universe[n];
@@ -446,6 +450,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
     // fill the idx of arriving moves
     for(index_t n = 0; n < static_cast<index_t>(info.axis_coords.size()); n++)
     {
+        assert(std::holds_alternative<null_entry>(info.axis_coords[n][null_coordinate]));
         for(index_t i = 0; i < static_cast<index_t>(info.axis_coords[n].size()); i++)
         {
             entry &loc = info.axis_coords[n][i];
@@ -459,6 +464,7 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
                     assert(nfrom != no_axis);
                     assert(p->m.from == std::get<departing_entry>(info.axis_coords[nfrom][p->idx]).from);
 #endif
+                    info.arriving_entries[n].insert(i);
                 }
                 else
                 {
@@ -466,6 +472,14 @@ std::pair<HC_info, search_space> HC_info::build_HC(const state &s)
                     [[maybe_unused]] auto flag = info.universe[n].erase(i);
                     assert(flag);
                 }
+            }
+            else if(std::holds_alternative<departing_entry>(loc))
+            {
+                info.departing_entries[n].insert(i);
+            }
+            else
+            {
+                info.nonjump_entries[n].insert(i);
             }
         }
     }
@@ -513,6 +527,82 @@ std::optional<point> HC_info::take_point(
     HC &hc, std::span<const slice> negative, workspace *ws) const
 {
     return take_point(hc, negative, natural_HC_ordering{}, ws);
+}
+
+std::unique_ptr<HC_info::local_space>
+HC_info::build_local_space(const HC &hc, const point &seed) const
+{
+    std::unique_ptr<local_space> result;
+    std::vector<integer_set> coordinates;
+    std::vector<std::pair<index_t, integer_set>> departure_domains;
+    for(index_t n = 0; n < dimension(); ++n)
+    {
+        integer_set alternatives;
+        integer_set departure_values;
+        index_t departure_axis = no_axis;
+        if(seed[n] != null_coordinate && nonjump_entries[n].contains(seed[n]))
+        {
+            alternatives = hc[n] & nonjump_entries[n];
+            alternatives.erase(null_coordinate);
+        }
+        else if(arriving_entries[n].contains(seed[n]))
+        {
+            const auto &anchor = std::get<arriving_entry>(axis_coords[n][seed[n]]);
+            departure_axis = line_to_axis_unsafe(anchor.m.from.l());
+            assert(departure_axis != no_axis && seed[departure_axis] == anchor.idx);
+            arriving_entries[n].for_each_intersection(hc[n], [&](index_t i) {
+                const auto &arrival = std::get<arriving_entry>(axis_coords[n][i]);
+                if(arrival.m.from.tl() == anchor.m.from.tl()
+                    && arrival.m.to.tl() == anchor.m.to.tl()
+                    && hc[departure_axis].contains(arrival.idx))
+                {
+                    alternatives.insert(i);
+                    departure_values.insert(arrival.idx);
+                }
+            });
+        }
+        if(alternatives.size() <= 1) continue;
+        if(!result) result = std::make_unique<local_space>();
+        if(departure_values.size() > 1)
+        {
+            assert(std::none_of(departure_domains.begin(), departure_domains.end(),
+                [&](const auto &p) { return p.first == departure_axis; }));
+            departure_domains.emplace_back(departure_axis, std::move(departure_values));
+        }
+        result->axes.push_back(n);
+        result->seed.push_back(seed[n]);
+        coordinates.push_back(std::move(alternatives));
+    }
+    if(!result) return nullptr;
+    result->universe = HC(std::move(coordinates));
+    // The outer rectangle includes mismatched departure/arrival combinations.
+    // Every matching-valid point in it uses exactly the seed's fixed axis pairs
+    // and is represented by a local arrival together with its cached departure.
+    std::size_t local_axis = 0;
+    for(index_t n = 0; n < dimension(); ++n)
+    {
+        if(local_axis < result->axes.size() && result->axes[local_axis] == n)
+        {
+            const auto &values = result->universe[local_axis++];
+            if(!hc[n].is_subset_of(values))
+                result->outer_region.fix_axis(n, values);
+        }
+        else
+        {
+            const auto departure = std::find_if(departure_domains.begin(), departure_domains.end(),
+                [&](const auto &p) { return p.first == n; });
+            if(departure != departure_domains.end())
+            {
+                if(!hc[n].is_subset_of(departure->second))
+                    result->outer_region.fix_axis(n, departure->second);
+            }
+            else if(hc[n].size() != 1)
+            {
+                result->outer_region.fix_axis(n, {seed[n]});
+            }
+        }
+    }
+    return result;
 }
 
 bool HC_info::prune_retained_slices(HC &hc, std::span<const slice> negative)
@@ -565,7 +655,7 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
         // within this loop, n is the axis for new_l
         const index_t in = p[n];
         const entry &loc = axis_coords[n][in];
-        if(std::holds_alternative<null_entry>(loc))
+        if(in == null_coordinate)
         {
             break;
             // assumed: search space is always separated by number of branches
@@ -579,8 +669,7 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
         if(const index_t m = line_to_axis_unsafe(to.l()); m != no_axis)
         {
             const index_t im = p[m];
-            const entry &loc2 = axis_coords[m][im];
-            if(std::holds_alternative<null_entry>(loc2)
+            if(im == null_coordinate
                && s.get_timeline_end(to.l()) == turn{to.t(), c})
             {
                 /* ban these combinations:
@@ -589,18 +678,10 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
                  i.e. all moves >> (l',t') then creates branch new_l
                  */
                 integer_set s;
-                for(index_t i : hc[n])
-                {
-                    const entry &loc3 = axis_coords[n][i];
-                    if(std::holds_alternative<arriving_entry>(loc3))
-                    {
-                        vec4 to3 = std::get<arriving_entry>(loc3).m.to;
-                        if(to3.tl() == to.tl())
-                        {
-                            s.insert(i);
-                        }
-                    }
-                }
+                arriving_entries[n].for_each_intersection(hc[n], [&](index_t i) {
+                    vec4 to3 = std::get<arriving_entry>(axis_coords[n][i]).m.to;
+                    if(to3.tl() == to.tl()) s.insert(i);
+                });
                 std::map<index_t, integer_set> fixed_axes {{n, s}, {m, integer_set{im}}};
                 slice problem(fixed_axes);
                 dprint("case one; point:", range_to_string(p));
@@ -623,30 +704,17 @@ std::optional<slice> HC_info::jump_order_consistent(const point &p, const HC &hc
             */
             index_t axis_branch = jump_map[critical_tl];
             integer_set s1, s2;
-            for(index_t i : hc[n])
-            {
-                const entry &l1 = axis_coords[n][i];
-                if(std::holds_alternative<arriving_entry>(l1))
+            arriving_entries[n].for_each_intersection(hc[n], [&](index_t i) {
+                vec4 from1 = std::get<arriving_entry>(axis_coords[n][i]).m.from;
+                if(from1.tl() == critical_tl) s1.insert(i);
+            });
+            arriving_entries[axis_branch].for_each_intersection(hc[axis_branch], [&](index_t i) {
+                vec4 to2 = std::get<arriving_entry>(axis_coords[axis_branch][i]).m.to;
+                if(to2.tl() == critical_tl)
                 {
-                    vec4 from1 = std::get<arriving_entry>(l1).m.from;
-                    if(from1.tl() == critical_tl)
-                    {
-                        s1.insert(i);
-                    }
+                    s2.insert(i);
                 }
-            }
-            for(index_t i : hc[axis_branch])
-            {
-                const entry &l2 = axis_coords[axis_branch][i];
-                if(std::holds_alternative<arriving_entry>(l2))
-                {
-                    vec4 to2 = std::get<arriving_entry>(l2).m.to;
-                    if(to2.tl() == critical_tl)
-                    {
-                        s2.insert(i);
-                    }
-                }
-            }
+            });
             std::map<index_t, integer_set> fixed_axes {{n, s1}, {axis_branch, s2}};
             slice problem(fixed_axes);
             dprint("case two; point:", range_to_string(p));
@@ -668,7 +736,7 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
     const auto [l_min, l_max] = s.get_lines_range();
     index_t branches = 0;
     while(new_axis + branches < dimension()
-          && !std::holds_alternative<null_entry>(axis_coords[new_axis + branches][p[new_axis + branches]]))
+          && p[new_axis + branches] != null_coordinate)
     {
         ++branches;
     }
@@ -696,8 +764,7 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
     {
         turn end = s.get_timeline_end(l);
         const index_t axis = line_to_axis_unsafe(l);
-        const bool moved = axis != no_axis
-            && !std::holds_alternative<null_entry>(axis_coords[axis][p[axis]]);
+        const bool moved = axis != no_axis && p[axis] != null_coordinate;
         if(moved) end = end.next_turn();
         if(end <= present)
         {
@@ -755,18 +822,18 @@ std::optional<slice> HC_info::test_present(const point &p, const HC &hc) const
         integer_set allowed;
         // Identify genuine restrictions against the universe, then clip each
         // restricted axis to hc to preserve the remove_slice() contract.
-        for(index_t i : universe[n])
+        if(min_branches == 0 || offset != min_branches - 1)
+            allowed.insert(null_coordinate);
+        if(offset != max_branches)
         {
-            const entry &loc = axis_coords[n][i];
-            const bool passed = std::holds_alternative<null_entry>(loc);
-            if(passed)
+            if(l < widest_min || l > widest_max)
             {
-                if(min_branches == 0 || offset != min_branches - 1) allowed.insert(i);
+                allowed |= arriving_entries[n];
             }
-            else if(offset != max_branches
-                    && (l < widest_min || l > widest_max || branch_end(loc) >= present))
+            else
             {
-                allowed.insert(i);
+                for(index_t i : arriving_entries[n])
+                    if(branch_end(axis_coords[n][i]) >= present) allowed.insert(i);
             }
         }
         // Branches form a prefix, so only the two boundary axes are needed
@@ -792,7 +859,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
         if(axis == no_axis) continue;
         const int l = l0_offset + static_cast<int>(offset);
         const entry &loc = axis_coords[axis][p[axis]];
-        if (std::holds_alternative<null_entry>(loc)) continue;
+        if(p[axis] == null_coordinate) continue;
         const auto [old_t, old_l] = extract_tl(loc);
         (void)old_l;
         // Branch arrivals use the axis's new line, not their old hotspot line.
@@ -801,6 +868,21 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
     // HC construction has already filtered physical checks on resulting boards.
     if(auto maybe_check = newstate.first_check(!c, false))
     {
+        const auto for_each_board = [&](index_t axis, auto &&visit) {
+            nonjump_entries[axis].for_each_intersection(hc[axis], [&](index_t i) {
+                if(i == null_coordinate) return;
+                const auto &loc = std::get<physical_entry>(axis_coords[axis][i]);
+                visit(i, loc.m.from.t(), loc.b);
+            });
+            departing_entries[axis].for_each_intersection(hc[axis], [&](index_t i) {
+                const auto &loc = std::get<departing_entry>(axis_coords[axis][i]);
+                visit(i, loc.from.t(), loc.b);
+            });
+            arriving_entries[axis].for_each_intersection(hc[axis], [&](index_t i) {
+                const auto &loc = std::get<arriving_entry>(axis_coords[axis][i]);
+                visit(i, loc.m.to.t(), loc.b);
+            });
+        };
         // there is a check
         // the slice to remove is a product of coordinates on certain axes
         full_move check = maybe_check.value();
@@ -819,15 +901,13 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
         if(const index_t n1 = line_to_axis_unsafe(check.from.l()); n1 != no_axis)
         {
             integer_set not_taking;
-            for(index_t i : hc[n1])
-            {
-                const entry &loc = axis_coords[n1][i];
+            for_each_board(n1, [&](index_t i, int old_t, const board &newboard) {
                 /* if there isn't a new board on the same place, it won't create the same check*/
-                if(std::holds_alternative<null_entry>(loc) || !is_next(extract_tl(loc).first,check.from.t()))
+                if(!is_next(old_t, check.from.t()))
                 {
-                    continue;
+                    return;
                 }
-                const board &newboard = extract_board(loc);
+
                 if(sliding_type)
                 {
                     bitboard_t bb = c ? newboard.white() : newboard.black();
@@ -850,7 +930,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
                     }
                     if(pmask(check.from.xy()) & bb)
                     {
-                        dprint(n1, i, sliding_type, to_semimove(loc).lan(s));
+                        dprint(n1, i, sliding_type, to_semimove(axis_coords[n1][i]).lan(s));
                         dprint("axis", n1, "not taking (sliding)", i);
                         not_taking.insert(i);
                     }
@@ -858,12 +938,12 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
                 else if(newboard.get_piece(check.from.xy()) == newstate.get_piece(check.from, !c))
                 {
                     // non sliding pieces remains in same position
-                    dprint(n1, i, sliding_type, to_semimove(loc).lan(s));
+                    dprint(n1, i, sliding_type, to_semimove(axis_coords[n1][i]).lan(s));
                     dprint("axis", n1, "not taking (untouched)", i);
                     not_taking.insert(i);
                 }
-            }
-                problem.fix_axis(n1, not_taking);
+            });
+            problem.fix_axis(n1, not_taking);
         }
         /* on axis for check.to.l():
          if the board of checks.to is what just played, ban all moves that leave
@@ -874,35 +954,29 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
         if(const index_t n2 = line_to_axis_unsafe(l2); n2 != no_axis)
         {
             const entry &loc0 = axis_coords[n2][p[n2]];
-            if(std::holds_alternative<null_entry>(loc0) || !is_next(extract_tl(loc0).first, check.to.t()))
+            if(p[n2] == null_coordinate || !is_next(extract_tl(loc0).first, check.to.t()))
             {
                 // pass to ban everything
             }
             else
             {
                 integer_set expose_royal;
-                for(index_t i : hc[n2])
-                {
-                    const entry &loc = axis_coords[n2][i];
-                    const board *newboard = nullptr;
+                for_each_board(n2, [&](index_t i, int old_t, const board &newboard) {
                     /* if there isn't a new board on the same place, do nothing*/
-                    if(std::holds_alternative<null_entry>(loc) || !is_next(extract_tl(loc).first, check.to.t()))
+                    if(!is_next(old_t, check.to.t()))
                     {
-                        continue;
+                        return;
                     }
-                    else
-                    {
-                        newboard = &extract_board(loc);
-                    }
-                    bitboard_t friendly = c ? newboard->black() : newboard->white();
-                    bool is_royal = pmask(check.to.xy()) & newboard->royal() & friendly;
+
+                    bitboard_t friendly = c ? newboard.black() : newboard.white();
+                    bool is_royal = pmask(check.to.xy()) & newboard.royal() & friendly;
                     if(is_royal)
                     {
-                        dprint(to_semimove(loc).lan(s));
+                        dprint(to_semimove(axis_coords[n2][i]).lan(s));
                         dprint("axis", n2, "expose royal", i);
                         expose_royal.insert(i);
                     }
-                }
+                });
                 problem.fix_axis(n2, expose_royal);
             }
         }
@@ -917,7 +991,7 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
             if(const index_t n = line_to_axis_unsafe(crossed.l()); n != no_axis)
             {
                 const entry &loc0 = axis_coords[n][p[n]];
-                if(std::holds_alternative<null_entry>(loc0) || !is_next(extract_tl(loc0).first, crossed.t()))
+                if(p[n] == null_coordinate || !is_next(extract_tl(loc0).first, crossed.t()))
                 {
                     // pass to ban everything
                 }
@@ -925,22 +999,20 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
                 {
                     bitboard_t z = pmask(crossed.xy());
                     integer_set not_blocking;
-                    for(index_t i : hc[n])
-                    {
-                        const entry &loc = axis_coords[n][i];
+                    for_each_board(n, [&](index_t i, int old_t, const board &newboard) {
                         /* if there isn't a board, then nothing pass through it*/
-                        if(std::holds_alternative<null_entry>(loc) || !is_next(extract_tl(loc).first, crossed.t()))
+                        if(!is_next(old_t, crossed.t()))
                         {
-                            continue;
+                            return;
                         }
-                        const board &newboard = extract_board(loc);
+
                         /* if the very place is empty, then it is clearly not blocking*/
                         if(!(z & newboard.occupied()))
                         {
-                            dprint(n, i, sliding_type, to_semimove(loc).lan(s));
+                            dprint(n, i, sliding_type, to_semimove(axis_coords[n][i]).lan(s));
                             dprint("axis", n, "not blocking (empty)", i);
                             not_blocking.insert(i);
-                            continue;
+                            return;
                         }
                         /* on the crossed point, if a hostile piece with the same sliding type
                          of the attacking piece is placed here, it doesn't completely resolve the check
@@ -967,10 +1039,10 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
                             }
                             if(z & bb)
                             {
-                                dprint(n, i, sliding_type, to_semimove(loc).lan(s));
+                                dprint(n, i, sliding_type, to_semimove(axis_coords[n][i]).lan(s));
                                 dprint("axis", n, "not blocking (sliding)", i);
                                 not_blocking.insert(i);
-                                continue;
+                                return;
                             }
                         }
                         /* on the crossed point, if a friendly royal piece is there
@@ -979,12 +1051,12 @@ std::optional<slice> HC_info::find_checks(const point &p, const HC &hc) const
                         bitboard_t friendly = c ? newboard.black() : newboard.white();
                         if(z & newboard.royal() & friendly)
                         {
-                            dprint(n, i, sliding_type, to_semimove(loc).lan(s));
+                            dprint(n, i, sliding_type, to_semimove(axis_coords[n][i]).lan(s));
                             dprint("axis", n, "not blocking (expose royal)", i);
                             not_blocking.insert(i);
-                            continue;
+                            return;
                         }
-                    }
+                    });
                     problem.fix_axis(n, not_blocking);
                 }
             }

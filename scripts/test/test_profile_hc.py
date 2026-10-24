@@ -75,6 +75,41 @@ class ProfileManifestTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 2)
                 process.assert_not_called()
 
+    def test_same_game_at_distinct_turns_is_transported_and_identified(self):
+        process = MagicMock()
+        child = process.return_value.__enter__.return_value
+        child.returncode = 0
+        child.communicate.return_value = (json.dumps({
+            "cases": [{"workload": "profile-count", "file": f"stdin:{i}", "at": at,
+                       "action_count": 20, "complete": True}
+                      for i, at in enumerate(("0b", "11b"), 1)], "summary": {},
+        }), None)
+        self.assertEqual(self.run_launcher([
+            {"file": str(self.pgn), "at": "0", "expected": "=20"},
+            {"file": str(self.pgn), "at": "011B", "expected": "=20"},
+        ], process), 0)
+        records = child.communicate.call_args.kwargs["input"].splitlines()
+        self.assertTrue(records[0].startswith("EXPECTED=20 AT=0b COUNT "))
+        self.assertTrue(records[1].startswith("EXPECTED=20 AT=11b COUNT "))
+        report = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual([x["at"] for x in report["run"]["inputs"]], ["0b", "11b"])
+        self.assertEqual([x["file"] for x in report["cases"]], [str(self.pgn)] * 2)
+        self.assertEqual([x["at"] for x in report["cases"]], ["0b", "11b"])
+
+    def test_invalid_turns_and_duplicate_canonical_positions_are_rejected(self):
+        entries = [[{"file": str(self.pgn), "expected": "=20", "at": value}]
+                   for value in (None, 0, "", "11", "0w", "00b", "-1b", "1x", "1b COUNT")]
+        entries += [[{"file": str(self.pgn), "expected": "=20", "at": at}
+                     for at in pair] for pair in (("0", "0B"), ("1b", "01B"))]
+        entries.append([{"file": str(self.pgn), "expected": "=20"}] * 2)
+        for entry in entries:
+            with self.subTest(entries=entry):
+                process = MagicMock()
+                with self.assertRaises(SystemExit) as error:
+                    self.run_launcher(entry, process)
+                self.assertEqual(error.exception.code, 2)
+                process.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
