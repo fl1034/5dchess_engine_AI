@@ -226,15 +226,20 @@ public:
      arrives get deleted immediately (that's why parameter hc is a
      non-const reference)
      */
-    // Scratch storage may be reused across calls, including different contexts.
+    // Search storage may be reused across calls, including different contexts.
+    // A retained matching can change point selection within the supplied order.
     // Each active search owns its workspace; returned points never borrow it.
     struct workspace
     {
     private:
         friend class HC_info;
         graph matching_graph{0};
+        graph::workspace matching_scratch;
         std::vector<index_t> must_include;
         std::vector<index_t> edge_refs;
+        std::vector<std::pair<index_t, index_t>> matching_seed;
+        // Deferred keeps matching hints between HCs; other policies start cold.
+        bool reuse_between_points = false;
         integer_set ghost_arrive_indices;
     };
 
@@ -247,7 +252,8 @@ public:
 
 private:
     template<HCOrdering Ordering>
-    std::optional<point> match_point(HC &hc, const Ordering &order, workspace &ws) const;
+    std::optional<point> match_point(
+        HC &hc, const Ordering &order, workspace &ws, bool reuse_matching) const;
 
 public:
     /*

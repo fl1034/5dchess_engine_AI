@@ -21,41 +21,66 @@ void graph::add_edge(index_t u, index_t v)
 }
 
 std::optional<std::vector<std::pair<index_t, index_t>>>
-graph::find_matching(const std::vector<index_t> &include) const
+graph::find_matching(const std::vector<index_t> &include, workspace &ws,
+    std::span<const std::pair<index_t, index_t>> initial) const
 {
     dprint("finding a match on" + to_string());
     // With no mandatory vertex, the empty matching is already a solution.
-    // This is also the common take_point() case, so avoid constructing the
-    // alternating-path workspace until it is actually needed.
+    // This is also the common take_point() case, so do not touch matching
+    // scratch until it is actually needed.
     if(include.empty())
     {
         return std::vector<std::pair<index_t, index_t>>{};
     }
 
-    std::vector<index_t> mate(n_vertices, nil_vertex);
-    integer_set must_include;
-    for(index_t n : include)
+    auto &mate = ws.mate;
+    mate.assign(n_vertices, nil_vertex);
+    auto &must_include = ws.must_include;
+    must_include.clear();
+    for(index_t n : include) must_include.insert(n);
+    const auto collect = [&] {
+        std::vector<std::pair<index_t, index_t>> result;
+        result.reserve(initial.empty() ? include.size()
+            : std::min<std::size_t>(n_vertices / 2, include.size() + initial.size()));
+        for(index_t vertex = 0; vertex < n_vertices; ++vertex)
+            if(mate[vertex] < vertex) result.emplace_back(vertex, mate[vertex]);
+        return result;
+    };
+    if(!initial.empty())
     {
-        must_include.insert(n);
+        // A seed may come from another graph or dimension. Retain only useful
+        // surviving edges, without introducing optional-only matching pairs.
+        for(const auto &[u, v] : initial)
+        {
+            if(u >= n_vertices || v >= n_vertices || u == v
+                || (!must_include.contains(u) && !must_include.contains(v))
+                || !has_edge(u, v)
+                || mate[u] != nil_vertex || mate[v] != nil_vertex) continue;
+            mate[u] = v;
+            mate[v] = u;
+        }
+        if(std::all_of(include.begin(), include.end(),
+            [&](index_t vertex) { return mate[vertex] != nil_vertex; })) return collect();
     }
-
-    // Storage used by every augmenting-path search in this matching. Keeping it
-    // here makes its lifetime explicit and avoids reallocating it for each root.
+    // Prepare path-search storage only when the seed needs repair. Retain its
+    // capacity across calls, but initialize logical state for each new root.
     // the BFS search tree structure
-    std::vector<index_t> parent(n_vertices);
+    auto &parent = ws.parent;
+    parent.resize(n_vertices);
     // base[v] is the base of the blossom containing v, or v itself if v is not in a blossom
-    std::vector<index_t> base(n_vertices);
+    auto &base = ws.base;
+    base.resize(n_vertices);
     // whether a vertex is reachable from the root by an even-length alternating path
-    integer_set is_even_reachable;
+    auto &is_even_reachable = ws.is_even_reachable;
     // bases included in the blossom currently being contracted
-    integer_set in_blossom;
+    auto &in_blossom = ws.in_blossom;
     // used to find the lowest common ancestor of two vertices in the alternating tree
-    integer_set in_ancestor_path;
+    auto &in_ancestor_path = ws.in_ancestor_path;
     // the BFS queue
-    std::vector<index_t> queue;
+    auto &queue = ws.queue;
     // the returned path and temporary storage used to reconstruct it
-    std::vector<index_t> path;
-    std::vector<index_t> reverse_path;
+    auto &path = ws.path;
+    auto &reverse_path = ws.reverse_path;
     queue.reserve(n_vertices);
     path.reserve(n_vertices);
     reverse_path.reserve(n_vertices);
@@ -240,16 +265,7 @@ graph::find_matching(const std::vector<index_t> &include) const
         }
     }
 
-    std::vector<std::pair<index_t, index_t>> result;
-    result.reserve(include.size());
-    for(index_t vertex = 0; vertex < n_vertices; ++vertex)
-    {
-        if(mate[vertex] < vertex)
-        {
-            result.emplace_back(vertex, mate[vertex]);
-        }
-    }
-    return result;
+    return collect();
 }
 
 std::string graph::to_string() const

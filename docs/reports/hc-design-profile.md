@@ -19,6 +19,8 @@ separate from normal timing.
 | Paired departures in local search | Nontrivial complete enumeration takes about 5–6% less time; allocation calls fall about 6–7%. | Confirmed on the expanded corpus below. Keep the extension, with a peak-storage tradeoff. |
 | Iterator ordering interface | Complete-enumeration aggregate changes stay within about 1%; gigantic first-result cases take 3–5% less time. | No broad depletion speedup; retain the interface cleanup. Random/scored/weighted full-enumeration probes are also approximately flat. |
 | Physical-first opening phase | Deferred perftest takes 2.5% less time across 50 games, and 4.5% less in a longer confirmation; first-10/100-action prefixes take 6.1%/3.1% less time. | Full depletion and capped counts are essentially flat across 275 positions; four gigantic cases are flat in confirmation. Keep the phase. |
+| Matching seeds | Always-reuse reduces matching time by about 32% on affected count calls and 52% on affected gigantic calls. | Paired measurements use identical graphs and required vertices. Keep for Deferred only, retaining seeds across failures; matching choices can change later fragmentation. |
+| Reusable matching scratch | Matching time falls another 75.6% on 61,283 nonempty count-matching calls; whole-search means fall 2.0% for nontrivial complete counts and 1.5% for capped counts. | Compared with matching seeds already enabled. First-10, gigantic first-result and perftest confirmation runs are effectively flat. Keep the workspace for all HC policies; matching choices are unchanged. |
 
 The physical-only local phase already reduced complete-count means by 35–41%.
 Allowing compatible arrivals supplied a smaller additional gain: sums of case
@@ -38,34 +40,69 @@ two large original depletion cases by about 5%, but did not consistently help
 first-result workloads or reduce measured peak heap storage. These experiments
 do not justify replacing the retained eager representation generally.
 
+Matching seeds and reusable scratch address different costs. Seeds retain the
+last nonempty successful pairing, validating surviving, disjoint edges against
+the current graph and required vertices before repairing coverage. Scratch
+retains vector and set capacity, resetting logical state for each call. Empty
+requirements return immediately; fully covering seeds skip path-search setup.
+
+Retry-only seeds save just 2.6% within their affected matching calls. Clearing
+seeds after failure halves count seed uses and increases matching time by 18.7%
+over the same affected positions. A failed graph is therefore not a useful
+signal to discard the earlier successful pairing. Always-reuse is restricted
+to Deferred: Balanced match 123 became about 12 times slower despite fewer
+matching path searches, because changed choices increased fragmentation.
+
+The full scratch-workspace comparison covers all 275 count positions,
+10/100/1,000-action prefixes, four gigantic endpoints and 50 perftest games.
+The sum of count-case medians falls 1.6%; first-100/1,000 means fall 1.5%/1.1%.
+Count allocations fall from 19,426,671 to 19,194,009 (1.2%), with unchanged
+per-position peak live HCs. Separate stack sampling estimates allocator cost
+at roughly 19% of search time both before and after; matching's allocator share
+falls from about 0.30% to 0.01%. Most remaining allocator cost is elsewhere.
+These pooled samples are dominated by enumeration and do not establish an
+allocator percentage for first-result searches separately.
+
+All 27 Release tests pass. Seed variants preserve complete action sets;
+reusable scratch additionally preserves 335 compared action sequences exactly.
+Regional timings hold the graph and required set fixed, alternating call order;
+the scratch comparison also holds the seed fixed. Whole-suite timing uses separate uninstrumented
+runs, with longer confirmation for noisy first-result and short-prefix results.
+
 ## Compared with v0.5.2
 
-The cumulative comparison estimates the current Deferred search, including the
-physical-first opening phase, against v0.5.2's Balanced default. It includes the
-intervening optimizations and default-policy change. Values are geometric means
-of per-case elapsed-time ratios; negative means less time.
+A fresh direct comparison measures current Deferred, including physical-first
+search, matching seeds and reusable solver scratch, against v0.5.2’s Balanced
+default. It includes the intervening optimizations and default-policy change.
+Values are geometric means of per-case elapsed-time ratios; negative means
+less time.
 
-| Workload | Cases | Estimated elapsed-time change |
+| Workload | Cases | Direct elapsed-time change |
 | --- | ---: | ---: |
-| Complete enumeration, at least 1,000 actions | 60 | -55.8% |
-| Complete enumeration, fewer than 1,000 actions | 179 | -42.4% |
-| Capped at 50,001 actions | 36 | -54.8% |
-| First 100 actions, limit reached | 106 | -47.7% |
-| First 1,000 actions, limit reached | 96 | -53.7% |
+| Complete enumeration, at least 1,000 actions | 60 | -57.0% |
+| Complete enumeration, fewer than 1,000 actions | 179 | -44.8% |
+| Capped at 50,001 actions | 36 | -55.1% |
+| First 10 actions, limit reached | 256 | -28.1% |
+| First 100 actions, limit reached | 106 | -48.5% |
+| First 1,000 actions, limit reached | 96 | -54.3% |
 | Gigantic first-result cases completing in both versions | 3 | -44.0% |
-| Perftest games | 50 | -6.8% |
+| Perftest games | 50 | -8.7% |
 
-The estimated sum of all 275 count-case medians falls from 8.90 to 4.13 seconds,
-or 53.6%. Weighting perftest by the sum of game medians gives 13.0% less time.
+The sum of all 275 count-case medians falls from 8.81 to 4.04 seconds,
+or 54.1%. Weighting perftest by the sum of game medians gives
+14.4% less time.
 Match 123 does not finish within ten seconds of search in v0.5.2, versus about
-12 ms with Deferred; the timeout is excluded from the finite aggregates.
+12.1 ms current; the child is killed and reaped, and this censored case is
+excluded from the finite aggregates.
 
-These estimates multiply the recorded release-comparison and physical-first
-ratios for each case before aggregation, using the longer first-result
-confirmation. They are not a direct final-versus-tag timing run. The underlying
-comparisons use the same Release configuration and timing driver, reversing
-binary order. The tag core is unchanged; parsing and replay are excluded, while
-HC construction and search are timed. Counts and terminal outcomes agree.
+Both binaries use the same current profiling loop and Release configuration,
+with an API adapter over the unchanged tag core. Two reversed execution blocks
+provide six measured samples per count/prefix case; longer first-result
+confirmation provides 40 samples per position. Parsing and replay are excluded,
+while HC construction and search are timed. Counts, exhaustion and terminal
+outcomes agree. These figures replace the earlier compounded estimates.
+Count reductions agree closely between blocks; perftest confirmation varies
+from 4.8% to 12.8% less time, so its precise magnitude is less stable.
 
 ## Broader depletion comparison
 

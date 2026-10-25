@@ -5,7 +5,8 @@
 #include "graph.h"
 
 template<HCOrdering Ordering>
-std::optional<point> HC_info::match_point(HC &hc, const Ordering &order, workspace &ws) const
+std::optional<point> HC_info::match_point(
+    HC &hc, const Ordering &order, workspace &ws, bool reuse_matching) const
 {
     assert(hc.dimension() == dimension());
     auto &g = ws.matching_graph;
@@ -70,7 +71,9 @@ std::optional<point> HC_info::match_point(HC &hc, const Ordering &order, workspa
         }
     }
 
-    auto matching = g.find_matching(must_include);
+    auto matching = g.find_matching(must_include, ws.matching_scratch, reuse_matching
+        ? std::span<const std::pair<index_t, index_t>>(ws.matching_seed)
+        : std::span<const std::pair<index_t, index_t>>{});
     if(!matching)
     {
         return std::nullopt;
@@ -82,6 +85,9 @@ std::optional<point> HC_info::match_point(HC &hc, const Ordering &order, workspa
         assert(result[u] != invalid_index);
         assert(result[v] != invalid_index);
     }
+    // Keep the last nonempty successful matching, including across failures.
+    // Every subsequent call validates its edges against the current graph.
+    if(!must_include.empty()) ws.matching_seed = std::move(*matching);
 #ifndef NDEBUG
     for(index_t i : result)
     {
@@ -103,7 +109,8 @@ std::optional<point> HC_info::take_point(
     }
     if(negative.empty())
     {
-        return match_point(hc, order, *ws);
+        if(!ws->reuse_between_points) ws->matching_seed.clear();
+        return match_point(hc, order, *ws, ws->reuse_between_points);
     }
 
     // Explore the complement lazily: a temporary region at depth k already
@@ -118,7 +125,7 @@ std::optional<point> HC_info::take_point(
         while(next < negative.size() && !region.intersects(negative[next])) ++next;
         if(next == negative.size())
         {
-            if(auto pt = match_point(region, order, *ws)) return pt;
+            if(auto pt = match_point(region, order, *ws, true)) return pt;
             continue;
         }
         auto pieces = std::move(region).remove_slice_carefully(negative[next]);
@@ -368,6 +375,7 @@ generator<moveseq> HC_info::search(search_space ss, Ordering order) const &
         }
     }
     workspace ws;
+    ws.reuse_between_points = Policy == hc_policy::deferred;
     std::vector<slice> negative;
     std::size_t num_problems = 0;
     constexpr std::size_t adaptive_problem_limit = 100;

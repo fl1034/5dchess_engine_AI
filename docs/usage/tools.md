@@ -32,6 +32,11 @@ candidate avoids all retained slices, it proceeds directly to validation;
 otherwise it uses temporary regions to avoid those slices before retrying
 matching.
 
+Deferred also reuses the last successful matching across HCs and failed
+attempts, validating its edges against each new graph before repairing any
+uncovered requirements. This can change action enumeration order. Other HC
+policies start each point selection with an empty matching.
+
 Slices of global codimension at most one are removed immediately. When retained
 slices outnumber stored HCs, one slice of smallest global codimension is removed
 from every HC. Equal counts retain the slices. Retained slices are also removed

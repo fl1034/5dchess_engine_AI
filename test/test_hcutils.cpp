@@ -6,6 +6,7 @@
 #include "graph.h"
 #include <cstdlib>
 #include <optional>
+#include <numeric>
 #include <random>
 #include <utility>
 #include <type_traits>
@@ -555,17 +556,18 @@ void test_point_workspace()
 
     // Reset adjacency rows across bit-set blocks and graph size changes.
     graph g(130);
+    graph::workspace matching_ws;
     g.add_edge(0, 129);
-    assert(g.find_matching({0, 129}));
+    assert(g.find_matching({0, 129}, matching_ws));
     for(index_t n : {index_t{130}, index_t{3}, index_t{130}})
     {
         g.reset(n);
-        assert(!g.find_matching({0}));
+        assert(!g.find_matching({0}, matching_ws));
         g.add_edge(0, 1);
-        assert(g.find_matching({0, 1}));
+        assert(g.find_matching({0, 1}, matching_ws));
     }
     g.reset(0);
-    assert(g.find_matching({}));
+    assert(g.find_matching({}, matching_ws));
 }
 
 void test_negative_point_selection()
@@ -592,9 +594,18 @@ void test_negative_point_selection()
         {
             auto reused_hc = hc;
             auto actual = info.take_point(hc, natural_HC_ordering{}, nullptr, negative);
-            assert(info.take_point(reused_hc, natural_HC_ordering{}, &ws, negative) == actual);
+            auto reused = info.take_point(reused_hc, natural_HC_ordering{}, &ws, negative);
+            assert(reused.has_value() == actual.has_value());
+            if(reused)
+            {
+                assert(hc.contains(*reused));
+                for(const slice &problem : negative) assert(!problem.contains(*reused));
+            }
             assert(reused_hc.to_string() == hc.to_string());
             assert(hc.to_string() == before);
+            // A retry's seed must not affect the next direct selection.
+            HC direct = hc;
+            assert(info.take_point(direct, natural_HC_ordering{}, &ws) == first);
             auto remaining = search_space{hc};
             for(const slice &problem : negative) remaining.remove_slice_globally(problem);
             bool exists = false;
@@ -1129,7 +1140,8 @@ void validate_matching(
 
 void compare_with_brute_force(
     const adjacency_matrix &adjacency,
-    const std::vector<index_t> &required)
+    const std::vector<index_t> &required, const matching &initial = {},
+    graph::workspace *ws = nullptr)
 {
     graph tested(static_cast<index_t>(adjacency.size()));
     for(index_t u = 0; u < adjacency.size(); ++u)
@@ -1144,7 +1156,9 @@ void compare_with_brute_force(
     }
 
     const bool expected = brute_force_match(adjacency, required);
-    const std::optional<matching> actual = tested.find_matching(required);
+    graph::workspace fresh;
+    const std::optional<matching> actual = tested.find_matching(required, fresh, initial);
+    if(ws) require(tested.find_matching(required, *ws, initial) == actual);
     if(actual.has_value() != expected)
     {
         std::cerr << "matching disagreement: expected=" << expected
@@ -1210,10 +1224,43 @@ void test_257_vertices()
     adjacency_matrix adjacency(257, std::vector<bool>(257, false));
     adjacency[255][256] = adjacency[256][255] = true;
     compare_with_brute_force(adjacency, {255, 256});
+    compare_with_brute_force(adjacency, {255, 256}, {{255, 256}});
+}
+
+void test_seeded_matching()
+{
+    // Cover a newly mandatory vertex by freeing an optional vertex, without
+    // increasing matching cardinality.
+    compare_with_brute_force(make_graph(3, {{0, 1}, {1, 2}}), {1, 2}, {{0, 1}});
+    // Retain one edge, discard a disappeared edge, then repair the coverage.
+    compare_with_brute_force(make_graph(4, {{0, 1}, {2, 3}}),
+        {0, 1, 2, 3}, {{0, 1}, {1, 2}});
+    // A seed from a larger graph must not access vertices outside this graph.
+    compare_with_brute_force(make_graph(2, {{0, 1}}), {0}, {{0, 3}, {0, 1}});
+    // Existing blossom regression, starting with an arbitrary partial matching.
+    compare_with_brute_force(make_graph(10, {
+        {3, 0}, {4, 2}, {5, 0}, {5, 1}, {5, 3}, {6, 2}, {6, 5},
+        {7, 0}, {7, 2}, {7, 3}, {7, 4}, {7, 5}, {7, 6}, {8, 3},
+        {9, 3}, {9, 4}
+    }), {0, 1, 2, 3, 4, 5, 6, 7, 9}, {{0, 3}, {2, 4}, {5, 6}});
+    graph empty_required(2);
+    empty_required.add_edge(0, 1);
+    const matching seed{{0, 1}};
+    graph::workspace ws;
+    const auto result = empty_required.find_matching({}, ws, seed);
+    require(result && result->empty());
+    graph optional_edges(4);
+    optional_edges.add_edge(0, 1);
+    optional_edges.add_edge(2, 3);
+    const matching optional_seed{{2, 3}};
+    const auto trimmed = optional_edges.find_matching({0}, ws, optional_seed);
+    require(trimmed && trimmed->size() == 1);
+    validate_matching(make_graph(4, {{0, 1}, {2, 3}}), {0}, *trimmed);
 }
 
 void test_random_graphs()
 {
+    graph::workspace ws;
     std::mt19937 random(0x5dca55u);
     std::bernoulli_distribution has_edge(0.35);
     std::bernoulli_distribution is_required(0.55);
@@ -1240,9 +1287,40 @@ void test_random_graphs()
                     required.push_back(vertex);
                 }
             }
-            compare_with_brute_force(adjacency, required);
+            compare_with_brute_force(adjacency, required, {}, &ws);
+            // Seeds need not be valid in the current graph. Filter their
+            // surviving edges and compare feasibility against exhaustive search.
+            matching seed;
+            std::vector<index_t> vertices(dimension);
+            std::iota(vertices.begin(), vertices.end(), index_t{0});
+            std::shuffle(vertices.begin(), vertices.end(), random);
+            for(std::size_t i = 0; i + 1 < vertices.size(); i += 2)
+                seed.emplace_back(vertices[i], vertices[i + 1]);
+            compare_with_brute_force(adjacency, required, seed, &ws);
         }
     }
+}
+
+void test_matching_workspace()
+{
+    graph::workspace ws;
+    graph large(257);
+    large.add_edge(255, 256);
+    const auto saved = large.find_matching({255, 256}, ws);
+    require(saved && saved->size() == 1);
+    const auto snapshot = *saved;
+
+    graph small(2);
+    require(!small.find_matching({0}, ws, *saved));
+    const auto empty = small.find_matching({}, ws, *saved);
+    require(empty && empty->empty());
+    small.add_edge(0, 1);
+    const auto repaired = small.find_matching({0, 1}, ws, *saved);
+    require(repaired.has_value());
+    graph::workspace fresh;
+    require(repaired == small.find_matching({0, 1}, fresh));
+    require(large.find_matching({255, 256}, ws, *repaired) == saved);
+    require(*saved == snapshot);
 }
 }
 
@@ -1251,6 +1329,8 @@ int run()
     test_existing_examples();
     test_blossom_regression();
     test_257_vertices();
+    test_seeded_matching();
+    test_matching_workspace();
     test_random_graphs();
     std::cerr << "---= test_graph.cpp: all passed =---\n";
     return 0;
