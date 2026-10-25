@@ -18,17 +18,54 @@ separate from normal timing.
 | Local physical/arrival search | Complete-count workload means fall about 40–44%; prefix means fall about 32–33%. | Original four count fixtures, including the eight-action NP endpoint. First-result means stay within about 2%; local search starts only after the first yield. |
 | Paired departures in local search | Nontrivial complete enumeration takes about 5–6% less time; allocation calls fall about 6–7%. | Confirmed on the expanded corpus below. Keep the extension, with a peak-storage tradeoff. |
 | Iterator ordering interface | Complete-enumeration aggregate changes stay within about 1%; gigantic first-result cases take 3–5% less time. | No broad depletion speedup; retain the interface cleanup. Random/scored/weighted full-enumeration probes are also approximately flat. |
+| Physical-first opening phase | Deferred perftest takes 2.5% less time across 50 games, and 4.5% less in a longer confirmation; first-10/100-action prefixes take 6.1%/3.1% less time. | Full depletion and capped counts are essentially flat across 275 positions; four gigantic cases are flat in confirmation. Keep the phase. |
 
 The physical-only local phase already reduced complete-count means by 35–41%.
 Allowing compatible arrivals supplied a smaller additional gain: sums of case
 medians fell another 3–5%. These results compare against a baseline already
 containing consuming removals and matching-mask improvements.
 
+The opening phase searches physical moves on every mandatory timeline, with
+null entries elsewhere, using only royal-safety checks. Outer subtraction waits
+until the phase finishes, avoiding splitting for first-result callers. All 27
+Release tests pass, and 290 complete action-set comparisons match the baseline
+without duplicates. Percentages for this experiment are geometric means of
+per-case median ratios; both binary orders were tested.
+
 Lazy splitting did not establish a broad advantage. The negative-slice selector
 comparison was approximately flat; lazy persistent point removal improved the
 two large original depletion cases by about 5%, but did not consistently help
 first-result workloads or reduce measured peak heap storage. These experiments
 do not justify replacing the retained eager representation generally.
+
+## Compared with v0.5.2
+
+The cumulative comparison estimates the current Deferred search, including the
+physical-first opening phase, against v0.5.2's Balanced default. It includes the
+intervening optimizations and default-policy change. Values are geometric means
+of per-case elapsed-time ratios; negative means less time.
+
+| Workload | Cases | Estimated elapsed-time change |
+| --- | ---: | ---: |
+| Complete enumeration, at least 1,000 actions | 60 | -55.8% |
+| Complete enumeration, fewer than 1,000 actions | 179 | -42.4% |
+| Capped at 50,001 actions | 36 | -54.8% |
+| First 100 actions, limit reached | 106 | -47.7% |
+| First 1,000 actions, limit reached | 96 | -53.7% |
+| Gigantic first-result cases completing in both versions | 3 | -44.0% |
+| Perftest games | 50 | -6.8% |
+
+The estimated sum of all 275 count-case medians falls from 8.90 to 4.13 seconds,
+or 53.6%. Weighting perftest by the sum of game medians gives 13.0% less time.
+Match 123 does not finish within ten seconds of search in v0.5.2, versus about
+12 ms with Deferred; the timeout is excluded from the finite aggregates.
+
+These estimates multiply the recorded release-comparison and physical-first
+ratios for each case before aggregation, using the longer first-result
+confirmation. They are not a direct final-versus-tag timing run. The underlying
+comparisons use the same Release configuration and timing driver, reversing
+binary order. The tag core is unchanged; parsing and replay are excluded, while
+HC construction and search are timed. Counts and terminal outcomes agree.
 
 ## Broader depletion comparison
 
@@ -74,6 +111,31 @@ and [255 expanded positions](../../scripts/profile_hc_expanded.json), referencin
 original games with optional submitted-turn cutoffs. See the
 [corpus guide](../../test/pgn/count/README.md) and
 [profiling commands](../usage/tools.md#hc-search-profiling).
+
+## Ordering and production scope
+
+`HCOrdering` consistently orders coordinates within each axis. The intended
+action-level property is weaker than decreasing summed semimove scores: an
+action preferred on every axis should precede one it dominates in the product
+partial order. The implementation only partially preserves this property.
+Selecting the preferred corner and removing individual points respect it within
+a rectangle, but problem-slice splitting and stack traversal can reorder the
+remaining regions. Matching finds a feasible pairing rather than an optimal
+one under this order, and draining a local group also takes priority over
+choices elsewhere.
+
+Structural preferences explicitly override coordinate rankings. Previously,
+non-branching regions were searched before branching regions even when a
+branching semimove ranked higher. The physical-first phase now searches a
+non-jump action first even when jump semimoves precede all physical alternatives
+on some axes. Matching already preferred physical/null choices when no pairing
+was required, so this adds an override rather than breaking a previously
+enforced global guarantee.
+
+The current `HC_info::search()` is accepted for production checkmate detection
+and counting. Fine-tree search, used by MCTS, needs stronger adherence to the
+supplied ordering; reviewing and improving that behavior is deferred to later
+work. Current throughput results do not establish MCTS search quality.
 
 ## Earlier propagation findings
 

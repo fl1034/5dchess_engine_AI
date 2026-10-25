@@ -912,6 +912,72 @@ void test_reactivated_present()
     }
 }
 
+void test_physical_first()
+{
+    for(const std::string pgn : {
+        "[Board \"Standard - Turn Zero\"]\n",
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:1:w]\n",
+        "[Board \"custom\"]\n[Size \"4x4\"]\n"
+        "[3k/4/4/KN2:0:1:w]\n[3k/4/4/KN2:1:2:w]\n"})
+    {
+        const state position = state::from_pgn(pgn);
+        auto [info, space] = HC_info::build_HC(position);
+        const auto [mandatory, optional, unplayable] = position.get_timeline_status();
+        std::set<moveseq> expected;
+        point p(info.dimension(), 0);
+        const auto enumerate = [&](auto &&self, index_t n) -> void {
+            if(n == mandatory.size())
+            {
+                // Use all structural checks as the independent reference.
+                if(space.contains(p) && !info.find_problem(p, info.get_universe()))
+                    expected.insert(info.to_action(p));
+                return;
+            }
+            for(index_t i : info.get_universe()[n])
+                if(info.get_semimove(n, i).is<physical_move>())
+                {
+                    p[n] = i;
+                    self(self, n + 1);
+                }
+        };
+        enumerate(enumerate, 0);
+        assert(!expected.empty());
+        const auto collect = [&](auto actions) {
+            std::set<moveseq> physical, all;
+            bool left_physical = false;
+            for(const moveseq &moves : actions)
+            {
+                assert(position.can_apply(action::from_moveseq(moves, position)));
+                assert(all.insert(moves).second);
+                if(expected.contains(moves))
+                {
+                    assert(!left_physical);
+                    physical.insert(moves);
+                }
+                else left_physical = true;
+            }
+            assert(physical == expected);
+            return all;
+        };
+        const auto reference = collect(info.search<natural_HC_ordering, hc_policy::iterative>(space));
+        assert((collect(info.search<natural_HC_ordering, hc_policy::balanced>(space)) == reference));
+        assert((collect(info.search<natural_HC_ordering, hc_policy::stable>(space)) == reference));
+        assert((collect(info.search<natural_HC_ordering, hc_policy::deferred>(space)) == reference));
+        // A singleton physical region must include its unvalidated seed.
+        p.assign(info.dimension(), 0);
+        for(index_t n = 0; n < mandatory.size(); ++n)
+            for(index_t i : info.get_universe()[n])
+                if(info.get_semimove(n, i).is<physical_move>()) { p[n] = i; break; }
+        std::vector<integer_set> axes;
+        for(index_t i : p) axes.push_back({i});
+        auto actions = info.search(search_space{HC(std::move(axes))});
+        const auto first = actions.first();
+        assert(first.has_value() == !info.find_problem(p, info.get_universe()).has_value());
+        assert(!actions.first());
+    }
+}
+
 void test_slow_global_conflicts()
 {
     const auto path = std::filesystem::path(__FILE__).parent_path()
@@ -962,6 +1028,7 @@ int run()
     test_paired_similar_rectangle();
     test_persistent_retained_slice();
     test_reactivated_present();
+    test_physical_first();
     test_slow_global_conflicts();
     //test_remove();
 //    HC h2 = {{{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}}};

@@ -172,6 +172,7 @@ class HC_info
     template<HCOrdering Ordering, hc_policy Policy>
     generator<moveseq> local_search(
         const HC &outer_hc, local_space &local, const point &seed, const Ordering &order,
+        bool seed_already_yielded,
         std::span<const slice> negative = {}
     ) const;
 

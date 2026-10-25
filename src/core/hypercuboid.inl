@@ -101,7 +101,10 @@ std::optional<point> HC_info::take_point(
         workspace local;
         return take_point(hc, order, &local, negative);
     }
-    if(negative.empty()) return match_point(hc, order, *ws);
+    if(negative.empty())
+    {
+        return match_point(hc, order, *ws);
+    }
 
     // Explore the complement lazily: a temporary region at depth k already
     // avoids slices [0, k). Matching is only run after all slices are avoided.
@@ -128,6 +131,7 @@ std::optional<point> HC_info::take_point(
 template<HCOrdering Ordering, hc_policy Policy>
 generator<moveseq> HC_info::local_search(
     const HC &outer_hc, local_space &local, const point &seed, const Ordering &order,
+    bool seed_already_yielded,
     std::span<const slice> negative) const
 {
     struct local_departure
@@ -188,7 +192,8 @@ generator<moveseq> HC_info::local_search(
         return projected;
     };
 
-    search_space remaining = local.universe.remove_point(local.seed);
+    search_space remaining = seed_already_yielded
+        ? local.universe.remove_point(local.seed) : search_space{local.universe};
     // Imported constraints keep their original guards outside this projection.
     for(const slice &problem : negative)
         if(auto projected = project_problem(problem))
@@ -300,6 +305,68 @@ generator<moveseq> HC_info::local_search(
 template<HCOrdering Ordering, hc_policy Policy>
 generator<moveseq> HC_info::search(search_space ss, Ordering order) const &
 {
+    // Mandatory timelines occupy the first axes. Physical moves on all of
+    // them, with null entries everywhere else, need only the check constraint.
+    if(!mandatory_lines.empty() && !ss.empty())
+    {
+        slice physical_region;
+        bool available = true;
+        for(index_t n = 0; n < dimension(); ++n)
+        {
+            integer_set values{null_coordinate};
+            if(n < mandatory_lines.size())
+            {
+                values = nonjump_entries[n];
+                values.erase(null_coordinate);
+            }
+            else values &= universe[n];
+            if(values.empty())
+            {
+                available = false;
+                break;
+            }
+            if(!universe[n].is_subset_of(values)) physical_region.fix_axis(n, std::move(values));
+        }
+        if(available)
+        {
+            search_space physical_space;
+            for(const HC &hc : ss)
+            {
+                if(hc.empty() || !hc.intersects(physical_region)) continue;
+                HC region = hc;
+                for(const auto &[n, values] : physical_region.get_fixed_axes()) region[n] &= values;
+                physical_space.push_back(std::move(region));
+            }
+            while(!physical_space.empty())
+            {
+                HC hc = std::move(physical_space.back());
+                physical_space.pop_back();
+                local_space local;
+                point seed(dimension(), null_coordinate);
+                std::vector<integer_set> coordinates;
+                for(index_t n = 0; n < mandatory_lines.size(); ++n)
+                {
+                    auto &&values = order(n, hc[n]);
+                    seed[n] = *values.begin();
+                    if(hc[n].size() <= 1) continue;
+                    local.axes.push_back(n);
+                    local.seed.push_back(seed[n]);
+                    coordinates.push_back(hc[n]);
+                }
+                local.universe = HC(std::move(coordinates));
+                auto actions = local_search<Ordering, Policy>(hc, local, seed, order, false);
+                while(auto moves = actions.first()) co_yield std::move(*moves);
+                for(const slice &problem : local.problems)
+                {
+                    ss.remove_slice_globally(problem);
+                    physical_space.remove_slice_globally(problem);
+                }
+            }
+            // Defer splitting the outer space until the local phase drains;
+            // first-action callers need not pay for removing this region.
+            ss.remove_slice_globally(physical_region);
+        }
+    }
     workspace ws;
     std::vector<slice> negative;
     std::size_t num_problems = 0;
@@ -337,7 +404,7 @@ generator<moveseq> HC_info::search(search_space ss, Ordering order) const &
             co_yield to_action(*pt);
             if(auto local = build_local_space(hc, *pt))
             {
-                auto actions = local_search<Ordering, Policy>(hc, *local, *pt, order, negative);
+                auto actions = local_search<Ordering, Policy>(hc, *local, *pt, order, true, negative);
                 while(auto moves = actions.first()) co_yield std::move(*moves);
                 ss.concat(std::move(hc).remove_slice(local->outer_region));
                 for(const slice &problem : local->problems) ss.remove_slice_globally(problem);

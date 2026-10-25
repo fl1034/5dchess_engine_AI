@@ -43,11 +43,13 @@ omitting template arguments also selects Deferred, with ordering deduced from
 the supplied object or natural ordering when omitted. Other HC policies use
 `hc_policy::iterative`, `hc_policy::stable`, or `hc_policy::balanced`.
 
-For `balanced`, `stable`, `deferred`, and `iterative`, continued enumeration
-groups similar actions before returning to other jump choices. Physical moves
+For `balanced`, `stable`, `deferred`, and `iterative`, search starts with physical
+moves on every mandatory timeline, leaving other timelines untouched. It then
+continues with the remaining choices. Continued enumeration groups similar
+actions before returning to other jump choices. Physical moves
 can vary within a group; jumps can vary their piece and arrival square while
 keeping the same source and destination timeline-turns and the same timeline
-pairing. Departures change together with their arrivals. The first action is searched normally.
+pairing. Departures change together with their arrivals.
 The complete legal-action set is unchanged, but enumeration order can differ.
 
 For `print`, `stats`, `count`, `all`, `checkmate`, and `diff`, `--at 0` and
