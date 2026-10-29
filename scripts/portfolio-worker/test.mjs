@@ -77,3 +77,15 @@ test('upstream failures never echo credential-bearing error bodies',async()=>{
     assert.equal(result.status,503);
     assert(!(await result.text()).includes('owner-test-secret'));
 });
+
+test('model discovery reports configuration presence without revealing the key',async()=>{
+    const f=fixture();
+    const request=()=>new Request('https://demo.example/models',{headers:{Origin:origin}});
+    const response=await handleRequest(request(),f.env);
+    const data=await response.json();
+    assert.equal(data.configured,true);
+    assert.deepEqual(data.configuration,{keyPresent:true,quotaBindingPresent:true});
+    assert(!JSON.stringify(data).includes('owner-test-secret'));
+    const missing=await handleRequest(request(),{...f.env,OPENAI_API_KEY:''});
+    assert.equal((await missing.json()).configured,false);
+});

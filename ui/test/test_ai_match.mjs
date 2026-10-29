@@ -38,7 +38,7 @@ function fixture(factory) {
     };
     const controller = new MatchController({rpc, playerFactory:config => ({
         ask:async (state, feedback, signal) => {
-            requests.push({side:config.side,model:config.model,state:structuredClone(state),feedback});
+            requests.push({side:config.side,model:config.model,demoUrl:config.demoUrl,state:structuredClone(state),feedback});
             config.reserve(); config.usage({prompt_tokens:100,completion_tokens:20});
             return factory ? factory(state,feedback,signal,requests.length) : reply(state);
         },forget() {},
@@ -240,5 +240,38 @@ test('malformed key input is rejected before requests instead of appearing as a 
         await assert.rejects(f.controller.start({...models,key}),/API key/);
         assert.equal(f.requests.length,0);
         assert.equal(f.operations.length,0);
+    }
+});
+
+test('public matches need both models but no visitor credential', async () => {
+    const f = fixture();
+    await f.controller.start({...models,backendUrl:'https://demo.example'});
+    assert.equal(f.controller.phase,'proposal');
+    assert.equal(f.requests[0].demoUrl,'https://demo.example/v1/chat/completions');
+    await f.controller.pause();
+    assert.throws(()=>f.controller.replaceKey('visitor-key'),/server-side key/);
+    await f.controller.resume();
+    assert.equal(f.controller.state.side,'White');
+});
+
+test('public transport never sends a visitor Authorization header', async () => {
+    const state={side:'White',boards:[],timelines:{mandatory_timelines:[]}};
+    const p=new OpenAIPlayer({key:'must-never-be-forwarded',side:'White',demoUrl:'https://demo.example/v1/chat/completions',
+        fetcher:async(url,options)=>{
+            assert.equal(url,'https://demo.example/v1/chat/completions');
+            assert.equal(new Headers(options.headers).get('Authorization'),null);
+            assert(!options.body.includes('must-never-be-forwarded'));
+            return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(reply(state))}}]});
+        }});
+    await p.ask(state,null,new AbortController().signal);
+});
+
+test('public budget and owner-configuration failures pause without retry loops', async () => {
+    for(const [status,code,pattern] of [[429,'demo_limit_reached',/shared demo/],[503,'demo_not_configured',/owner/]]){
+        let calls=0;
+        const p=new OpenAIPlayer({side:'White',demoUrl:'https://demo.example/v1/chat/completions',
+            fetcher:async()=>{calls++;return Response.json({error:{code}},{status});}});
+        await assert.rejects(p.ask({},null,new AbortController().signal),pattern);
+        assert.equal(calls,1);
     }
 });

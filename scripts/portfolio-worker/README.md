@@ -1,8 +1,9 @@
 # Portfolio API backend
 
 This optional Cloudflare Worker keeps the owner's OpenAI key in Cloudflare
-secret storage. It is separate from the GitHub Pages static site. It is not
-connected to the live UI until the Worker has been deployed and its URL configured.
+secret storage. It is separate from the GitHub Pages static site. The frontend
+uses the public endpoint configured in `ui/scripts/ai-service.mjs`; it discovers
+the enabled models and readiness at `/models`.
 
 The free Workers plan and SQLite-backed Durable Objects support this small demo.
 Cloudflare's current free allowances include 100,000 Worker requests/day and
@@ -33,8 +34,9 @@ at Wrangler's secret prompt; never put it in a source file, GitHub, or chat.
 The Worker returns an unavailable response until this secret is configured.
 
 The deployment prints a `workers.dev` URL. That URL is public and safe to share;
-the frontend must then be configured to use its `/v1/chat/completions` endpoint.
-The live frontend currently continues using browser-side personal keys.
+set it in `ui/scripts/ai-service.mjs` when moving the service. Public mode sends
+no visitor Authorization header or API key. Personal-key mode remains available
+and sends its requests directly to OpenAI instead.
 
 Settings are in `wrangler.jsonc`. Increase quotas or enable additional models
 only after deciding how much usage to fund. The backend replaces client system

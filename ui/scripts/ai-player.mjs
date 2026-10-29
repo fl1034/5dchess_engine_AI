@@ -30,9 +30,9 @@ export function abortableWait(ms, signal) {
 }
 
 export class OpenAIPlayer {
-    constructor({ key, side, model = 'gpt-5-mini', fetcher = globalThis.fetch.bind(globalThis),
+    constructor({ key, side, model = 'gpt-5-mini', demoUrl = null, fetcher = globalThis.fetch.bind(globalThis),
         reserve = () => {}, usage = () => {}, waiting = () => {}, wait = abortableWait }) {
-        Object.assign(this, {key, side, model, fetcher, reserve, usage, waiting, wait});
+        Object.assign(this, {key, side, model, demoUrl, fetcher, reserve, usage, waiting, wait});
         this.history = [];
     }
     async ask(state, feedback, signal) {
@@ -54,8 +54,9 @@ export class OpenAIPlayer {
             this.reserve();
             let response;
             try {
-                response = await this.fetcher('https://api.openai.com/v1/chat/completions', {
-                    method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer ' + this.key},
+                response = await this.fetcher(this.demoUrl || 'https://api.openai.com/v1/chat/completions', {
+                    method:'POST', headers:this.demoUrl ? {'Content-Type':'application/json'}
+                        : {'Content-Type':'application/json',Authorization:'Bearer ' + this.key},
                     body, signal:AbortSignal.any([signal, AbortSignal.timeout(90000)]),
                 });
             } catch (error) {
@@ -64,7 +65,8 @@ export class OpenAIPlayer {
                     const timedOut = error.name === 'TimeoutError' || error.name === 'AbortError';
                     throw new PlayerError(timedOut
                         ? 'OpenAI did not respond within 90 seconds. The match is paused on the same turn; resume to retry. The earlier request may still complete.'
-                        : 'This browser could not connect to api.openai.com. Check this workstation’s network, proxy, firewall, or browser extensions, then resume. This connection failure does not establish whether the key is valid.');
+                        : 'This browser could not connect to ' + (this.demoUrl ? 'the public demo service' : 'api.openai.com')
+                            + '. Check this workstation’s network, proxy, firewall, or browser extensions, then resume. This connection failure does not establish whether the key is valid.');
                 }
                 this.waiting('Connection interrupted; retrying this same turn.');
                 await this.wait(retryDelay(null, attempt), signal);
@@ -90,6 +92,12 @@ export class OpenAIPlayer {
             // Never expose raw service bodies (or request headers) in logs/UI.
             let code;
             try { code = (await response.json()).error?.code; } catch {}
+            if (code === 'demo_limit_reached') throw new PlayerError('The shared demo request limit was reached. Try later, or enter Analysis mode and start a new match with your own key.');
+            if (['demo_not_configured','demo_budget_unavailable','demo_upstream_unavailable'].includes(code)) {
+                throw new PlayerError('The public demo service is unavailable or needs its owner to finish API configuration. Your turn is paused.');
+            }
+            if (code === 'invalid_demo_request') throw new PlayerError('This position or model exceeds the public demo limits. You can use your own key for a new match.');
+            if (this.demoUrl && [401,403].includes(response.status)) throw new PlayerError('Public demo access was denied. Its owner may need to update the allowed website configuration.');
             if ([401,403].includes(response.status)) throw new PlayerError('API authentication or access denied (HTTP ' + response.status + '). Check the key and model access, then resume.');
             if (['insufficient_quota','billing_hard_limit_reached','billing_not_active'].includes(code)) {
                 throw new PlayerError('OpenAI billing or quota is unavailable. Check API billing, then resume.');

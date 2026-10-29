@@ -10,6 +10,8 @@
 #aiStatus { font-weight: 600; }
 #aiPanel label { display: block; margin: 12px 0; }
 #aiPanel input, #aiPanel select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 7px; }
+#aiPanel .ai-funding-choice { display: flex; align-items: center; gap: 8px; }
+#aiPanel #aiPersonalMode { display: inline-block; width: auto; margin: 0; }
 #loadingTitle span { display: block; }
 #loadingScreen { background: var(--ui-panel); }
 #loadingTitle { font-size: clamp(26px, 5vw, 48px); font-weight: 650; line-height: 1.25; }

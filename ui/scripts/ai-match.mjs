@@ -12,12 +12,13 @@ export class MatchController {
         this.players = {};
         this.usage = {requests:0,input:0,output:0,cached:0,cost:0};
         this.models = {};
+        this.demoUrl = null;
         this.limit = 40;
         this.turnLimit = 8;
     }
     emit(message = this.message) {
         this.message = message;
-        this.render({phase:this.phase,state:this.state,message,usage:{...this.usage},models:{...this.models},limit:this.limit,
+        this.render({phase:this.phase,state:this.state,message,usage:{...this.usage},models:{...this.models},demoMode:Boolean(this.demoUrl),limit:this.limit,
             explanation:this.explanation ?? '', feedback:this.feedback ?? null});
     }
     async boot() {
@@ -36,16 +37,23 @@ export class MatchController {
         return result;
     }
     cancel() { this.run++; this.abort?.abort(); }
-    async start({key, whiteModel, blackModel, limit = 40}) {
+    async start({key, whiteModel, blackModel, backendUrl = null, limit = 40}) {
         if (!findModel(whiteModel) || !findModel(blackModel)) throw Error('Choose a supported model for both White and Black before starting.');
-        key = normalizeApiKey(key);
-        if (!key || !Number.isInteger(limit) || limit < 1 || limit > 200) throw Error('Supply a key and a request limit from 1 to 200.');
+        let demoUrl = null;
+        if (backendUrl) {
+            const url = new URL(backendUrl);
+            if (url.protocol !== 'https:') throw Error('The public demo backend must use HTTPS.');
+            demoUrl = new URL('/v1/chat/completions',url).href;
+            key = '';
+        } else key = normalizeApiKey(key);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw Error('Supply a request limit from 1 to 200.');
         this.cancel();
         const run = this.run;
         for (const player of Object.values(this.players)) player.forget?.();
         this.players = {};
         this.usage = {requests:0,input:0,output:0,cached:0,cost:0};
         this.models = {White:whiteModel,Black:blackModel};
+        this.demoUrl = demoUrl;
         this.limit = limit;
         this.feedback = null;
         this.explanation = '';
@@ -57,7 +65,7 @@ export class MatchController {
         this.state = result.state;
         for (const side of ['White','Black']) {
             this.players[side] = this.playerFactory({
-                key,side,model:this.models[side],
+                key,side,model:this.models[side],demoUrl:this.demoUrl,
                 reserve:() => {
                     if (this.usage.requests >= this.limit) throw Error('Request safeguard reached. Increase the limit and resume; the same player keeps the turn.');
                     this.usage.requests++; this.emit();
@@ -166,6 +174,7 @@ export class MatchController {
         await this.think(run);
     }
     replaceKey(key) {
+        if (this.demoUrl) throw Error('The public demo uses a server-side key. Enter Analysis mode to start a match with your own key.');
         if (this.phase !== 'paused') throw Error('Pause the match before replacing the API key.');
         key = normalizeApiKey(key);
         if (!this.players.White || !this.players.Black) throw Error('Start a new match to load player credentials.');

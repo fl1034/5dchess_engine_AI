@@ -34,7 +34,9 @@ export async function handleRequest(request, env, upstream = fetch) {
     if (request.method === 'OPTIONS') return respond({ok:true},200);
     const path = new URL(request.url).pathname;
     if (request.method === 'GET' && path === '/models') {
-        return respond({data:allowedModels(env).map(id=>({id}))},200);
+        return respond({data:allowedModels(env).map(id=>({id})),
+            configured:Boolean(env.OPENAI_API_KEY && env.BUDGET),
+            configuration:{keyPresent:Boolean(env.OPENAI_API_KEY),quotaBindingPresent:Boolean(env.BUDGET)}},200);
     }
     if (request.method !== 'POST' || path !== '/v1/chat/completions') {
         return respond({error:{code:'not_found'}},404);

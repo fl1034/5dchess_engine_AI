@@ -6,6 +6,11 @@ Terra, GPT-6.1 Sol, or GPT-5 mini. Both players use low reasoning effort and
 independent conversation histories. No model is preselected. The existing
 WebAssembly engine owns the game and decides legality and results.
 
+The public portfolio demo needs no visitor key. Its model menus show only models
+enabled by the Cloudflare service (initially GPT-6 Luna). Shared server-side
+request quotas apply. Select **Use my own API key** to use the other models
+against your own API account instead.
+
 ## Run locally
 
 The repository includes a compiled engine, so UI editing needs no compiler.
@@ -35,13 +40,14 @@ or AI proxy server is needed.
 
 Open the locally served interface. In **Players & API access**, select both
 **White model** and **Black model**. They may use the same model or different
-models. Paste your API
+models. In personal-key mode, paste your API
 key or use the file picker for a local JSON file with a top-level `apiKey` string.
 Keep that file outside the repository and served directory. The file picker
 reads it locally; the static server does not read or serve it.
 
-**Start new match** remains disabled until both model selections, a key, and the
-rules engine are ready. Selecting models never starts paid requests by itself.
+**Start new match** remains disabled until both model selections, the rules
+engine, and the chosen funding mode are ready. The public demo needs a configured
+backend; personal mode needs your key. Selecting models never starts paid requests by itself.
 The controller also rejects missing or unsupported models before resetting the
 game or calling the API. Model choices stay fixed during play and pauses;
 enter **Analysis mode** to change them for a new match.
@@ -101,13 +107,16 @@ patterns, ZIP archives, and the private build's automatic key loader.
 
 ### API access
 
-For an owner-funded portfolio demo, an optional
-[Cloudflare backend](../../scripts/portfolio-worker/README.md) is prepared with
-server-side secret storage and persistent request quotas. It requires a
-Cloudflare account and deployment before the frontend can be connected to it.
-The currently published site continues to use browser-side personal keys.
+The [Cloudflare backend](../../scripts/portfolio-worker/README.md) provides
+server-side secret storage and persistent request quotas. Its public URL is set
+in `ui/scripts/ai-service.mjs`. The frontend discovers its enabled models and
+configuration status without receiving the server's key.
 
-Requests go directly from the browser to `https://api.openai.com/v1/chat/completions`.
+Public-demo requests go to Cloudflare, which calls OpenAI with the owner's
+stored secret. A shared quota pause is not automatically retried. The spectator
+can wait or enter Analysis mode and start a new personal-key match.
+
+In personal mode, requests go directly from the browser to `https://api.openai.com/v1/chat/completions`.
 The key is held in memory, never included in model messages, browser storage,
 game exports, or static bundles. Use a trusted local/private copy of the app;
 the scripts on a site necessarily have access to a key entered into that site.
