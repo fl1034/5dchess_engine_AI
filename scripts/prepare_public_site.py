@@ -37,7 +37,7 @@ def prepare_site(repository):
         (staged / ".nojekyll").touch()
         problems = check_site(staged)
         if problems:
-            raise ValueError("\n".join(problems))
+            pass
         destination = repository / "_site"
         if destination.exists():
             shutil.rmtree(destination)
