@@ -426,5 +426,4 @@ vite.config.ts.timestamp-*
 _site/
 .emsdk-cache/
 *.local.json
-/ui/local-key.json
 /5dchess-ai-private.zip

@@ -1,6 +1,14 @@
 import { MatchController } from './ai-match.mjs';
 import { compactViewport } from './mobile.js';
 import { MODELS, findModel } from './ai-models.mjs';
+let localKey = '';
+async function loadLocalKey() {
+ const response = await fetch(new URL('../local-key.json', import.meta.url), {cache:'no-store'});
+ if (!response.ok) throw Error('Could not load the bundled local key.');
+ const config = await response.json();
+ if (typeof config.apiKey !== 'string' || !config.apiKey.trim()) throw Error('The bundled key is missing.');
+ localKey = config.apiKey.trim();
+}
 
 export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}} = {}) {
     const panel = document.createElement('section');
@@ -19,7 +27,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
             <button id="aiStop" type="button" disabled>Analysis mode</button>
         </div>
         <details id="aiConfig" open>
-            <summary>Players &amp; API access</summary>
+            <summary>Players &amp; match settings</summary>
             <p>Choose each player’s model. Both players have separate private conversations.</p>
             <label>White model <select id="aiWhiteModel" required><option value="">Choose White’s model…</option></select></label>
             <label>Black model <select id="aiBlackModel" required><option value="">Choose Black’s model…</option></select></label>
@@ -27,7 +35,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
             <label>Or load local JSON (apiKey) <input id="aiKeyFile" type="file" accept=".json,application/json"></label>
             <label>Request limit per match <input id="aiLimit" type="number" min="1" max="200" value="40"></label>
             <button id="aiStart" type="button" disabled>Start new match</button>
-            <p class="ai-note">Starting resets the board to Standard turn-zero. API usage is billed to your key. Keys stay in memory and are sent directly to OpenAI; they are never saved in game exports or browser storage. Use this only on a trusted local or private site.</p>
+            <p class="ai-note">Starting resets the board to Standard turn-zero. API usage is billed to your key. Your bundled key loads automatically. This private package contains your API key; do not share it or publish it to GitHub Pages.</p>
             <p class="ai-note">Pause or closing the tab stops scheduling and aborts pending browser requests. Work already accepted by OpenAI may still complete and be charged. Request limits are safeguards, not a billing cap.</p>
         </details>`;
     document.body.append(panel);
@@ -40,6 +48,8 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
     placePanel();
     compactViewport.addEventListener('change',placePanel);
     const el = id => panel.querySelector('#' + id);
+    el('aiKey').closest('label').hidden = true;
+    el('aiKeyFile').closest('label').hidden = true;
     for (const id of ['aiWhiteModel','aiBlackModel']) {
         for (const model of MODELS) el(id).add(new Option(model.label,model.id));
     }
@@ -49,7 +59,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
     function updateControls() {
         const editable = ['idle','paused','finished','stopped'].includes(controller.phase);
         const chosen = findModel(el('aiWhiteModel').value) && findModel(el('aiBlackModel').value);
-        const hasKey = Boolean(el('aiKey').value.trim() || pendingKey);
+        const hasKey = Boolean(el('aiKey').value.trim() || pendingKey || localKey);
         el('aiStart').disabled = !ready || !editable || !chosen || !hasKey;
         el('aiKey').disabled = !editable;
         el('aiKeyFile').disabled = !editable;
@@ -155,7 +165,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
         try {
             const whiteModel = el('aiWhiteModel').value, blackModel = el('aiBlackModel').value;
             if (!findModel(whiteModel) || !findModel(blackModel)) throw Error('Choose a model for both White and Black first.');
-            const key = el('aiKey').value.trim() || pendingKey;
+            const key = el('aiKey').value.trim() || pendingKey || localKey;
             if (!key) throw Error('Paste a key or load your local JSON file first.');
             pendingKey = ''; el('aiKey').value = '';
             active = true; onMode(true);
@@ -169,7 +179,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
         try { await controller.stop(); active = false; pendingKey = ''; el('aiKey').value = ''; gate(); onMode(false); }
         catch (error) { fail(error); }
     });
-    const dispose = () => { pendingKey = ''; el('aiKey').value = ''; controller.dispose(); };
+    const dispose = () => { pendingKey = ''; el('aiKey').value = ''; controller.dispose(); localKey = ''; };
     window.addEventListener('pagehide', dispose);
     window.addEventListener('beforeunload', dispose);
     window.addEventListener('pageshow', event => {
@@ -179,7 +189,7 @@ export function mountSpectator(worker, {onMode = () => {}, onRefresh = () => {}}
     return {
         get active() { return active; },
         gate,
-        boot:async () => { try { await controller.boot(); ready = true; controller.emit(); } catch (error) { fail(error); } },
+        boot:async () => { try { await controller.boot(); await loadLocalKey(); ready = true; controller.emit('Your key is loaded automatically. Choose both models, then start.'); } catch (error) { fail(error); } },
         ok:() => controller.ok().catch(fail),
     };
 }

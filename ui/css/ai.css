@@ -27,3 +27,5 @@ body.ai-controlled #btnImport, body.ai-controlled #btnEdit { opacity: .4; pointe
     position: static; width: auto; max-height: 35dvh; padding: 12px;
     border-radius: 0; border-top: 1px solid #bcc6b8; box-shadow: none;
 }
+
+#aiPanel label[hidden] { display: none; }
