@@ -207,3 +207,38 @@ test('engine terminal status ends scheduling without any model request', async (
     assert.equal(c.phase,'finished');
     assert.equal(calls,0);
 });
+
+test('replacement credentials apply to both players without changing the paused position', async () => {
+    const f = fixture();
+    await f.controller.start({...models,key:'old-test-key'});
+    assert.throws(()=>f.controller.replaceKey('new-test-key'),/Pause/);
+    await f.controller.pause();
+    const position = structuredClone(f.controller.state);
+    f.controller.replaceKey('new-test-key');
+    assert.equal(f.controller.players.White.key,'new-test-key');
+    assert.equal(f.controller.players.Black.key,'new-test-key');
+    assert.deepEqual(f.controller.state,position);
+    assert.throws(()=>f.controller.replaceKey('bad key'),/whitespace/);
+    await f.controller.resume();
+    assert.equal(f.controller.state.side,'White');
+    assert.equal(f.controller.state.commits,0);
+});
+
+test('browser connection failures and response timeouts have distinct diagnoses', async () => {
+    for (const [name,pattern] of [['TimeoutError',/within 90 seconds/],['TypeError',/could not connect to api.openai.com/]]) {
+        let calls = 0;
+        const p = new OpenAIPlayer({key:'test',side:'White',wait:async()=>{},
+            fetcher:async()=>{calls++;throw new DOMException('test transport failure',name);}});
+        await assert.rejects(p.ask({},null,new AbortController().signal),error=>pattern.test(error.message));
+        assert.equal(calls,4);
+    }
+});
+
+test('malformed key input is rejected before requests instead of appearing as a network failure', async () => {
+    const f = fixture();
+    for (const key of ['bad key','bad\nkey','bad“key','']) {
+        await assert.rejects(f.controller.start({...models,key}),/API key/);
+        assert.equal(f.requests.length,0);
+        assert.equal(f.operations.length,0);
+    }
+});

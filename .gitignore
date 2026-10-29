@@ -427,3 +427,5 @@ _site/
 .emsdk-cache/
 *.local.json
 /5dchess-ai-private.zip
+
+/ui/local-key.json

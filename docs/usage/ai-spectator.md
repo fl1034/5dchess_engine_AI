@@ -107,6 +107,14 @@ game exports, or static bundles. Use a trusted local/private copy of the app;
 the scripts on a site necessarily have access to a key entered into that site.
 The interface requests `store:false`; OpenAI's API data policies still apply.
 Closing/reloading the tab requires entering the key again.
+Opening the site on another workstation also requires loading your key in that
+browser. A key file selected by the browser is not uploaded to GitHub Pages or
+synchronized between devices.
+
+If authentication pauses a match, load or paste a replacement key, then click
+**Resume**. Both players use the replacement key and the committed position is
+preserved. A network timeout is separate from authentication: check that the
+workstation can connect to `api.openai.com` through its network and browser.
 
 Pause and tab-close abort pending browser requests and prevent further
 scheduling. Requests already accepted by OpenAI may still finish and incur

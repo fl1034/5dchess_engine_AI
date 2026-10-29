@@ -1,4 +1,4 @@
-import { OpenAIPlayer } from './ai-player.mjs';
+import { OpenAIPlayer, normalizeApiKey } from './ai-player.mjs';
 import { checkedMoves } from './ai-engine.mjs';
 import { findModel, usageCost } from './ai-models.mjs';
 
@@ -38,6 +38,7 @@ export class MatchController {
     cancel() { this.run++; this.abort?.abort(); }
     async start({key, whiteModel, blackModel, limit = 40}) {
         if (!findModel(whiteModel) || !findModel(blackModel)) throw Error('Choose a supported model for both White and Black before starting.');
+        key = normalizeApiKey(key);
         if (!key || !Number.isInteger(limit) || limit < 1 || limit > 200) throw Error('Supply a key and a request limit from 1 to 200.');
         this.cancel();
         const run = this.run;
@@ -163,6 +164,13 @@ export class MatchController {
         try { await this.command('state'); await this.command('resume'); }
         catch (error) { this.emit(error.message); return; }
         await this.think(run);
+    }
+    replaceKey(key) {
+        if (this.phase !== 'paused') throw Error('Pause the match before replacing the API key.');
+        key = normalizeApiKey(key);
+        if (!this.players.White || !this.players.Black) throw Error('Start a new match to load player credentials.');
+        for (const player of Object.values(this.players)) player.key = key.trim();
+        this.emit('Replacement key loaded for both players. Resume to retry the current turn.');
     }
     async stop() {
         this.cancel();

@@ -4,6 +4,13 @@ export class PlayerError extends Error {
     constructor(message, recoverable = false) { super(message); this.recoverable = recoverable; }
 }
 
+export function normalizeApiKey(value) {
+    if (typeof value !== 'string' || !value.trim()) throw Error('Supply a nonempty API key.');
+    const key = value.trim();
+    if (/[^\x21-\x7e]/.test(key)) throw Error('The API key contains whitespace or unsupported characters. Paste the key on one line without surrounding quotes.');
+    return key;
+}
+
 export function retryDelay(value, attempt, now = Date.now(), random = Math.random) {
     if (value) {
         const seconds = Number(value);
@@ -53,7 +60,12 @@ export class OpenAIPlayer {
                 });
             } catch (error) {
                 if (signal.aborted) throw new DOMException('Stopped', 'AbortError');
-                if (attempt === 3) throw new PlayerError('Network request failed or timed out. Check connectivity; resume to retry this same turn.');
+                if (attempt === 3) {
+                    const timedOut = error.name === 'TimeoutError' || error.name === 'AbortError';
+                    throw new PlayerError(timedOut
+                        ? 'OpenAI did not respond within 90 seconds. The match is paused on the same turn; resume to retry. The earlier request may still complete.'
+                        : 'This browser could not connect to api.openai.com. Check this workstation’s network, proxy, firewall, or browser extensions, then resume. This connection failure does not establish whether the key is valid.');
+                }
                 this.waiting('Connection interrupted; retrying this same turn.');
                 await this.wait(retryDelay(null, attempt), signal);
                 continue;

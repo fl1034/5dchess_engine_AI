@@ -20,7 +20,7 @@ def prepare_site(repository):
     for name in ("engine.js", "engine.wasm"):
         actual = hashlib.sha256((runtime / name).read_bytes()).hexdigest()
         if actual != manifest["sha256"][name]:
-            pass
+            raise ValueError("Precompiled runtime checksum mismatch: " + name)
 
     def excluded(directory, names):
         directory = Path(directory)
@@ -37,7 +37,7 @@ def prepare_site(repository):
         (staged / ".nojekyll").touch()
         problems = check_site(staged)
         if problems:
-            pass
+            raise ValueError("\n".join(problems))
         destination = repository / "_site"
         if destination.exists():
             shutil.rmtree(destination)
