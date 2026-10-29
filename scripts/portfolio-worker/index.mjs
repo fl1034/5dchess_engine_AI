@@ -2,7 +2,7 @@ import { RULES, REPLY_SCHEMA } from '../../ui/scripts/ai-rules.mjs';
 import { findModel } from '../../ui/scripts/ai-models.mjs';
 
 const limit = (value, fallback) => /^\d+$/.test(String(value)) ? Math.max(1, Math.min(10000, Number(value))) : fallback;
-const allowedModels = env => (env.ALLOWED_MODELS || 'gpt-6-luna').split(',').map(s => s.trim()).filter(findModel);
+const allowedModels = env => (env.ALLOWED_MODELS || 'gpt-6.1-sol,gpt-6.1-terra,gpt-6-luna').split(',').map(s => s.trim()).filter(findModel);
 const json = (body, status = 200, origin) => Response.json(body, {status, headers:{
     'Access-Control-Allow-Origin':origin || 'null', 'Vary':'Origin',
     'Access-Control-Allow-Methods':'GET, POST, OPTIONS',

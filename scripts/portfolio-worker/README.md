@@ -9,7 +9,7 @@ The free Workers plan and SQLite-backed Durable Objects support this small demo.
 Cloudflare's current free allowances include 100,000 Worker requests/day and
 100,000 Durable Object requests/day. OpenAI generation remains billable.
 
-The defaults deliberately allow only GPT-6 Luna, with 100 total upstream
+The defaults allow GPT-6.1 Sol, GPT-6.1 Terra, and GPT-6 Luna, with 100 total upstream
 attempts/day, 20 per visitor IP/day, and 6 per IP/minute. Counters persist in one
 Durable Object and daily quotas reset at 00:00 UTC. This limits request count,
 not exact dollars. Failed upstream attempts also consume quota.
