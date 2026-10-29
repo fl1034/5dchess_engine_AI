@@ -7,6 +7,7 @@ import { actionKey } from './branch-deletion.js';
 import ChessBoardCanvasBase from 'draw';
 import { compactViewport, initMobileLayout } from './mobile.js';
 import { createSelection } from './selection.js';
+import { mountSpectator } from './ai-ui.mjs';
 
 initMobileLayout();
 
@@ -18,13 +19,15 @@ let positionId = 0;
 let showPhantom = true;
 let focusOnNextData = true;
 let committedData = null;
+let spectator;
 
 class ChessBoardCanvas extends ChessBoardCanvasBase {
     onClickSquare(l, t, c, x, y) {
+        if (spectator?.active) return;
         selection.click({ l, t, c, x, y });
     }
     
-    onPreviewSquare(pos) { return selection.preview(pos); }
+    onPreviewSquare(pos) { if (!spectator?.active) return selection.preview(pos); }
     onCommitSquare(token) { selection.commit(token); }
     onCancelSquare(token) { selection.cancel(token); }
 
@@ -73,6 +76,16 @@ function deselect() {
 function showPosition(raw, preview = false) {
     // Keep the real position intact for immediate cancellation of a preview.
     const data = structuredClone(raw);
+    if (spectator?.active && !data.focus?.length) {
+        // A completed draft has no mandatory boards left. Focus its resulting
+        // timeline tips so the spectator can actually review the proposed turn.
+        const tips = new Map();
+        for (const board of data.boards) {
+            const previous = tips.get(board.l);
+            if (!previous || 2 * board.t + Number(board.c) > 2 * previous.t + Number(previous.c)) tips.set(board.l,board);
+        }
+        data.focus = [...tips.values()].map(({l,t,c}) => ({l,t,c}));
+    }
     window.chessBoardCanvas.gestureData = preview && committedData ? {
         boards: [...(committedData.boards || []), ...(showPhantom ? committedData.phantom || [] : [])]
     } : undefined;
@@ -128,6 +141,7 @@ function onWorkerMessage(e) {
             settings: UI.getSettings()
         });
         worker.postMessage({type: 'load', pgn: '[Board "Standard - Turn Zero"]'});
+        spectator.boot();
     }
     else if (msg.type === 'engine_version') {
         // Update the version in the Information popup and welcome popup
@@ -153,7 +167,7 @@ function onWorkerMessage(e) {
             committedData = data;
         }
         showPosition(data, msg.previewId != null);
-        if (msg.previewId == null && focusOnNextData && compactViewport.matches) window.chessBoardCanvas.goToNextFocus();
+        if (msg.previewId == null && focusOnNextData && (compactViewport.matches || spectator?.active)) window.chessBoardCanvas.goToNextFocus();
         if (msg.previewId == null) focusOnNextData = false;
     }
     else if (msg.type === 'moves') {
@@ -223,6 +237,7 @@ function onWorkerMessage(e) {
             UI.setHudText('');
         }
     }
+    spectator?.gate();
 }
 
 UI.select.setChangeCallback(index => index < 0 ? UI.buttons.disable('next') : UI.buttons.enable('next'));
@@ -231,30 +246,36 @@ UI.setExportOpenCallback(() => worker.postMessage({ type: 'open_export', positio
 
 UI.buttons.setCallbacks({
     prev: () => {
+        if (spectator?.active) return;
         deselect();
         worker.postMessage({type: 'prev', positionId});
     },
     next: () => {
+        if (spectator?.active) return;
         deselect();
         let index = UI.select.getSelectedIndex();
         let action = nextOptions[index];
         worker.postMessage({type: 'next', action: action, positionId});
     },
     undo: () => {
+        if (spectator?.active) return;
         deselect();
         worker.postMessage({type: 'undo'});
     },
     redo: () => {
+        if (spectator?.active) return;
         deselect();
         worker.postMessage({type: 'redo'});
     },
     submit: () => {
+        if (spectator?.active) { spectator.ok(); return; }
         deselect();
         worker.postMessage({type: 'submit', positionId});
     }
 });
 
 UI.setHintCallback(() => {
+    if (spectator?.active) return;
     deselect();
     worker.postMessage({type: 'hint'});
 });
@@ -269,6 +290,7 @@ UI.setCanvasNavigationCallback((action, options) => {
 });
 
 UI.setImportCallback((data, requestId) => {
+    if (spectator?.active) return;
     deselect();
     focusOnNextData = true;
     worker.postMessage({type: 'load', pgn: data, requestId});
@@ -281,6 +303,7 @@ UI.setExportCallback((requestId) => {
 });
 
 UI.setCommentsEditCallback((text) => {
+    if (spectator?.active) return;
     worker.postMessage({ type: 'update_comment', comment: text });
 });
 
@@ -326,4 +349,11 @@ UI.setHudLight(false); // Initialize HUD light to off
 
 // Replay early engine messages only after all UI callbacks are installed.
 reportLoaded('interface');
+spectator = mountSpectator(worker, {
+    onMode: active => { deselect(); if (active) focusOnNextData = true; else {
+        worker.postMessage({type:'view'});
+        worker.postMessage({type:'update_settings',settings:UI.getSettings()});
+    } },
+    onRefresh: () => window.chessBoardCanvas.goToNextFocus(),
+});
 connectWorker(onWorkerMessage);

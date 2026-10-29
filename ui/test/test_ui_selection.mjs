@@ -150,6 +150,7 @@ test('main-thread wiring renders local feedback, preserves it on refresh and cle
     let selectedIndex = -1;
     let selectConfig;
     const context = {
+        mountSpectator: () => ({active:false,gate() {},boot() {}}),
         structuredClone, actionKey, createSelection, initMobileLayout() {}, compactViewport: { addEventListener() {}, matches: false },
         window: {},
         Worker: class {

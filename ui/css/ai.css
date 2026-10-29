@@ -1,0 +1,29 @@
+#aiPanel {
+    position: fixed; top: 24px; left: 24px; width: 310px;
+    max-height: calc(100dvh - 120px); overflow: auto; box-sizing: border-box;
+    z-index: 5; padding: 16px; border-radius: 16px;
+    color: #26342d; background: #fffdf3f2;
+    box-shadow: 0 8px 32px #0002; font: 14px/1.45 system-ui, sans-serif;
+}
+#aiPanel h2 { margin: 0 0 10px; font-size: 17px; }
+#aiPanel p { margin: 10px 0; overflow-wrap: anywhere; }
+#aiStatus { font-weight: 600; }
+#aiPanel label { display: block; margin: 12px 0; }
+#aiPanel input, #aiPanel select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 7px; }
+#loadingTitle span { display: block; }
+#loadingScreen { background: var(--ui-panel); }
+#loadingTitle { font-size: clamp(26px, 5vw, 48px); font-weight: 650; line-height: 1.25; }
+#loadingTitle span:last-child { color: var(--ui-primary); }
+#aiPanel button { padding: 8px 10px; border: 1px solid #8c998a; border-radius: 7px; background: #f7f7ef; color: #26342d; cursor: pointer; }
+#aiPanel button:disabled { opacity: .45; cursor: default; }
+#aiPanel summary { margin-top: 12px; cursor: pointer; }
+#aiPanel .ai-note, #aiUsage { font-size: 12px; color: #536151; }
+#aiPanel .ai-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#aiMoves { white-space: pre-wrap; font: 13px/1.5 monospace; padding: 8px; background: #e3eddf; border-radius: 6px; }
+body.ai-controlled .hud-text { cursor: default; }
+body.ai-controlled #btnImport, body.ai-controlled #btnEdit { opacity: .4; pointer-events: none; }
+.compact-layout #mobileLayout:has(> #aiPanel) { grid-template-rows: auto minmax(0, 1fr) auto auto auto; }
+.compact-layout #aiPanel {
+    position: static; width: auto; max-height: 35dvh; padding: 12px;
+    border-radius: 0; border-top: 1px solid #bcc6b8; box-shadow: none;
+}

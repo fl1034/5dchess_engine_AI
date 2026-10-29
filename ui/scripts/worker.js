@@ -2,6 +2,7 @@ import { PendingBranches, actionKey } from './branch-deletion.js';
 import createModule from '../wasm/engine.js';
 import { parse_FEN } from './parse.js';
 import { hashAction, hashActionList } from './hash.js';
+import { EngineMatch } from './ai-engine.mjs';
 
 function nextTurn(pos) {
     if (pos.c) {
@@ -23,6 +24,7 @@ createModule().then((engine) => {
     let confirmationId = 0;
     let confirmation = null;
     let pendingLoad = null;
+    let aiMatch = null;
 
     function children() {
         let flags = engine.SHOW_CAPTURE | engine.SHOW_PROMOTION;
@@ -361,6 +363,21 @@ createModule().then((engine) => {
 
     self.onmessage = (e) => {
         let data = e.data;
+        if (data.type === 'ai') {
+            if (!aiMatch) aiMatch = new EngineMatch(engine, () => self.game, replaceGame, refreshLoadedGame);
+            const result = aiMatch.handle(data);
+            self.postMessage({type:'ai_result', ...result});
+            return;
+        }
+        if (aiMatch?.locked) {
+            // The worker enforces the lock even for keyboard shortcuts or stale UI messages.
+            if (data.type === 'export') {
+                self.postMessage({type:'update_pgn', pgn:aiMatch.committedPgn, requestId:data.requestId});
+                return;
+            }
+            if (!['view','open_export','update_settings'].includes(data.type)) return;
+            if (data.type === 'update_settings') data = {...data, settings:{...data.settings, allowSubmitWithChecks:false}};
+        }
         if (data.type === 'cancel_load') {
             if (pendingLoad && pendingLoad.requestId === data.requestId) {
                 pendingLoad.game.delete();

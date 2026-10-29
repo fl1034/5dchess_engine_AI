@@ -1,5 +1,13 @@
 # Web UI tests
 
+AI spectator tests in `test_ai_match.mjs` exercise complete-turn approval,
+same-player correction, isolated player histories, inspection, cancellation,
+duplicate/lost approval acknowledgements, request safeguards, API retries and
+terminal scheduling without network requests. After a WebAssembly build, run
+`node build-wasm/ui/wasm/test-ai.mjs` for the real engine's rollback, multi-board
+turn, promotion, branching, terminal and PGN reload checks. See
+[AI spectator matches](../../docs/usage/ai-spectator.md) for setup and usage.
+
 Startup tests cover ordered worker-message delivery when the engine becomes
 ready before or after the UI, including replay without duplicate messages.
 Loading-screen tests cover either asset group finishing first, both completing

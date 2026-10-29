@@ -60,6 +60,14 @@ See the [build guide](docs/usage/building.md) for platform details, Python bindi
 
 ## Documentation
 
+For two OpenAI players with spectator approval of each complete turn, see
+[AI spectator matches](docs/usage/ai-spectator.md). This uses the existing web
+interface and rules engine; API usage is billed to your own key.
+
+The fork's Project Pages site is [5D Chess with AI](https://fl1034.github.io/5dchess_engine_AI/).
+The Pages workflow deploys a tested public build on pushes to `main`; private
+local packages and API keys are excluded.
+
 | Task | Guide |
 |---|---|
 | Build native programs, Python bindings, or the web interface | [Building](docs/usage/building.md) |

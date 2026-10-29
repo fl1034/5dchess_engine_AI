@@ -423,3 +423,8 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+_site/
+.emsdk-cache/
+*.local.json
+/ui/local-key.json
+/5dchess-ai-private.zip
