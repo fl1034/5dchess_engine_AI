@@ -3,4 +3,4 @@
 	url = https://github.com/pybind/pybind11.git
 [submodule "extern/client"]
 	path = extern/client
-	url = git@github.com:SuZero-5DChess/5dchess_client.git
+	url = https://github.com/SuZero-5DChess/5dchess_client.git
