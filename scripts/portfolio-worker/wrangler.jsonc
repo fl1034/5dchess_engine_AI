@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "five-d-chess-portfolio",
+  "main": "index.mjs",
+  "compatibility_date": "2026-10-29",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGIN": "https://fl1034.github.io",
+    "ALLOWED_MODELS": "gpt-6-luna",
+    "DAILY_REQUESTS": "100",
+    "DAILY_REQUESTS_PER_VISITOR": "20",
+    "REQUESTS_PER_MINUTE": "6"
+  },
+  "durable_objects": {
+    "bindings": [{"name": "BUDGET", "class_name": "DemoBudget"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["DemoBudget"]}],
+  "observability": {"enabled": false}
+}

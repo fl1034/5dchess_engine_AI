@@ -101,6 +101,12 @@ patterns, ZIP archives, and the private build's automatic key loader.
 
 ### API access
 
+For an owner-funded portfolio demo, an optional
+[Cloudflare backend](../../scripts/portfolio-worker/README.md) is prepared with
+server-side secret storage and persistent request quotas. It requires a
+Cloudflare account and deployment before the frontend can be connected to it.
+The currently published site continues to use browser-side personal keys.
+
 Requests go directly from the browser to `https://api.openai.com/v1/chat/completions`.
 The key is held in memory, never included in model messages, browser storage,
 game exports, or static bundles. Use a trusted local/private copy of the app;
