@@ -1,0 +1,9 @@
+{
+  "source_commit": "016112e636ef4cd0b481be1489ce5beca55534a7",
+  "toolchain": "Emscripten 4.0.23",
+  "build_run": "https://github.com/fl1034/5dchess_engine_AI/actions/runs/40852194751",
+  "sha256": {
+    "engine.js": "02353c626670d6e56f58d9392fa5cbc8b9efdabeffeb0afa34cb9a10ab6fd9c2",
+    "engine.wasm": "5f708fc3a98ed904d3d39d1b13cbaf7c0e8afcf9208c24be96491bac050894fb"
+  }
+}

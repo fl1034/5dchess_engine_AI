@@ -8,7 +8,19 @@ WebAssembly engine owns the game and decides legality and results.
 
 ## Run locally
 
-Build the web interface as described in [Building](building.md#webassembly):
+The repository includes a compiled engine, so UI editing needs no compiler.
+From the repository root, run:
+
+```sh
+python3 -m http.server 8001 --bind 127.0.0.1 --directory ui
+```
+
+Open the local site in your browser. Edit `ui/index.html`, `ui/styles/`,
+`ui/css/`, or `ui/scripts/` in WebStorm and reload to see your edits.
+Commit and push to `main` to publish them.
+
+If you change the C++ engine or its bindings, build WebAssembly as described in
+[Building](building.md#webassembly):
 
 ```sh
 emcmake cmake -S . -B build-wasm -DEMMODULE=ON -DJSTEST=ON -DCMAKE_BUILD_TYPE=Release
@@ -64,10 +76,23 @@ from the engine. A paused/error/limit stop is not a chess result.
 
 The public site is deployed separately from a personal GitHub Pages homepage:
 `https://fl1034.github.io/5dchess_engine_AI/`.
-The `Deploy AI spectator to GitHub Pages` workflow builds and tests a clean
-WebAssembly site on pushes to `main`, then publishes only its static runtime.
-Repository Settings → Pages must use **GitHub Actions** as its build source.
-The release workflow continues to produce release artifacts independently.
+The `Publish UI to GitHub Pages` workflow copies the latest `ui/` source on
+pushes to `main` that change UI or publishing files. It verifies the precompiled
+engine checksums and checks for private files, then publishes. It does not
+install dependencies, run the full test suite, or compile the engine. No
+Python server remains running on GitHub; Pages serves the resulting files.
+
+Repository Settings → Pages must keep **GitHub Actions** as its build source.
+Under Actions, leave **Publish UI to GitHub Pages** enabled. The old release
+workflow can remain disabled. Manual publishing is also available via that
+workflow's **Run workflow** button.
+
+The paired `ui/wasm/engine.js` and `engine.wasm` files came from the successful
+Emscripten 4.0.23 build recorded in `ui/wasm/runtime.json`. C++ engine changes
+require a new WebAssembly build; replace both files together and update their
+SHA-256 values and provenance in that manifest before publishing. A fresh full
+build excludes these precompiled files from its UI-copy step so they cannot
+overwrite newly compiled output.
 
 The public site uses runtime key entry or the local file picker. The private
 ready-to-run ZIP is a separate local-only package and must never be uploaded

@@ -65,8 +65,9 @@ For two OpenAI players with spectator approval of each complete turn, see
 interface and rules engine; API usage is billed to your own key.
 
 The fork's Project Pages site is [5D Chess with AI](https://fl1034.github.io/5dchess_engine_AI/).
-The Pages workflow deploys a tested public build on pushes to `main`; private
-local packages and API keys are excluded.
+The lightweight Pages workflow publishes UI changes pushed to `main`, reusing
+the compiled engine in `ui/wasm/`. It does not run the full CI or rebuild C++;
+private local packages and API keys are excluded.
 
 | Task | Guide |
 |---|---|

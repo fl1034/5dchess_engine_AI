@@ -238,8 +238,9 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         if(NOT "${TEST}" AND NOT "${JSTEST}")
             set(UI_COPY_EXCLUDE "PATTERN \"test\" EXCLUDE")
         endif()
+        # Keep the checked-in runtime from overwriting freshly compiled output.
         file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/copy_ui.cmake" CONTENT
-            "file(COPY \"${CMAKE_CURRENT_SOURCE_DIR}/ui/\" DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/ui\" ${UI_COPY_EXCLUDE})\n"
+            "file(COPY \"${CMAKE_CURRENT_SOURCE_DIR}/ui/\" DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/ui\" ${UI_COPY_EXCLUDE} REGEX \"/wasm/engine[.](js|wasm)$\" EXCLUDE)\n"
         )
         add_custom_target(copy_files ALL
             COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/copy_ui.cmake"

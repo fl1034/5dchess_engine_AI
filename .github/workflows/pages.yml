@@ -1,8 +1,14 @@
-name: Deploy AI spectator to GitHub Pages
+name: Publish UI to GitHub Pages
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'ui/**'
+      - 'scripts/prepare_public_site.py'
+      - 'scripts/check_public_site.py'
+      - '.github/workflows/pages.yml'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
@@ -13,56 +19,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: '4.0.23'
-          actions-cache-folder: '.emsdk-cache'
-      - name: Test UI and match controller
-        run: node --test ui/test/*.mjs
-      - name: Test public-site checks
-        run: python3 -m unittest discover -s scripts/test -p test_public_site.py -v
-      - name: Configure WebAssembly
-        run: >-
-          emcmake cmake -S . -B build-pages
-          -DEMMODULE=ON -DJSTEST=ON -DTEST=OFF -DPYMODULE=OFF
-          -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-fexperimental-library
-      - name: Build WebAssembly
-        run: cmake --build build-pages --parallel 2
-      - name: Test real WebAssembly engine
-        run: |
-          node build-pages/ui/wasm/test.js
-          node build-pages/ui/wasm/test-ai.mjs
-      - name: Prepare public site
-        run: |
-          cmake -E copy_directory build-pages/ui _site
-          cmake -E rm -r _site/test _site/wasm/test.js _site/wasm/test-ai.mjs
-          cp LICENSE _site/LICENSE
-          touch _site/.nojekyll
-          python3 scripts/check_public_site.py _site
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Prepare UI with existing WebAssembly engine
+        run: python3 scripts/prepare_public_site.py
       - uses: actions/configure-pages@v5
-      - name: Deploy project site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish project site
         id: deployment
         uses: actions/deploy-pages@v4
